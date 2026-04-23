@@ -145,8 +145,8 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
     super.didUpdateWidget(oldWidget);
     // If config changes and no animation is running → update instantly
 
-    if (isWeb && widget.children.length != oldWidget.children.length) {
-      _recreateWebShaders(widget.children.length);
+    if (widget.children.length != oldWidget.children.length) {
+      _recreateShaders(widget.children.length);
     }
     if (widget.realTimeCapture != oldWidget.realTimeCapture) {
       _realtimeCaptureEnabled = widget.realTimeCapture;
@@ -191,24 +191,21 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
     final main = _mainProgram!;
     final border = _borderProgram!;
 
-    if (isWeb) {
-      final count = widget.children.length;
-
-      _shaders = {
-        'liquid_glass_list': _createShaderList(main, count),
-        'liquid_glass_border_list': _createShaderList(border, count),
-      };
-    } else {
-      _shaders = {
-        'liquid_glass': main.fragmentShader(),
-        'liquid_glass_border': border.fragmentShader(),
-      };
-    }
+    // Unified path for both web and native: one dedicated FragmentShader per
+    // lens. Previously native builds shared a single shader instance across
+    // all lenses. With 2+ lenses in release/Impeller, successive draw calls
+    // reused the same shader object with the last uniforms set, producing
+    // context-switch artifacts (old lens content leaking, new lens
+    // appearing transparent).
+    final count = widget.children.length;
+    _shaders = {
+      'liquid_glass_list': _createShaderList(main, count),
+      'liquid_glass_border_list': _createShaderList(border, count),
+    };
   }
 
-  Future<void> _recreateWebShaders(int newCount) async {
-    if (!isWeb) return;
-
+  Future<void> _recreateShaders(int newCount) async {
+    if (_mainProgram == null || _borderProgram == null) return;
     final main = _mainProgram!;
     final border = _borderProgram!;
 
@@ -219,6 +216,23 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
     });
   }
 
+  /// Safely captures the background RepaintBoundary.
+  ///
+  /// Important behavior (please keep — do not remove without testing on
+  /// release/profile builds on Android):
+  /// - On release/profile builds with Impeller (Android), a
+  ///   `RenderRepaintBoundary` can still have no composited `layer` even
+  ///   after `endOfFrame` (especially for small or freshly mounted
+  ///   boundaries, or ones containing `Image.file`). In that case
+  ///   `toImageSync` throws "Null check operator used on a null value".
+  /// - So we first check `boundary.layer != null`; if the layer is not
+  ///   ready we go straight to the async `toImage()`, which can wait for
+  ///   composition to complete.
+  /// - If `toImageSync` still throws, we catch it and also fall back to
+  ///   async `toImage()`.
+  /// - If async `toImage()` also fails, we soft-fail — we do not crash
+  ///   the app; the frame is simply skipped and the UI keeps using the
+  ///   previous `_image`.
   Future<void> _captureWidgetSafe() async {
     try {
       final context = _repaintKey.currentContext;
@@ -227,25 +241,47 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
       final boundary = context.findRenderObject();
       if (boundary is RenderRepaintBoundary && boundary.attached) {
         await WidgetsBinding.instance.endOfFrame;
-        if (context.mounted) {
-          double devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-          double pixelRatio =
-              widget.pixelRatio <= 0 ? devicePixelRatio : widget.pixelRatio;
-          if (pixelRatio > devicePixelRatio) {
-            pixelRatio = devicePixelRatio;
+        if (!context.mounted) return;
+
+        double devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+        double pixelRatio =
+            widget.pixelRatio <= 0 ? devicePixelRatio : widget.pixelRatio;
+        if (pixelRatio > devicePixelRatio) {
+          pixelRatio = devicePixelRatio;
+        }
+
+        // ignore: invalid_use_of_protected_member
+        final bool layerReady = boundary.layer != null;
+        final bool preferSync = widget.useSync && layerReady;
+
+        ui.Image? newImage;
+
+        if (preferSync) {
+          try {
+            newImage = boundary.toImageSync(pixelRatio: pixelRatio);
+          } catch (_) {
+            try {
+              newImage = await boundary.toImage(pixelRatio: pixelRatio);
+            } catch (_) {
+              newImage = null;
+            }
           }
-          if (widget.useSync) {
-            _image = boundary.toImageSync(
-              pixelRatio: pixelRatio,
-            );
-          } else {
-            _image = await boundary.toImage(
-              pixelRatio: pixelRatio,
-            );
+        } else {
+          try {
+            newImage = await boundary.toImage(pixelRatio: pixelRatio);
+          } catch (_) {
+            newImage = null;
           }
         }
+
+        if (newImage == null) return;
+        if (!context.mounted) return;
+
+        _image = newImage;
       }
-    } catch (_) {}
+    } catch (_) {
+      // Soft-fail: skip this frame, the UI keeps working.
+    }
   }
 
   Future<void> _captureOnce() async {
@@ -285,21 +321,28 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
             builder: (context, s) {
               return Stack(children: [
                 ...widget.children.asMap().entries.map((entry) {
-                  if (_shaders.length > 1 && _image != null) {
+                  final shaderList =
+                      _shaders['liquid_glass_list'] as List<ui.FragmentShader>?;
+                  final borderList = _shaders['liquid_glass_border_list']
+                      as List<ui.FragmentShader>?;
+                  if (shaderList != null &&
+                      borderList != null &&
+                      entry.key < shaderList.length &&
+                      entry.key < borderList.length &&
+                      _image != null) {
                     final index = entry.key;
                     final child = entry.value;
 
+                    // Use `config.key` when provided, otherwise a stable
+                    // index-based key. This prevents Flutter from reusing
+                    // a lens `State` across the wrong slot when `children`
+                    // change (insert/remove/reorder).
                     return LiquidGlassWidget(
+                      key: child.key ?? ValueKey('lg_index_$index'),
                       config: child,
                       parentSize: captureSize,
-                      sharedShader: isWeb
-                          ? (_shaders['liquid_glass_list']
-                              as List<ui.FragmentShader>)[index]
-                          : _shaders['liquid_glass'],
-                      border: isWeb
-                          ? (_shaders['liquid_glass_border_list']
-                              as List<ui.FragmentShader>)[index]
-                          : _shaders['liquid_glass_border'],
+                      sharedShader: shaderList[index],
+                      border: borderList[index],
                       sharedImage: _image!,
                     );
                   } else {

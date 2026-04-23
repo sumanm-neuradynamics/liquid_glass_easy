@@ -10,6 +10,13 @@ import 'utils/liquid_glass_refraction_mode.dart';
 
 // Represents a single lens in the LiquidGlass system
 class LiquidGlass {
+  /// Optional widget key, propagated to the underlying `LiquidGlassWidget`
+  /// inside `LiquidGlassView`. Use it to bind a lens `State` to a logical
+  /// slot (e.g. a fixed UI position) rather than to its index in `children`.
+  /// Without a stable key, inserting/removing other lenses (e.g. a progress
+  /// bar) can cause Flutter to reuse the wrong `State` for a lens.
+  final Key? key;
+
   /// Controls the lens behavior programmatically, such as toggling visibility or
   /// updating properties dynamically at runtime.
   final LiquidGlassController? controller;
@@ -127,7 +134,8 @@ class LiquidGlass {
   final bool outOfBoundaries;
 
   const LiquidGlass(
-      {this.controller,
+      {this.key,
+      this.controller,
       this.width = 200,
       this.height = 100,
       this.magnification = 1,
@@ -254,6 +262,7 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
   @override
   void didUpdateWidget(covariant LiquidGlassWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     // If config changes and no animation is running → update instantly
     if (!_animController.isAnimating &&
         widget.config.visibility != oldWidget.config.visibility) {

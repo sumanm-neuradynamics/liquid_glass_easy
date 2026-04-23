@@ -208,6 +208,61 @@ class LiquidGlassPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant LiquidGlassPainter oldDelegate) {
-    return (oldDelegate.image != image) || (borderAlpha > 0 && borderAlpha < 1);
+    // IMPORTANT (do not shorten this list): the previous implementation
+    // compared only `image` and `borderAlpha` and ignored changes to
+    // `lensWidth`/`lensHeight`/`cornerRadius`/`color` and other uniforms.
+    // In debug builds this was masked by the fact that `_image` changes
+    // every frame (so the canvas would repaint regardless). On release
+    // builds with Impeller, `toImageSync` can silently fail, so the image
+    // stops changing — and the canvas shader then freezes with stale
+    // uniforms even though the widget tree already holds a different
+    // lens configuration. That's what caused "stale lens content" and
+    // "transparent lenses" on release/profile builds.
+    //
+    // Comparing every parameter guarantees that any real change to the
+    // lens configuration triggers a repaint.
+    return oldDelegate.image != image ||
+        oldDelegate.dragOffset != dragOffset ||
+        oldDelegate.lensWidth != lensWidth ||
+        oldDelegate.lensHeight != lensHeight ||
+        oldDelegate.magnification != magnification ||
+        oldDelegate.distortion != distortion ||
+        oldDelegate.distortionWidth != distortionWidth ||
+        oldDelegate.diagonalFlip != diagonalFlip ||
+        oldDelegate.enableInnerRadiusTransparent !=
+            enableInnerRadiusTransparent ||
+        oldDelegate.parentSize != parentSize ||
+        !_shapeEquals(oldDelegate.border, border) ||
+        oldDelegate.borderAlpha != borderAlpha ||
+        oldDelegate.blur.sigmaX != blur.sigmaX ||
+        oldDelegate.blur.sigmaY != blur.sigmaY ||
+        oldDelegate.color != color ||
+        oldDelegate.chromaticAberration != chromaticAberration ||
+        oldDelegate.saturation != saturation ||
+        oldDelegate.refractionMode != refractionMode ||
+        oldDelegate.shader != shader ||
+        oldDelegate.borderShader != borderShader;
+  }
+
+  bool _shapeEquals(LiquidGlassShape? a, LiquidGlassShape? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    if (a.runtimeType != b.runtimeType) return false;
+    if (a.borderWidth != b.borderWidth) return false;
+    if (a.borderSoftness != b.borderSoftness) return false;
+    if (a.borderColor != b.borderColor) return false;
+    if (a.lightIntensity != b.lightIntensity) return false;
+    if (a.lightColor != b.lightColor) return false;
+    if (a.shadowColor != b.shadowColor) return false;
+    if (a.lightDirection != b.lightDirection) return false;
+    if (a.oneSideLightIntensity != b.oneSideLightIntensity) return false;
+    if (a.lightMode != b.lightMode) return false;
+    if (a is RoundedRectangleShape && b is RoundedRectangleShape) {
+      return a.cornerRadius == b.cornerRadius;
+    }
+    if (a is SuperellipseShape && b is SuperellipseShape) {
+      return a.curveExponent == b.curveExponent;
+    }
+    return true;
   }
 }
