@@ -1,5 +1,5 @@
 ## 2.0.1
-- Fixed lens position being clamped to the parent bounds even when `outOfBoundaries: true`. Repositioning a lens (e.g. rows scrolling off-screen in a list) no longer pins it to the edge, so spacing between lenses stays correct.
+- Fixed lens position being clamped to the parent bounds even when `outOfBoundaries: true`. A lens moved past the parent's edge (in any direction) now keeps its true position instead of being pinned, so spacing between lenses stays correct.
 
 ## 2.0.0
 - Added **optical border mode** (`OpticalBorder`) — Apple-style, SDF-based rim lighting with background-tinted highlights, dual-sided specular reflections, and a lens height profile — alongside the existing `ClassicBorder`.
