@@ -10,8 +10,26 @@
 These dynamic lenses can **magnify**, **distort**, **blur**, **tint**, and **refract** underlying content — creating stunning, glass-like effects that respond fluidly to **movement** and **touch**.
 
 <p>
+  <img src="showcases/liquid_glass_control_center.jpg" width="49%" alt="Liquid Glass Control Center"/>
+  <img src="showcases/liquid_glass_notification.jpg" width="49%" alt="Liquid Glass Notification"/>
+</p>
+
+<p>
   <img src="showcases/liquid_glass_example_1.gif" width="60%" alt="LiquidGlass Example"/>
 </p>
+
+---
+
+## What's New
+
+- 🪟 **Optical border mode** — borders now ship with a new **`OpticalBorder`** style alongside the original `ClassicBorder`. It renders an Apple-style, SDF-based rim light that automatically picks up the background color through ambient tinting, with dual-sided specular highlights and a lens height profile. See [Border Modes](#border-modes) for details.
+- 🧩 **New ready-made components** — drop-in glass UI widgets so you can compose interfaces faster:
+  - `LiquidGlassButton`
+  - `LiquidGlassSearchBar`
+  - `LiquidGlassAppIcon`
+  - `LiquidGlassDock`
+  - `LiquidGlassTabBar`
+  - `LiquidGlassBottomNavBar`
 
 ---
 
@@ -40,7 +58,7 @@ Add the dependency:
 
 ```yaml
 dependencies:
-  liquid_glass_easy: ^1.1.1
+  liquid_glass_easy: ^2.0.0
 ```
 
 Then run:
@@ -52,7 +70,7 @@ flutter pub get
 
 ## Getting Started
 
-Use the `LiquidGlassExample` widget found in the `example/` directory for a quick preview.
+Check the `example/` directory for a complete, self-contained demo (Control Center, Notifications, and a draggable lens playground) you can run with `flutter run` or copy into your own project.
 You can also try:
 - `LiquidGlassShowcase` — a comprehensive demo widget that lets you explore all Liquid Glass Easy capabilities interactively. Adjust parameters such as distortion, blur, magnification, lighting, and border style in real time using intuitive sliders and toggles.
 - `LiquidGlassPlayground` — an experimental environment where you can test your own widgets beneath a live liquid glass lens. Fine-tune visual parameters with built-in controls to instantly see how the effect adapts to different content and layouts.
@@ -95,6 +113,70 @@ class DemoGlass extends StatelessWidget {
   }
 }
 ```
+
+---
+
+## Border Modes
+
+Every shape can render its border in one of two styles through the `borderType` parameter. Use **`ClassicBorder`** for a stylized sweep gradient with direct light/shadow color control, or **`OpticalBorder`** for an Apple-style, SDF-based rim light that picks up the background color through ambient tinting.
+
+<p>
+  <img src="showcases/liquid_glass_classic_border.jpg" width="49%" alt="Classic Border"/>
+  <img src="showcases/liquid_glass_optical_border.jpg" width="49%" alt="Optical Border"/>
+</p>
+
+| Mode | Description |
+|--------|-------------|
+| `ClassicBorder` | Light and shadow colors sweep around the shape based on the angle between the surface normal and the light direction. Produces a clean, stylized border with direct control over light/shadow colors. |
+| `OpticalBorder` | The border emerges as an optical consequence of the glass shape, using SDF-based rim lighting with background-tinted highlights, dual-sided specular reflections, and a lens height profile. Automatically picks up the background color through ambient tinting. |
+
+### Classic Border
+
+```dart
+LiquidGlass(
+  width: 200,
+  height: 120,
+  position: LiquidGlassAlignPosition(alignment: Alignment.center),
+  shape: RoundedRectangleShape(
+    lightColor: Color(0xB2FFFFFF),
+    borderType: ClassicBorder(
+      borderSoftness: 2.5,
+      shadowColor: Color(0x1A000000),
+    ),
+  ),
+)
+```
+
+| Property | Description |
+|----------|-------------|
+| `borderSoftness` | Controls the feathered edge transition. Higher values produce a softer border; lower values keep it crisp. Defaults to `1.0`. |
+| `shadowColor` | The shadow color used on the opposite side of the lens border to enhance depth and contrast. Defaults to `Color(0x1A000000)`. |
+
+### Optical Border
+
+```dart
+LiquidGlass(
+  width: 200,
+  height: 120,
+  position: LiquidGlassAlignPosition(alignment: Alignment.center),
+  shape: RoundedRectangleShape(
+    borderType: OpticalBorder(
+      borderSaturation: 1.5,
+      ambientIntensity: 1.0,
+      borderSolidity: 0.0,
+    ),
+  ),
+)
+```
+
+| Property | Description |
+|----------|-------------|
+| `borderSaturation` | Saturation boost applied to the final border color. `0.0` is grayscale, `1.0` is unchanged (default), `>1.0` is more vivid. Recommended range: `0.0`–`3.0`. |
+| `ambientIntensity` | Ambient lighting contribution to the rim, keeping it visible even on the shadow side. `0.0` is none, `1.0` is the default gain, `>1.0` washes around the entire rim. Recommended range: `0.0`–`5.0`. |
+| `borderSolidity` | How much `lightIntensity` can push the rim toward a fully opaque look. `0.0` keeps it translucent (default), `1.0` allows a light-driven solid rim. Recommended range: `0.0`–`1.0`. |
+
+> **Tip:**  
+> `borderType` defaults to `OpticalBorder()`. The optical mode always applies ambient tinting from the background, so the rim color adapts to whatever sits behind the lens.
 
 ---
 

@@ -262,7 +262,6 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
   @override
   void didUpdateWidget(covariant LiquidGlassWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     // If config changes and no animation is running → update instantly
     if (!_animController.isAnimating &&
         widget.config.visibility != oldWidget.config.visibility) {
@@ -350,6 +349,9 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
 
   @override
   Widget build(BuildContext context) {
+    final bool useBlur =
+        widget.config.blur.sigmaX > 0 || widget.config.blur.sigmaY > 0;
+
     return (_animController.value < 1)
         ? Stack(
             children: [
@@ -399,6 +401,71 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
                   ),
                 ),
               ),
+
+              // BackdropFilter blur for RoundedRectangleShape (matches root widget approach)
+              if (widget.border != null &&
+                  useBlur &&
+                  widget.config.shape is RoundedRectangleShape)
+                Positioned(
+                  left: _touchNotifier.value.dx,
+                  top: _touchNotifier.value.dy,
+                  width: widget.config.width,
+                  height: widget.config.height,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      widget.config.shape is RoundedRectangleShape
+                          ? (widget.config.shape as RoundedRectangleShape)
+                              .cornerRadius
+                          : 0,
+                    ),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(
+                        sigmaX: widget.config.blur.sigmaX *
+                            (1 - _animController.value),
+                        sigmaY: widget.config.blur.sigmaY *
+                            (1 - _animController.value),
+                      ),
+                      child: Container(
+                      ),
+                    ),
+                  ),
+                ),
+
+              // // SECOND PASS: border painter ONLY (sharp, isolated)
+              if (widget.border != null && widget.sharedImage != null&& useBlur)
+                IgnorePointer(
+                  ignoring: true,
+                  child: CustomPaint(
+                    painter: LiquidGlassBorderPainter(
+                      borderShader: widget.border!,
+                      lensPosition: _touchNotifier.value,
+                      lensWidth: widget.config.width,
+                      lensHeight: widget.config.height,
+                      magnification: (_animController.value) +
+                          (widget.config.magnification *
+                              (1 - _animController.value)),
+                      distortion: widget.config.distortion,
+                      distortionWidth: (widget.config.distortionWidth -
+                          _animController.value *
+                              widget.config.distortionWidth),
+                      diagonalFlip: widget.config.diagonalFlip,
+                      enableInnerRadiusTransparent:
+                          widget.config.enableInnerRadiusTransparent,
+                      chromaticAberration:
+                          widget.config.chromaticAberration *
+                              (1 - _animController.value),
+                      saturation: (_animController.value) +
+                          (widget.config.saturation *
+                              (1 - _animController.value)),
+                      refractionMode: widget.config.refractionMode,
+                      border: widget.config.shape,
+                      borderAlpha: (1 - _animController.value),
+                      image: widget.sharedImage!,
+                    ),
+                    size: Size.infinite,
+                  ),
+                ),
+
               // Draggable lens
               ValueListenableBuilder<Offset>(
                 valueListenable: _touchNotifier,
@@ -406,8 +473,10 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
                   return Positioned(
                     left: offset.dx,
                     top: offset.dy,
-                    width: widget.config.width,
-                    height: widget.config.height,
+                    width: widget.config.width -
+                        widget.config.shape.borderWidth / 2,
+                    height: widget.config.height -
+                        widget.config.shape.borderWidth / 2,
                     child: GestureDetector(
                       behavior: HitTestBehavior
                           .opaque, // ensures full area receives gestures

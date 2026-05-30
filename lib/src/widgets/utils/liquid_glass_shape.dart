@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'liquid_glass_border_mode.dart';
 import 'liquid_glass_light_mode.dart';
 
-/// Abstract base border configuration
+/// Abstract base border configuration for liquid glass shapes.
+///
+/// Contains shared border parameters that apply to both classic and optical
+/// border modes. Mode-specific parameters are encapsulated in [borderType].
 abstract class LiquidGlassShape {
   /// The thickness of the lens border in logical pixels.
   ///
@@ -10,15 +14,9 @@ abstract class LiquidGlassShape {
   /// around the lens perimeter.
   final double borderWidth;
 
-  /// The smoothness or falloff softness of the border edge.
-  ///
-  /// A higher value results in a softer, feathered border transition,
-  /// while a lower value keeps it crisp and sharp.
-  final double borderSoftness;
-
   /// The base color of the lens border.
   ///
-  /// If not`null`, This will replace the light and shadow color. Its a solid color.
+  /// If not `null`, this will replace the light and shadow color. It's a solid color.
   final Color? borderColor;
 
   /// The brightness multiplier for lens lighting and reflections.
@@ -27,31 +25,11 @@ abstract class LiquidGlassShape {
   /// - Typical range: `0.0` (no lighting) → `1.0` (normal brightness) → `>1.0` (strong glow).
   final double lightIntensity;
 
-  /// Controls the intensity of the one-sided specular highlight
-  /// applied to the glass border.
-  ///
-  /// This affects only the specular reflection component and is
-  /// applied from a single light direction, creating a focused
-  /// glass-like shine on one side of the border.
-  ///
-  /// - `0.0` → Disables the specular highlight entirely.
-  /// - `1.0` → Default subtle specular reflection.
-  /// - `>1.0` → Produces a stronger, sharper highlight for a more
-  ///   glossy or crystal-like appearance.
-  ///
-  /// Recommended range: `0.0` to `2.0`.
-  final double oneSideLightIntensity;
-
   /// The primary highlight color applied to illuminated areas of the lens border.
   ///
-  /// Usually a lighter tint such as white or pale yellow.
+  /// Used in both classic mode (sweep gradient highlight) and optical mode
+  /// (specular boost highlights). Usually a lighter tint such as white or pale yellow.
   final Color lightColor;
-
-  /// The shadow color used on the opposite side of the lens border
-  /// to enhance depth and contrast.
-  ///
-  /// Typically a darker or cooler tone to complement `lightColor`.
-  final Color shadowColor;
 
   /// The directional angle (in degrees) from which the simulated light hits the lens.
   ///
@@ -64,10 +42,10 @@ abstract class LiquidGlassShape {
 
   /// Defines how lighting is calculated along the liquid glass border.
   ///
-  /// • [LiquidGlassLightMode.edge] — Uses the shape’s edge gradient
+  /// • [LiquidGlassLightMode.edge] — Uses the shape's edge gradient
   ///   as the surface normal, producing lighting that follows the
   ///   contour of the glass border and the light to expand along
-  ///   straight edges  This results in more physically
+  ///   straight edges. This results in more physically
   ///   accurate edge highlights.
   ///
   /// • [LiquidGlassLightMode.radial] — Uses a radial direction from
@@ -76,46 +54,119 @@ abstract class LiquidGlassShape {
   ///   lens-like lighting sweep around the border.
   final LiquidGlassLightMode lightMode;
 
+  /// Defines the rendering style and mode-specific parameters for the border.
+  ///
+  /// - [ClassicBorder] — Sweep gradient with light/shadow colors and softness.
+  /// - [OpticalBorder] — Apple-style SDF rim light with ambient tinting and saturation.
+  ///
+  /// Defaults to [OpticalBorder].
+  final LiquidGlassBorderType borderType;
+
   const LiquidGlassShape({
     this.borderWidth = 1.0,
-    this.borderSoftness = 1.0,
     this.borderColor,
     this.lightIntensity = 1.0,
-    this.oneSideLightIntensity = 0,
     this.lightColor = const Color(0xB2FFFFFF),
-    this.shadowColor = const Color(0x1A000000),
     this.lightDirection = 0.0,
     this.lightMode = LiquidGlassLightMode.edge,
+    this.borderType = const OpticalBorder(),
   });
+
+  // ── Convenience getters for the painter to extract values ──
+
+  /// The one-sided specular highlight intensity.
+  ///
+  /// Classic-only: returns the value from [ClassicBorder.oneSideLightIntensity]
+  /// in classic mode, and `0.0` for optical mode (which derives its rim from
+  /// the glass shape and does not use this specular term).
+  double get oneSideLightIntensity => switch (borderType) {
+        ClassicBorder(oneSideLightIntensity: final v) => v,
+        OpticalBorder() => 0.0,
+      };
+
+  /// The double-sided specular highlight intensity.
+  ///
+  /// Classic-only: returns the value from
+  /// [ClassicBorder.doubleSideLightIntensity] in classic mode, and `0.0` for
+  /// optical mode (which derives its rim from the glass shape and does not use
+  /// this specular term).
+  double get doubleSideLightIntensity => switch (borderType) {
+        ClassicBorder(doubleSideLightIntensity: final v) => v,
+        OpticalBorder() => 0.0,
+      };
+
+  /// The border softness (classic only, returns 1.0 for optical).
+  double get borderSoftness => switch (borderType) {
+        ClassicBorder(borderSoftness: final s) => s,
+        OpticalBorder() => 1.0,
+      };
+
+  /// The shadow color (classic only, returns transparent black for optical).
+  Color get shadowColor => switch (borderType) {
+        ClassicBorder(shadowColor: final c) => c,
+        OpticalBorder() => const Color(0x1A000000),
+      };
+
+  /// The ambient intensity used by the shader for the optical rim.
+  ///
+  /// Returns the user-configurable value from [OpticalBorder.ambientIntensity]
+  /// when in optical mode, and `0.0` for classic mode (which doesn't use
+  /// the ambient term).
+  double get ambientIntensity => switch (borderType) {
+        OpticalBorder(ambientIntensity: final a) => a,
+        ClassicBorder() => 0.0,
+      };
+
+  /// The border saturation (optical only, returns 1.0 for classic).
+  double get borderSaturation => switch (borderType) {
+        OpticalBorder(borderSaturation: final s) => s,
+        ClassicBorder() => 1.0,
+      };
+
+  /// The optical-mode rim solidity. `0.0` for classic mode (unused there).
+  double get borderSolidity => switch (borderType) {
+        OpticalBorder(borderSolidity: final s) => s,
+        ClassicBorder() => 0.0,
+      };
+
+  /// Whether the border mode is optical.
+  bool get isOpticalBorder => borderType.isOptical;
+
+  /// The border mode as the enum value (for shader uniform).
+  LiquidGlassBorderMode get borderMode => borderType.isOptical
+      ? LiquidGlassBorderMode.optical
+      : LiquidGlassBorderMode.classic;
 }
+
+/// For backward compatibility — the enum is still used internally
+/// by the shader dispatch logic.
+enum LiquidGlassBorderMode { classic, optical }
 
 class RoundedRectangleShape extends LiquidGlassShape {
   final double cornerRadius;
-  const RoundedRectangleShape(
-      {this.cornerRadius = 50.0,
-      super.borderWidth,
-      super.borderSoftness,
-      super.borderColor,
-      super.lightIntensity,
-      super.oneSideLightIntensity,
-      super.lightColor,
-      super.shadowColor,
-      super.lightDirection,
-      super.lightMode});
+  const RoundedRectangleShape({
+    this.cornerRadius = 50.0,
+    super.borderWidth,
+    super.borderColor,
+    super.lightIntensity,
+    super.lightColor,
+    super.lightDirection,
+    super.lightMode,
+    super.borderType,
+  });
 }
 
 class SuperellipseShape extends LiquidGlassShape {
   final double curveExponent;
 
-  const SuperellipseShape(
-      {this.curveExponent = 3.0,
-      super.borderWidth,
-      super.borderSoftness,
-      super.borderColor,
-      super.lightIntensity,
-      super.oneSideLightIntensity,
-      super.lightColor,
-      super.shadowColor,
-      super.lightDirection,
-      super.lightMode});
+  const SuperellipseShape({
+    this.curveExponent = 3.0,
+    super.borderWidth,
+    super.borderColor,
+    super.lightIntensity,
+    super.lightColor,
+    super.lightDirection,
+    super.lightMode,
+    super.borderType,
+  });
 }

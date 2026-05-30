@@ -1,3 +1,10 @@
+## 2.0.0
+- Added **optical border mode** (`OpticalBorder`) — Apple-style, SDF-based rim lighting with background-tinted highlights, dual-sided specular reflections, and a lens height profile — alongside the existing `ClassicBorder`.
+- Added new ready-made components: `LiquidGlassButton`, `LiquidGlassSearchBar`, `LiquidGlassAppIcon`, `LiquidGlassDock`, `LiquidGlassTabBar`, and `LiquidGlassBottomNavBar`.
+- Improved rendering stability on release/profile builds with Impeller.
+- Fixed lens and border content rendering upside down on Impeller's OpenGL ES backend (older Android devices) by inverting the texture sample Y-axis under `IMPELLER_TARGET_OPENGLES`.
+- **Breaking:** `oneSideLightIntensity` and `doubleSideLightIntensity` moved from the shape to `ClassicBorder`. Pass them via `borderType: ClassicBorder(...)` instead of directly on the shape.
+
 ## 1.1.1
 - Formatted the dart files and changed the size of the thumbnail of screenshot.
 

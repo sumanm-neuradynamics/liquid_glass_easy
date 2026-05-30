@@ -20,8 +20,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Using gradient backgrounds in code. If you add images later, include:
-
-
-  #   - assets/mountain.jpg
-  #   - assets/waterfall.jpg

@@ -56,10 +56,10 @@ class LiquidGlassView extends StatefulWidget {
 
   /// Controls how frequently the background is re-captured while real-time updates are enabled.
   ///
-  /// - [low] = ~10 FPS (energy saving)
-  /// - [medium] = ~24 FPS (balanced)
-  /// - [high] = ~60 FPS (smooth)
-  /// - [deviceRefreshRate] = tries to match the display refresh rate
+  /// - [LiquidGlassRefreshRate.low] = ~10 FPS (energy saving)
+  /// - [LiquidGlassRefreshRate.medium] = ~24 FPS (balanced)
+  /// - [LiquidGlassRefreshRate.high] = ~60 FPS (smooth)
+  /// - [LiquidGlassRefreshRate.deviceRefreshRate] = tries to match the display refresh rate
   final LiquidGlassRefreshRate refreshRate;
 
   const LiquidGlassView(

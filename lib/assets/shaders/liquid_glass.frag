@@ -45,6 +45,11 @@ uniform float u_chromaticAberration;
 uniform float u_saturation;
 uniform float u_lightMode;
 uniform float u_refractionMode;
+uniform float u_ambientIntensity;
+uniform float u_doubleSideLightIntensity;
+uniform float u_borderSaturation;
+uniform float u_borderSolidity;
+uniform float u_borderMode;
 
 
 out vec4 frag_color;
@@ -86,14 +91,19 @@ vec3 applySaturation(vec3 color, float saturation) {
 vec4 finalSample(
     vec2 refractedPx,
     vec2 texScale,
-    float shapeMask
+    float shapeMask,
+    out vec3 preTintColor
 ){
     vec3 refrColor;
 
     vec2 sampleUV = clamp(refractedPx * texScale, vec2(0.001), vec2(0.999));
+    #ifdef IMPELLER_TARGET_OPENGLES
+    sampleUV.y = 1.0 - sampleUV.y;
+    #endif
     refrColor = applyChromaticAberration(sampleUV, u_chromaticAberration);
     // Apply saturation BEFORE tinting
     refrColor = applySaturation(refrColor,u_saturation);
+    preTintColor = refrColor; // capture before tint for optical border
     vec4 base = vec4(refrColor * shapeMask, shapeMask);
     // Then apply lens tint
     base.rgb = applyLensTint(base.rgb, shapeMask, u_lensColor, u_borderAlpha);
@@ -185,18 +195,25 @@ void main() {
     vec2 magUV=magPx*invResY;
     if (zoneMask < 0.5) {
         // Outside distortion zone
+        vec3 preTintCol = vec3(0.0);
         vec4 base = (u_enableBackgroundTransparency > 0.5)
         ? vec4(0.0)
-        : finalSample(magUV, texScale, shapeMask);
+        : finalSample(magUV, texScale, shapeMask, preTintCol);
 
+        vec3 ambientCol = preTintCol;
         vec4 borderPremul = getSweepBorder(
             uvNorm, lensCenterNorm, shapeData.orthoDist,shapeData.grad,
             u_borderWidth, u_borderSoftness, u_borderColor,
             u_lightColor, u_shadowColor,
-            u_lightIntensity, u_borderAlpha, u_lightDirection, u_oneSideLightIntensity,u_lightMode
+            u_lightIntensity, u_borderAlpha, u_lightDirection, u_oneSideLightIntensity,u_lightMode,
+            ambientCol, u_ambientIntensity,
+            u_doubleSideLightIntensity,
+            u_borderSaturation,
+            u_borderSolidity,
+            u_borderMode
         );
 
-        frag_color = overlayPremul(base, borderPremul);
+        frag_color = overlayPremul(base, borderPremul, u_borderMode);
         return;
     }
 
@@ -239,17 +256,24 @@ void main() {
     // ===============================
     // Final sample & border
     // ===============================
-    vec4 base = finalSample(refrUV, texScale, shapeMask);
+    vec3 preTintCol2 = vec3(0.0);
+    vec4 base = finalSample(refrUV, texScale, shapeMask, preTintCol2);
 
+    vec3 ambientCol2 = preTintCol2;
     vec4 borderPremul = getSweepBorder(
         uvNorm, lensCenterNorm, shapeData.orthoDist,shapeData.grad,
         u_borderWidth, u_borderSoftness, u_borderColor,
         u_lightColor, u_shadowColor,
-        u_lightIntensity, u_borderAlpha, u_lightDirection, u_oneSideLightIntensity,u_lightMode
+        u_lightIntensity, u_borderAlpha, u_lightDirection, u_oneSideLightIntensity,u_lightMode,
+        ambientCol2, u_ambientIntensity,
+        u_doubleSideLightIntensity,
+        u_borderSaturation,
+        u_borderSolidity,
+        u_borderMode
     );
 
     // ===============================
     // Output composite
     // ===============================
-    frag_color = overlayPremul(base, borderPremul);
+    frag_color = overlayPremul(base, borderPremul, u_borderMode);
 }

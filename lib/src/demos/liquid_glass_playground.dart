@@ -7,6 +7,7 @@ import '../helpers/slider_page_view.dart';
 import '../widgets/liquid_glass.dart';
 import '../widgets/liquid_glass_view.dart';
 import '../widgets/utils/liquid_glass_blur.dart';
+import '../widgets/utils/liquid_glass_border_mode.dart';
 import '../widgets/utils/liquid_glass_light_mode.dart';
 import '../widgets/utils/liquid_glass_refraction_mode.dart';
 import '../widgets/utils/liquid_glass_shape.dart';
@@ -41,7 +42,6 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
   double backgroundTransparencyFadeIn = 0;
   double diagonalFlip = 0;
   double borderWidth = 1.0;
-  double borderSoftness = 1.0;
   double lightIntensity = 1.0;
   double oneSideLightIntensity = 0.0;
   double chromaticAberration = 0.003;
@@ -62,6 +62,32 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
   bool isVisible = true;
   bool isRadialLightMode = false;
   bool isRadialRefractionMode = false;
+  double doubleSideLightIntensity = 0.0;
+  double borderSaturation = 1.0;
+  double ambientIntensity = 1.0;
+  double borderSolidity = 0.0;
+  double borderSoftness = 1.0;
+  bool isOpticalBorderMode = false;
+  Color glassColor = Colors.transparent;
+  Color lightColorValue = const Color(0xB2FFFFFF);
+  Color shadowColorValue = const Color(0x1A000000);
+
+  LiquidGlassBorderType _buildBorderType() {
+    if (isOpticalBorderMode) {
+      return OpticalBorder(
+        borderSaturation: borderSaturation,
+        ambientIntensity: ambientIntensity,
+        borderSolidity: borderSolidity,
+      );
+    } else {
+      return ClassicBorder(
+        borderSoftness: borderSoftness,
+        shadowColor: shadowColorValue,
+        oneSideLightIntensity: oneSideLightIntensity,
+        doubleSideLightIntensity: doubleSideLightIntensity,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,25 +137,26 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
                   chromaticAberration: chromaticAberration,
                   saturation: saturation,
                   draggable: true,
+                  color: glassColor,
                   blur: LiquidGlassBlur(sigmaX: blur, sigmaY: blur),
                   shape: shape
                       ? SuperellipseShape(
                           curveExponent: curveExponent,
                           borderWidth: borderWidth,
-                          borderSoftness: borderSoftness,
                           lightIntensity: lightIntensity,
                           lightDirection: lightDirection,
-                          oneSideLightIntensity: oneSideLightIntensity,
+                          lightColor: lightColorValue,
+                          borderType: _buildBorderType(),
                           lightMode: isRadialLightMode
                               ? LiquidGlassLightMode.radial
                               : LiquidGlassLightMode.edge)
                       : RoundedRectangleShape(
                           cornerRadius: cornerRadius,
                           borderWidth: borderWidth,
-                          borderSoftness: borderSoftness,
                           lightIntensity: lightIntensity,
                           lightDirection: lightDirection,
-                          oneSideLightIntensity: oneSideLightIntensity,
+                          lightColor: lightColorValue,
+                          borderType: _buildBorderType(),
                           lightMode: isRadialLightMode
                               ? LiquidGlassLightMode.radial
                               : LiquidGlassLightMode.edge),
@@ -158,6 +185,14 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
             lightIntensity: lightIntensity,
             oneSideLightIntensity: oneSideLightIntensity,
             lightMode: isRadialLightMode,
+            doubleSideLightIntensity: doubleSideLightIntensity,
+            borderSaturation: borderSaturation,
+            ambientIntensity: ambientIntensity,
+            borderSolidity: borderSolidity,
+            borderMode: isOpticalBorderMode,
+            glassColor: glassColor,
+            lightColorValue: lightColorValue,
+            shadowColorValue: shadowColorValue,
             chromaticAberration: chromaticAberration,
             saturation: saturation,
             blur: blur,
@@ -186,6 +221,19 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
             onOneSideLightIntensityChanged: (v) =>
                 setState(() => oneSideLightIntensity = v),
             onLightModeChanged: (v) => setState(() => isRadialLightMode = v),
+            onDoubleSideLightIntensityChanged: (v) =>
+                setState(() => doubleSideLightIntensity = v),
+            onBorderSaturationChanged: (v) =>
+                setState(() => borderSaturation = v),
+            onAmbientIntensityChanged: (v) =>
+                setState(() => ambientIntensity = v),
+            onBorderSolidityChanged: (v) =>
+                setState(() => borderSolidity = v),
+            onBorderModeChanged: (v) =>
+                setState(() => isOpticalBorderMode = v),
+            onGlassColorChanged: (v) => setState(() => glassColor = v),
+            onLightColorChanged: (v) => setState(() => lightColorValue = v),
+            onShadowColorChanged: (v) => setState(() => shadowColorValue = v),
             onChromaticAberrationChanged: (v) =>
                 setState(() => chromaticAberration = v),
             onSaturationChanged: (v) => setState(() => saturation = v),

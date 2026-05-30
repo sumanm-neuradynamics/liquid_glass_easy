@@ -26,6 +26,14 @@ class SlidersPageView extends StatelessWidget {
   final double oneSideLightIntensity;
   final double lightDirection;
   final bool lightMode;
+  final double doubleSideLightIntensity;
+  final double borderSaturation;
+  final double ambientIntensity;
+  final double borderSolidity;
+  final bool borderMode;
+  final Color glassColor;
+  final Color lightColorValue;
+  final Color shadowColorValue;
   final double chromaticAberration;
   final double saturation;
   final double curveExponent;
@@ -54,6 +62,14 @@ class SlidersPageView extends StatelessWidget {
 
   final ValueChanged<double> onLightDirectionChanged;
   final ValueChanged<bool> onLightModeChanged;
+  final ValueChanged<double> onDoubleSideLightIntensityChanged;
+  final ValueChanged<double> onBorderSaturationChanged;
+  final ValueChanged<double> onAmbientIntensityChanged;
+  final ValueChanged<double> onBorderSolidityChanged;
+  final ValueChanged<bool> onBorderModeChanged;
+  final ValueChanged<Color> onGlassColorChanged;
+  final ValueChanged<Color> onLightColorChanged;
+  final ValueChanged<Color> onShadowColorChanged;
   final ValueChanged<double> onChromaticAberrationChanged;
   final ValueChanged<double> onSaturationChanged;
 
@@ -84,6 +100,14 @@ class SlidersPageView extends StatelessWidget {
     required this.oneSideLightIntensity,
     required this.lightDirection,
     required this.lightMode,
+    required this.doubleSideLightIntensity,
+    required this.borderSaturation,
+    required this.ambientIntensity,
+    required this.borderSolidity,
+    required this.borderMode,
+    required this.glassColor,
+    required this.lightColorValue,
+    required this.shadowColorValue,
     required this.chromaticAberration,
     required this.saturation,
     required this.curveExponent,
@@ -110,6 +134,14 @@ class SlidersPageView extends StatelessWidget {
     required this.onOneSideLightIntensityChanged,
     required this.onLightDirectionChanged,
     required this.onLightModeChanged,
+    required this.onDoubleSideLightIntensityChanged,
+    required this.onBorderSaturationChanged,
+    required this.onAmbientIntensityChanged,
+    required this.onBorderSolidityChanged,
+    required this.onBorderModeChanged,
+    required this.onGlassColorChanged,
+    required this.onLightColorChanged,
+    required this.onShadowColorChanged,
     required this.onChromaticAberrationChanged,
     required this.onSaturationChanged,
     required this.onCurveExponentChanged,
@@ -336,6 +368,12 @@ class SlidersPageView extends StatelessWidget {
                       devision: 30,
                       onChanged: onSaturationChanged,
                     ),
+                    const SizedBox(height: 12),
+                    _ColorPickerRow(
+                      label: "Glass Color",
+                      color: glassColor,
+                      onChanged: onGlassColorChanged,
+                    ),
                   ],
                 ),
 
@@ -345,6 +383,18 @@ class SlidersPageView extends StatelessWidget {
                   title: "Border Settings",
                   icon: Icons.border_style,
                   sliders: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Text("Classic Border - Optical Border"),
+                        ),
+                        Switch(
+                          value: borderMode,
+                          onChanged: onBorderModeChanged,
+                        ),
+                      ],
+                    ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -365,13 +415,15 @@ class SlidersPageView extends StatelessWidget {
                       devision: 100,
                       onChanged: onBorderWidthChanged,
                     ),
+                    // Classic only
                     SliderWidget(
-                      label: "Border Softness",
+                      label: "Border Softness${borderMode ? ' (Classic only)' : ''}",
                       value: borderSoftness,
                       min: 0,
                       max: 50,
                       devision: 100,
                       onChanged: onBorderSoftnessChanged,
+                      enabled: !borderMode,
                     ),
                     SliderWidget(
                       label: "Light Intensity",
@@ -382,12 +434,22 @@ class SlidersPageView extends StatelessWidget {
                       onChanged: onLightIntensityChanged,
                     ),
                     SliderWidget(
-                      label: "One Side Light Intensity",
+                      label: "One Side Light Intensity${borderMode ? ' (Classic only)' : ''}",
                       value: oneSideLightIntensity,
                       min: 0,
                       max: 5,
                       devision: 100,
                       onChanged: onOneSideLightIntensityChanged,
+                      enabled: !borderMode,
+                    ),
+                    SliderWidget(
+                      label: "Double Side Light Intensity${borderMode ? ' (Classic only)' : ''}",
+                      value: doubleSideLightIntensity,
+                      min: 0,
+                      max: 5,
+                      devision: 100,
+                      onChanged: onDoubleSideLightIntensityChanged,
+                      enabled: !borderMode,
                     ),
                     SliderWidget(
                       label: "Light Direction",
@@ -396,6 +458,50 @@ class SlidersPageView extends StatelessWidget {
                       max: 360,
                       devision: 360,
                       onChanged: onLightDirectionChanged,
+                    ),
+                    // Optical only
+                    SliderWidget(
+                      label: "Border Saturation${!borderMode ? ' (Optical only)' : ''}",
+                      value: borderSaturation,
+                      min: 0,
+                      max: 3,
+                      devision: 100,
+                      onChanged: onBorderSaturationChanged,
+                      enabled: borderMode,
+                    ),
+                    // Optical only
+                    SliderWidget(
+                      label: "Ambient Intensity${!borderMode ? ' (Optical only)' : ''}",
+                      value: ambientIntensity,
+                      min: 0,
+                      max: 5,
+                      devision: 100,
+                      onChanged: onAmbientIntensityChanged,
+                      enabled: borderMode,
+                    ),
+                    // Optical only
+                    SliderWidget(
+                      label: "Border Solidity${!borderMode ? ' (Optical only)' : ''}",
+                      value: borderSolidity,
+                      min: 0,
+                      max: 1,
+                      devision: 100,
+                      onChanged: onBorderSolidityChanged,
+                      enabled: borderMode,
+                    ),
+                    const SizedBox(height: 12),
+                    // Classic only — shadow color
+                    _ColorPickerRow(
+                      label: "Light Color",
+                      color: lightColorValue,
+                      onChanged: onLightColorChanged,
+                    ),
+                    const SizedBox(height: 8),
+                    _ColorPickerRow(
+                      label: "Shadow Color${borderMode ? ' (Classic only)' : ''}",
+                      color: shadowColorValue,
+                      onChanged: onShadowColorChanged,
+                      enabled: !borderMode,
                     ),
                   ],
                 ),
@@ -486,28 +592,40 @@ class SlidersPageView extends StatelessWidget {
     final lightModeCode = lightMode
         ? '''${LiquidGlassLightMode.radial}'''
         : '''${LiquidGlassLightMode.edge}''';
+    final borderModeCode = borderMode
+        ? '''OpticalBorder(
+    borderSaturation: $borderSaturation,
+    ambientIntensity: $ambientIntensity,
+    borderSolidity: $borderSolidity,
+  )'''
+        : '''ClassicBorder(
+    borderSoftness: $borderSoftness,
+    shadowColor: $shadowColorValue,
+    oneSideLightIntensity: $oneSideLightIntensity,
+    doubleSideLightIntensity: $doubleSideLightIntensity,
+  )''';
 
     final shapeCode = shape
         ? '''
 SuperellipseShape(
-  oneSideLightIntensity: $oneSideLightIntensity,
   curveExponent: $curveExponent,
   borderWidth: $borderWidth,
-  borderSoftness: $borderSoftness,
   lightIntensity: $lightIntensity,
   lightDirection: $lightDirection,
-  lightMode: $lightModeCode
+  lightMode: $lightModeCode,
+  lightColor: $lightColorValue,
+  borderType: $borderModeCode,
 )
 '''
         : '''
 RoundedRectangleShape(
-  oneSideLightIntensity: $oneSideLightIntensity,
   cornerRadius: $cornerRadius,
   borderWidth: $borderWidth,
-  borderSoftness: $borderSoftness,
   lightIntensity: $lightIntensity,
   lightDirection: $lightDirection,
-  lightMode: $lightModeCode
+  lightMode: $lightModeCode,
+  lightColor: $lightColorValue,
+  borderType: $borderModeCode,
 )
 ''';
 
@@ -696,6 +814,7 @@ class SliderWidget extends StatelessWidget {
   final double max;
   final int? devision;
   final ValueChanged<double> onChanged;
+  final bool enabled;
 
   const SliderWidget({
     super.key,
@@ -705,50 +824,197 @@ class SliderWidget extends StatelessWidget {
     required this.max,
     this.devision,
     required this.onChanged,
+    this.enabled = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.secondary;
+    final disabledColor = Colors.grey.shade400;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Label + value
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Label + value
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: enabled ? null : disabledColor,
+                  ),
                 ),
+                Text(
+                  value.toStringAsFixed(2), // Show value here
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: enabled ? accent : disabledColor,
+                  ),
+                ),
+              ],
+            ),
+
+            // Slider
+            Slider(
+              activeColor: enabled ? accent : disabledColor,
+              inactiveColor: (enabled ? accent : disabledColor).withAlpha(76),
+              value: value,
+              min: min,
+              max: max,
+              divisions: devision,
+              onChanged: enabled ? onChanged : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ColorPickerRow extends StatelessWidget {
+  final String label;
+  final Color color;
+  final ValueChanged<Color> onChanged;
+  final bool enabled;
+
+  const _ColorPickerRow({
+    required this.label,
+    required this.color,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  void _showPicker(BuildContext context) {
+    double r = (color.r * 255).roundToDouble();
+    double g = (color.g * 255).roundToDouble();
+    double b = (color.b * 255).roundToDouble();
+    double a = (color.a * 255).roundToDouble();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            Color preview = Color.fromARGB(
+              a.round().clamp(0, 255),
+              r.round().clamp(0, 255),
+              g.round().clamp(0, 255),
+              b.round().clamp(0, 255),
+            );
+            Widget channelSlider(String ch, double val, Color trackColor,
+                ValueChanged<double> onCh) {
+              return Row(
+                children: [
+                  SizedBox(
+                      width: 20,
+                      child:
+                          Text(ch, style: const TextStyle(fontSize: 13))),
+                  Expanded(
+                    child: Slider(
+                      activeColor: trackColor,
+                      inactiveColor: trackColor.withAlpha(76),
+                      value: val,
+                      min: 0,
+                      max: 255,
+                      divisions: 255,
+                      onChanged: onCh,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 32,
+                    child: Text(val.round().toString(),
+                        style: const TextStyle(fontSize: 12)),
+                  ),
+                ],
+              );
+            }
+
+            return AlertDialog(
+              title: Text(label),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: preview,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  channelSlider("R", r, Colors.red, (v) {
+                    setDialogState(() => r = v);
+                  }),
+                  channelSlider("G", g, Colors.green, (v) {
+                    setDialogState(() => g = v);
+                  }),
+                  channelSlider("B", b, Colors.blue, (v) {
+                    setDialogState(() => b = v);
+                  }),
+                  channelSlider("A", a, Colors.grey, (v) {
+                    setDialogState(() => a = v);
+                  }),
+                ],
               ),
-              Text(
-                value.toStringAsFixed(2), // Show value here
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Cancel"),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    onChanged(preview);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text("Apply"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final disabledColor = Colors.grey.shade400;
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: GestureDetector(
+        onTap: enabled ? () => _showPicker(context) : null,
+        child: Row(
+          children: [
+            Text(label,
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: enabled ? null : disabledColor)),
+            const Spacer(),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade400),
               ),
-            ],
-          ),
-
-          // Slider
-          Slider(
-            activeColor: accent,
-            inactiveColor: accent.withAlpha(76),
-            value: value,
-            min: min,
-            max: max,
-            divisions: devision,
-            onChanged: onChanged,
-          ),
-        ],
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.color_lens_outlined,
+                size: 18, color: enabled ? null : disabledColor),
+          ],
+        ),
       ),
     );
   }
