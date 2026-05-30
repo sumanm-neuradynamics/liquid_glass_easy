@@ -1,7 +1,0 @@
-Release 2.0.1: respect outOfBoundaries when repositioning a lens
-
-- Gate the didUpdateWidget position clamp behind !outOfBoundaries so a
-  lens with outOfBoundaries: true is no longer pinned to the parent edge
-  when its position changes (e.g. list rows scrolling off-screen). Keeps
-  spacing between lenses correct.
-- Bump version 2.0.0 -> 2.0.1, update CHANGELOG and README install snippet.
