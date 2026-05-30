@@ -1,3 +1,6 @@
+## 2.0.1
+- Fixed lens position being clamped to the parent bounds even when `outOfBoundaries: true`. Repositioning a lens (e.g. rows scrolling off-screen in a list) no longer pins it to the edge, so spacing between lenses stays correct.
+
 ## 2.0.0
 - Added **optical border mode** (`OpticalBorder`) — Apple-style, SDF-based rim lighting with background-tinted highlights, dual-sided specular reflections, and a lens height profile — alongside the existing `ClassicBorder`.
 - Added new ready-made components: `LiquidGlassButton`, `LiquidGlassSearchBar`, `LiquidGlassAppIcon`, `LiquidGlassDock`, `LiquidGlassTabBar`, and `LiquidGlassBottomNavBar`.
