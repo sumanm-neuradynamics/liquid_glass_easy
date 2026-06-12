@@ -29,7 +29,29 @@ class LiquidGlassPainter extends CustomPainter {
   final ui.FragmentShader shader;
   final ui.FragmentShader? borderShader;
 
-  final ui.Image image;
+  /// When true, a refracted background sample that is (near) black is
+  /// drawn transparent instead of black. See [LiquidGlass.transparentWhenBlack].
+  final bool transparentWhenBlack;
+
+  final ui.Image? image;
+
+  /// Paint-time capture fallback. When [image] is null (first frame of a
+  /// freshly created view, before any capture has landed), `paint()`
+  /// calls this to synchronously rasterize the background boundary —
+  /// which has already painted earlier in the same frame — so the lens
+  /// refracts correctly with no one-frame gap. The fallback always
+  /// captures the full frame, matching the null [imageOffset]/[imageSize]
+  /// this painter is constructed with in that situation. Returns null on
+  /// failure, in which case the lens skips this frame (soft-fail).
+  final ui.Image? Function()? imageFallback;
+
+  /// Top-left (in parent logical px) of the parent-space rectangle the
+  /// captured [image] covers. `null` → full-frame capture (offset zero).
+  final Offset? imageOffset;
+
+  /// Size (in parent logical px) of the parent-space rectangle the
+  /// captured [image] covers. `null` → full-frame capture (== resolution).
+  final Size? imageSize;
 
   LiquidGlassPainter({
     required this.position,
@@ -53,10 +75,17 @@ class LiquidGlassPainter extends CustomPainter {
     required this.saturation,
     required this.refractionMode,
     required this.image,
+    this.imageFallback,
+    this.transparentWhenBlack = false,
+    this.imageOffset,
+    this.imageSize,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final ui.Image? sampledImage = image ?? imageFallback?.call();
+    if (sampledImage == null) return;
+
     final bool useBlur = blur.sigmaX > 0 || blur.sigmaY > 0;
     final lensPosition = dragOffset!;
     final double selectedLightMode =
@@ -75,16 +104,17 @@ class LiquidGlassPainter extends CustomPainter {
 
     shader.setFloat(index++, lensWidth);
     shader.setFloat(index++, lensHeight);
-    shader.setFloat(index++, border is RoundedRectangleShape ? 0 : 1);
+    // u_cornerRadius
     shader.setFloat(
         index++,
         border is RoundedRectangleShape
             ? (border as RoundedRectangleShape).cornerRadius
             : 0);
+    // u_cornerSmoothing: continuous-corner smoothing (0..1)
     shader.setFloat(
         index++,
-        border is SuperellipseShape
-            ? (border as SuperellipseShape).curveExponent
+        border is RoundedRectangleShape
+            ? (border as RoundedRectangleShape).cornerSmoothing
             : 0);
 
     shader.setFloat(index++, magnification);
@@ -94,16 +124,18 @@ class LiquidGlassPainter extends CustomPainter {
     shader.setFloat(index++, enableInnerRadiusTransparent ? 1.0 : 0.0);
     shader.setFloat(index++, diagonalFlip);
 
-    // No-blur path: main shader draws the border itself.
-    // Match the second pass's behavior: it doubles the border width
-    // (so its `effectiveBorderWidth = u_borderWidth * 2.0` covers the
-    // full intended inner width once the outer half is clipped).
-    // We do the same here — the main shader's centered band has its
-    // outer half clipped by `canvas.clipRRect` below, leaving the
-    // full intended border width visible inside the shape.
+    // No-blur path: main shader draws the border itself. We pass the
+    // full border-band width: doubled (the band is centered on the edge
+    // and its outer half is clipped by `canvas.clipRRect` below, leaving
+    // the intended width inside the shape), plus the optical-mode extra
+    // — historically a `+ 2` inside the shader, now added here in
+    // logical px so it scales consistently across the Skia and Impeller
+    // shader spaces.
     // Blur path: suppress the border in the main shader so the
     // second-pass painter draws it sharp on top of the blur.
-    shader.setFloat(index++, (!useBlur) ? border!.borderWidth * 2.0 : 0);
+    final double opticalExtra = border!.isOpticalBorder ? 2.0 : 0.0;
+    shader.setFloat(
+        index++, (!useBlur) ? border!.borderWidth * 2.0 + opticalExtra : 0);
     shader.setFloat(index++, border!.borderSoftness);
 
     shader.setFloat(index++, border!.borderColor?.r ?? 0);
@@ -134,21 +166,30 @@ class LiquidGlassPainter extends CustomPainter {
     // brightness cap so these contributions become invisible. Zero
     // them on the wire to keep behavior consistent with the UI.
     shader.setFloat(
-        index++,
-        border!.isOpticalBorder ? 0.0 : border!.oneSideLightIntensity);
+        index++, border!.isOpticalBorder ? 0.0 : border!.oneSideLightIntensity);
     shader.setFloat(index++, chromaticAberration);
     shader.setFloat(index++, saturation);
     shader.setFloat(index++, selectedLightMode);
     shader.setFloat(index++, selectedRefractionMode);
     shader.setFloat(index++, border!.ambientIntensity);
-    shader.setFloat(
-        index++,
+    shader.setFloat(index++,
         border!.isOpticalBorder ? 0.0 : border!.doubleSideLightIntensity);
     shader.setFloat(index++, border!.borderSaturation);
     shader.setFloat(index++, border!.borderSolidity);
     shader.setFloat(index++, selectedBorderMode);
+    shader.setFloat(index++, transparentWhenBlack ? 1.0 : 0.0);
 
-    shader.setImageSampler(0, image);
+    // u_imageOffset / u_imageSize — map the bound texture to a parent-space
+    // rect. Full-frame default: offset (0,0), size == resolution (`size`),
+    // which reproduces the old `refrPx / u_resolution` sampling exactly.
+    final Offset imgOffset = imageOffset ?? Offset.zero;
+    final Size imgSize = imageSize ?? size;
+    shader.setFloat(index++, imgOffset.dx);
+    shader.setFloat(index++, imgOffset.dy);
+    shader.setFloat(index++, imgSize.width);
+    shader.setFloat(index++, imgSize.height);
+
+    shader.setImageSampler(0, sampledImage);
 
     // final borderExpand = border!.borderWidth / 2;
     // final rectExpandedBorder = Rect.fromLTWH(
@@ -166,30 +207,13 @@ class LiquidGlassPainter extends CustomPainter {
 
     final rectRRect = RRect.fromRectAndRadius(
       rectExpandedBorder,
-      Radius.circular(
-        border is RoundedRectangleShape
-            ? (border as RoundedRectangleShape).cornerRadius
-            : 0,
-      ),
+      Radius.circular(liquidGlassClipCornerRadius(border!)),
     );
 
     //canvas.save();
     canvas.clipRRect(rectRRect);
 
     final lensPaint = Paint()..shader = shader;
-
-    if (useBlur && border is SuperellipseShape) {
-      // Clamp the superellipse blur to a maximum sigma of 3 to keep
-      // the effect tasteful and avoid heavy GPU cost on large shapes.
-      const double kSuperellipseMaxBlurSigma = 3.0;
-      lensPaint.imageFilter = ui.ImageFilter.blur(
-        sigmaX:
-            (blur.sigmaX * borderAlpha).clamp(0.0, kSuperellipseMaxBlurSigma),
-        sigmaY:
-            (blur.sigmaY * borderAlpha).clamp(0.0, kSuperellipseMaxBlurSigma),
-        tileMode: ui.TileMode.mirror,
-      );
-    }
     canvas.drawRRect(rectRRect, lensPaint);
     //canvas.restore();
   }
@@ -229,7 +253,10 @@ class LiquidGlassPainter extends CustomPainter {
         oldDelegate.saturation != saturation ||
         oldDelegate.refractionMode != refractionMode ||
         oldDelegate.shader != shader ||
-        oldDelegate.borderShader != borderShader;
+        oldDelegate.borderShader != borderShader ||
+        oldDelegate.transparentWhenBlack != transparentWhenBlack ||
+        oldDelegate.imageOffset != imageOffset ||
+        oldDelegate.imageSize != imageSize;
   }
 
   bool _shapeEquals(LiquidGlassShape? a, LiquidGlassShape? b) {
@@ -253,10 +280,8 @@ class LiquidGlassPainter extends CustomPainter {
     if (a.borderSolidity != b.borderSolidity) return false;
     if (a.borderMode != b.borderMode) return false;
     if (a is RoundedRectangleShape && b is RoundedRectangleShape) {
-      return a.cornerRadius == b.cornerRadius;
-    }
-    if (a is SuperellipseShape && b is SuperellipseShape) {
-      return a.curveExponent == b.curveExponent;
+      return a.cornerRadius == b.cornerRadius &&
+          a.cornerSmoothing == b.cornerSmoothing;
     }
     return true;
   }
@@ -277,7 +302,17 @@ class LiquidGlassBorderPainter extends CustomPainter {
   final LiquidGlassRefractionMode refractionMode;
   final LiquidGlassShape border;
   final double borderAlpha;
-  final ui.Image image;
+  final ui.Image? image;
+
+  /// See [LiquidGlassPainter.imageFallback]. Paint-time synchronous
+  /// capture used when [image] is still null on the first frame.
+  final ui.Image? Function()? imageFallback;
+
+  /// See [LiquidGlassPainter.imageOffset]. `null` → full-frame.
+  final Offset? imageOffset;
+
+  /// See [LiquidGlassPainter.imageSize]. `null` → full-frame.
+  final Size? imageSize;
 
   LiquidGlassBorderPainter({
     required this.borderShader,
@@ -295,10 +330,16 @@ class LiquidGlassBorderPainter extends CustomPainter {
     required this.border,
     required this.borderAlpha,
     required this.image,
+    this.imageFallback,
+    this.imageOffset,
+    this.imageSize,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final ui.Image? sampledImage = image ?? imageFallback?.call();
+    if (sampledImage == null) return;
+
     final double selectedLightMode =
         (border.lightMode == LiquidGlassLightMode.edge) ? 0 : 1;
     final double selectedBorderMode =
@@ -315,11 +356,7 @@ class LiquidGlassBorderPainter extends CustomPainter {
 
     final rrect = RRect.fromRectAndRadius(
       rect,
-      Radius.circular(
-        border is RoundedRectangleShape
-            ? (border as RoundedRectangleShape).cornerRadius
-            : 0,
-      ),
+      Radius.circular(liquidGlassClipCornerRadius(border)),
     );
 
     int index = 0;
@@ -330,23 +367,28 @@ class LiquidGlassBorderPainter extends CustomPainter {
       ..setFloat(index++, lensPosition.dy)
       ..setFloat(index++, lensWidth)
       ..setFloat(index++, lensHeight)
-      ..setFloat(index++, border is SuperellipseShape ? 1 : 0)
+      // u_cornerRadius
       ..setFloat(
           index++,
           border is RoundedRectangleShape
               ? (border as RoundedRectangleShape).cornerRadius
               : 0)
+      // u_cornerSmoothing: continuous-corner smoothing (0..1)
       ..setFloat(
           index++,
-          border is SuperellipseShape
-              ? (border as SuperellipseShape).curveExponent
+          border is RoundedRectangleShape
+              ? (border as RoundedRectangleShape).cornerSmoothing
               : 0)
       ..setFloat(index++, magnification)
       ..setFloat(index++, distortion)
       ..setFloat(index++, distortionWidth)
       ..setFloat(index++, enableInnerRadiusTransparent ? 1.0 : 0.0)
       ..setFloat(index++, diagonalFlip)
-      ..setFloat(index++, border.borderWidth)
+      // Full border-band width: doubled (the shader no longer doubles
+      // internally) plus the optical-mode extra, in logical px. Matches
+      // the main pass and the Impeller path.
+      ..setFloat(index++,
+          border.borderWidth * 2.0 + (border.isOpticalBorder ? 2.0 : 0.0))
       ..setFloat(index++, border.borderSoftness)
       ..setFloat(index++, border.borderColor?.r ?? 0)
       ..setFloat(index++, border.borderColor?.g ?? 0)
@@ -364,21 +406,28 @@ class LiquidGlassBorderPainter extends CustomPainter {
       ..setFloat(index++, border.shadowColor.a)
       ..setFloat(index++, border.lightDirection)
       ..setFloat(
-          index++,
-          border.isOpticalBorder ? 0.0 : border.oneSideLightIntensity)
+          index++, border.isOpticalBorder ? 0.0 : border.oneSideLightIntensity)
       ..setFloat(index++, chromaticAberration)
       ..setFloat(index++, saturation)
       ..setFloat(index++, selectedLightMode)
       ..setFloat(index++, selectedRefractionMode)
       ..setFloat(index++, border.ambientIntensity)
-      ..setFloat(
-          index++,
+      ..setFloat(index++,
           border.isOpticalBorder ? 0.0 : border.doubleSideLightIntensity)
       ..setFloat(index++, border.borderSaturation)
       ..setFloat(index++, border.borderSolidity)
       ..setFloat(index++, selectedBorderMode);
 
-    borderShader.setImageSampler(0, image);
+    // u_imageOffset / u_imageSize — full-frame default: (0,0) / size.
+    final Offset imgOffset = imageOffset ?? Offset.zero;
+    final Size imgSize = imageSize ?? size;
+    borderShader
+      ..setFloat(index++, imgOffset.dx)
+      ..setFloat(index++, imgOffset.dy)
+      ..setFloat(index++, imgSize.width)
+      ..setFloat(index++, imgSize.height);
+
+    borderShader.setImageSampler(0, sampledImage);
 
     final paint = Paint()..shader = borderShader;
 
@@ -411,6 +460,8 @@ class LiquidGlassBorderPainter extends CustomPainter {
         oldDelegate.refractionMode != refractionMode ||
         oldDelegate.borderAlpha != borderAlpha ||
         oldDelegate.borderShader != borderShader ||
+        oldDelegate.imageOffset != imageOffset ||
+        oldDelegate.imageSize != imageSize ||
         !_shapeEquals(oldDelegate.border, border);
   }
 
@@ -432,10 +483,8 @@ class LiquidGlassBorderPainter extends CustomPainter {
     if (a.borderSolidity != b.borderSolidity) return false;
     if (a.borderMode != b.borderMode) return false;
     if (a is RoundedRectangleShape && b is RoundedRectangleShape) {
-      return a.cornerRadius == b.cornerRadius;
-    }
-    if (a is SuperellipseShape && b is SuperellipseShape) {
-      return a.curveExponent == b.curveExponent;
+      return a.cornerRadius == b.cornerRadius &&
+          a.cornerSmoothing == b.cornerSmoothing;
     }
     return true;
   }

@@ -1,169 +1,52 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_easy/src/controllers/liquid_glass_controller.dart';
-import 'package:liquid_glass_easy/src/widgets/painters/liquid_glass_painter.dart';
-import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_blur.dart';
-import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_position.dart';
-import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_shape.dart';
 
-import 'utils/liquid_glass_refraction_mode.dart';
+import 'liquid_glass_config.dart';
+import 'render/impeller_liquid_glass_lens.dart';
+import 'render/skia_liquid_glass_lens.dart';
 
-// Represents a single lens in the LiquidGlass system
-class LiquidGlass {
-  /// Optional widget key, propagated to the underlying `LiquidGlassWidget`
-  /// inside `LiquidGlassView`. Use it to bind a lens `State` to a logical
-  /// slot (e.g. a fixed UI position) rather than to its index in `children`.
-  /// Without a stable key, inserting/removing other lenses (e.g. a progress
-  /// bar) can cause Flutter to reuse the wrong `State` for a lens.
-  final Key? key;
+export 'liquid_glass_config.dart' show LiquidGlass;
 
-  /// Controls the lens behavior programmatically, such as toggling visibility or
-  /// updating properties dynamically at runtime.
-  final LiquidGlassController? controller;
-
-  /// The width of the lens in logical pixels.
-  final double width;
-
-  /// The height of the lens in logical pixels.
-  final double height;
-
-  /// Defines how much the lens magnifies (zooms in on) the distorted content.
-  ///
-  /// - `1.0` means no magnification.
-  final double magnification;
-
-  /// Defines how light is refracted through the liquid glass surface.
-  ///
-  /// This determines the visual distortion pattern applied to the
-  /// background behind the glass effect:
-  ///
-  /// • [LiquidGlassRefractionMode.shapeRefraction] — Refracts light
-  ///   based on the underlying shape geometry, following the contours
-  ///   of the glass for a more physically accurate distortion.
-  ///
-  /// • [LiquidGlassRefractionMode.radialRefraction] — Refracts light
-  ///   radially from a central point, creating a circular
-  ///   distortion pattern.
-  final LiquidGlassRefractionMode refractionMode;
-
-  /// The bending strength of the distortion effect.
-  ///
-  /// Controls how much the refracted (bent) background is warped inside the
-  /// distortion width area. Higher values increase compression within the
-  /// distortion zone, creating a stronger bending effect. Lower values reduce
-  /// compression and produce softer distortion.
-  ///
-  /// - **Range:** `0.0` (no distortion) to `1.0` (maximum distortion).
-  final double distortion;
-
-  /// The thickness of the distortion band around the lens perimeter.
-  ///
-  /// This defines how wide the bending/refraction zone is. Larger values create
-  /// a thicker distortion border, affecting more of the background. Smaller values
-  /// produce a thinner, tighter distortion edge.
-  ///
-  /// - **Unit:** logical pixels
-  /// - **Typical range:** `0.0` (no distortion band) to around `50.0`+ depending
-  ///   on the lens size and desired visual intensity.
-  final double distortionWidth;
-
-  /// Applies a diagonal mirroring or flip effect to the refraction direction.
-  ///
-  /// Used to create artistic or mirrored lens effects.
-  final double diagonalFlip;
-
-  /// Determines whether the lens can be dragged (moved) by the user.
-  final bool draggable;
-
-  /// Optional widget content displayed inside the lens area.
-  ///
-  /// Can be used to show overlays, icons, or custom visual elements.
-  final Widget? child;
-
-  /// The position of the lens on screen.
-  ///
-  /// Can be defined either as an absolute `Offset` or a relative `Alignment` value.
-  final LiquidGlassPosition position;
-
-  /// The geometric shape of the lens and its optional border.
-  ///
-  /// Common options include `superellipse`, `roundedRect`, etc.
-  final LiquidGlassShape shape;
-
-  /// The blur configuration for the lens background.
-  ///
-  /// Controls how the underlying content is blurred beneath the glass.
-  final LiquidGlassBlur blur;
-
-  /// Controls the intensity of the chromatic aberration effect.
-  ///
-  /// Higher values increase the separation of color channels,
-  /// creating a stronger chromatic distortion. The default value is 0.003. A value of `0.0`
-  /// disables the effect.
-  final double chromaticAberration;
-
-  /// Controls the color saturation level of the rendered output.
-  ///
-  /// Values greater than `1.0` increase color intensity, while
-  /// values between `0.0` and `1.0` reduce saturation. A value of
-  /// `0.0` results in a grayscale image.
-  final double saturation;
-
-  /// Whether the inner, non-distorted region should be transparent.
-  ///
-  /// When enabled, the unaffected center area will reveal the background directly.
-  final bool enableInnerRadiusTransparent;
-
-  /// Whether the lens is currently visible or hidden in the view.
-  final bool visibility;
-
-  /// The base color tint of the lens.
-  ///
-  /// Can be semi-transparent to create colored glass effects.
-  final Color color;
-
-  /// Whether this lens is allowed to move outside the boundaries
-  /// of its parent container.
-  ///
-  /// When set to `true`, the lens can partially or fully extend beyond
-  /// the visible area of the parent, which can be useful for creative
-  /// transitions or edge-based effects.
-  ///
-  /// When set to `false` (default), the lens position is automatically
-  /// clamped to remain fully within the parent’s bounds.
-  final bool outOfBoundaries;
-
-  const LiquidGlass(
-      {this.key,
-      this.controller,
-      this.width = 200,
-      this.height = 100,
-      this.magnification = 1,
-      this.distortion = 0.1,
-      this.distortionWidth = 30,
-      this.enableInnerRadiusTransparent = false,
-      this.diagonalFlip = 0,
-      this.draggable = false,
-      this.child,
-      required this.position,
-      this.shape = const RoundedRectangleShape(),
-      this.blur = const LiquidGlassBlur(),
-      this.chromaticAberration = 0.003,
-      this.saturation = 1.0,
-      this.refractionMode = LiquidGlassRefractionMode.shapeRefraction,
-      this.visibility = true,
-      this.color = Colors.transparent,
-      this.outOfBoundaries = false});
-}
-
-/// Lens widgets that uses the shared shader + image
+/// Lens widget that uses the shared shader + image.
+///
+/// This widget is a thin **coordinator**: it owns the per-lens shared
+/// state (the show/hide [AnimationController] and the drag position
+/// notifier) and the position/clamping bookkeeping, then delegates the
+/// actual rendering to one of two paths:
+///
+///  • [ImpellerLiquidGlassLens] — `BackdropFilter` + `ImageFilter.shader`,
+///    sampling the **live backdrop** directly. Selected when
+///    [useImpellerBackdrop] is true.
+///  • [SkiaLiquidGlassLens] — `CustomPaint` sampling a **captured**
+///    snapshot of the background. The fallback for Skia / Web.
 class LiquidGlassWidget extends StatefulWidget {
   final Size parentSize;
   final LiquidGlass config;
   final ui.FragmentShader? sharedShader;
   final ui.FragmentShader? border;
 
+  /// Snapshot of the captured background. Only required on the
+  /// Skia / web path. On the Impeller path the shader reads the
+  /// live backdrop directly via `ImageFilter.shader` and this is
+  /// allowed to be null.
   final ui.Image? sharedImage;
+
+  /// Parent-space rectangle the [sharedImage] covers (Skia path). `null`
+  /// means the image is a full-frame capture. Forwarded to
+  /// [SkiaLiquidGlassLens] so the shader samples a region capture correctly.
+  final Rect? sharedImageRegion;
+
+  /// Paint-time synchronous capture fallback (Skia path). Invoked by the
+  /// painters when [sharedImage] is still null — the first frame after
+  /// the parent view is created — so the lens can refract the freshly
+  /// painted background within that same frame.
+  final ui.Image? Function()? captureFallback;
+
+  /// When true, the lens is rendered with `BackdropFilter` +
+  /// `ImageFilter.shader` instead of a `CustomPaint` that samples a
+  /// captured image. Set by the parent view based on
+  /// `ImageFilter.isShaderFilterSupported`.
+  final bool useImpellerBackdrop;
 
   const LiquidGlassWidget(
       {super.key,
@@ -171,7 +54,10 @@ class LiquidGlassWidget extends StatefulWidget {
       required this.config,
       this.sharedShader,
       this.sharedImage,
-      this.border});
+      this.sharedImageRegion,
+      this.captureFallback,
+      this.border,
+      this.useImpellerBackdrop = false});
 
   @override
   State<LiquidGlassWidget> createState() => _LiquidGlassWidgetState();
@@ -297,18 +183,32 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
       // final scaleX = parentSize.width / oldParentSize.width;
       // final scaleY = parentSize.height / oldParentSize.height;
 
-      // Maintain the same relative touch offset ratio inside the parent
+      // Maintain the same relative touch offset ratio inside the parent.
+      //
+      // Guard against a degenerate old parent size. On the Impeller path
+      // a lens is created before layout settles, so its first
+      // `oldParentSize` is `Size(0, 0)`. Dividing by that yields NaN,
+      // and the clamp below turns NaN into the max bound — slamming the
+      // lens to the bottom-right corner. When the old size has no area we
+      // can't preserve a relative ratio anyway, so just snap to the
+      // freshly resolved position.
+      final bool canScale = oldParentSize.width > 0 && oldParentSize.height > 0;
       final Offset oldTouch = _touchNotifier.value;
-      final Offset relative = Offset(
-        (oldTouch.dx - oldResolvedPosition.dx) / oldParentSize.width,
-        (oldTouch.dy - oldResolvedPosition.dy) / oldParentSize.height,
-      );
 
-      // Apply scaling and update position proportionally
-      Offset newTouch = Offset(
-        resolvedPosition.dx + relative.dx * parentSize.width,
-        resolvedPosition.dy + relative.dy * parentSize.height,
-      );
+      Offset newTouch;
+      if (canScale) {
+        final Offset relative = Offset(
+          (oldTouch.dx - oldResolvedPosition.dx) / oldParentSize.width,
+          (oldTouch.dy - oldResolvedPosition.dy) / oldParentSize.height,
+        );
+        // Apply scaling and update position proportionally.
+        newTouch = Offset(
+          resolvedPosition.dx + relative.dx * parentSize.width,
+          resolvedPosition.dy + relative.dy * parentSize.height,
+        );
+      } else {
+        newTouch = resolvedPosition;
+      }
 
       // Clamp lens inside parent bounds — but only when the lens is NOT
       // allowed out of bounds. With outOfBoundaries == true, the lens must
@@ -355,160 +255,31 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
 
   @override
   Widget build(BuildContext context) {
-    final bool useBlur =
-        widget.config.blur.sigmaX > 0 || widget.config.blur.sigmaY > 0;
+    if (_animController.value >= 1) return const SizedBox.shrink();
 
-    return (_animController.value < 1)
-        ? Stack(
-            children: [
-              // Shader layer
-              IgnorePointer(
-                ignoring: true,
-                child: SizedBox(
-                  width: widget.parentSize.width,
-                  height: widget.parentSize.height,
-                  child: CustomPaint(
-                    painter: (widget.sharedShader != null &&
-                            widget.sharedImage != null)
-                        ? LiquidGlassPainter(
-                            dragOffset: _touchNotifier.value,
-                            position: widget.config.position,
-                            lensWidth: widget.config.width,
-                            lensHeight: widget.config.height,
-                            magnification: (_animController.value) +
-                                (widget.config.magnification *
-                                    (1 - _animController.value)),
-                            distortion: widget.config.distortion,
-                            distortionWidth: (widget.config.distortionWidth -
-                                _animController.value *
-                                    widget.config.distortionWidth),
-                            diagonalFlip: widget.config.diagonalFlip,
-                            enableInnerRadiusTransparent:
-                                widget.config.enableInnerRadiusTransparent,
-                            draggable: widget.config.draggable,
-                            parentSize: widget.parentSize,
-                            border: widget.config.shape,
-                            borderAlpha: (1 - _animController.value),
-                            blur: widget.config.blur,
-                            color: widget.config.color,
-                            shader: widget.sharedShader!,
-                            image: widget.sharedImage!,
-                            borderShader: widget.border,
-                            chromaticAberration:
-                                widget.config.chromaticAberration *
-                                    (1 - _animController.value),
-                            saturation: (_animController.value) +
-                                (widget.config.saturation *
-                                    (1 - _animController.value)),
-                            refractionMode: widget.config.refractionMode,
-                          )
-                        : null,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
+    // Pick the render path. Each path widget owns its own rendering and
+    // rebuild scope; this coordinator only owns the shared state
+    // (animation + drag position) and passes it down by reference.
+    if (widget.useImpellerBackdrop) {
+      return ImpellerLiquidGlassLens(
+        config: widget.config,
+        parentSize: widget.parentSize,
+        shader: widget.sharedShader,
+        touch: _touchNotifier,
+        animation: _animController,
+      );
+    }
 
-              // BackdropFilter blur for RoundedRectangleShape (matches root widget approach)
-              if (widget.border != null &&
-                  useBlur &&
-                  widget.config.shape is RoundedRectangleShape)
-                Positioned(
-                  left: _touchNotifier.value.dx,
-                  top: _touchNotifier.value.dy,
-                  width: widget.config.width,
-                  height: widget.config.height,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      widget.config.shape is RoundedRectangleShape
-                          ? (widget.config.shape as RoundedRectangleShape)
-                              .cornerRadius
-                          : 0,
-                    ),
-                    child: BackdropFilter(
-                      filter: ui.ImageFilter.blur(
-                        sigmaX: widget.config.blur.sigmaX *
-                            (1 - _animController.value),
-                        sigmaY: widget.config.blur.sigmaY *
-                            (1 - _animController.value),
-                      ),
-                      child: Container(
-                      ),
-                    ),
-                  ),
-                ),
-
-              // // SECOND PASS: border painter ONLY (sharp, isolated)
-              if (widget.border != null && widget.sharedImage != null&& useBlur)
-                IgnorePointer(
-                  ignoring: true,
-                  child: CustomPaint(
-                    painter: LiquidGlassBorderPainter(
-                      borderShader: widget.border!,
-                      lensPosition: _touchNotifier.value,
-                      lensWidth: widget.config.width,
-                      lensHeight: widget.config.height,
-                      magnification: (_animController.value) +
-                          (widget.config.magnification *
-                              (1 - _animController.value)),
-                      distortion: widget.config.distortion,
-                      distortionWidth: (widget.config.distortionWidth -
-                          _animController.value *
-                              widget.config.distortionWidth),
-                      diagonalFlip: widget.config.diagonalFlip,
-                      enableInnerRadiusTransparent:
-                          widget.config.enableInnerRadiusTransparent,
-                      chromaticAberration:
-                          widget.config.chromaticAberration *
-                              (1 - _animController.value),
-                      saturation: (_animController.value) +
-                          (widget.config.saturation *
-                              (1 - _animController.value)),
-                      refractionMode: widget.config.refractionMode,
-                      border: widget.config.shape,
-                      borderAlpha: (1 - _animController.value),
-                      image: widget.sharedImage!,
-                    ),
-                    size: Size.infinite,
-                  ),
-                ),
-
-              // Draggable lens
-              ValueListenableBuilder<Offset>(
-                valueListenable: _touchNotifier,
-                builder: (context, offset, child) {
-                  return Positioned(
-                    left: offset.dx,
-                    top: offset.dy,
-                    width: widget.config.width -
-                        widget.config.shape.borderWidth / 2,
-                    height: widget.config.height -
-                        widget.config.shape.borderWidth / 2,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior
-                          .opaque, // ensures full area receives gestures
-                      onPanUpdate: widget.config.draggable
-                          ? (details) {
-                              _touchNotifier.value += details.delta;
-                            }
-                          : null,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          widget.config.shape is RoundedRectangleShape
-                              ? (widget.config.shape as RoundedRectangleShape)
-                                  .cornerRadius
-                              : 0,
-                        ),
-                        child: widget.config.child ??
-                            Container(
-                              color: Colors.transparent,
-                            ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          )
-        : SizedBox.shrink();
+    return SkiaLiquidGlassLens(
+      config: widget.config,
+      parentSize: widget.parentSize,
+      shader: widget.sharedShader,
+      image: widget.sharedImage,
+      imageFallback: widget.captureFallback,
+      borderShader: widget.border,
+      touch: _touchNotifier,
+      animValue: _animController.value,
+      imageRegion: widget.sharedImageRegion,
+    );
   }
 }

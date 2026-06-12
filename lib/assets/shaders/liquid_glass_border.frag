@@ -20,9 +20,8 @@ uniform sampler2D u_texture_input;
 
 uniform float u_lensWidth;
 uniform float u_lensHeight;
-uniform float u_shapeType; // 0 = rounded-rect, 1 = superellipse
 uniform float u_cornerRadius;
-uniform float u_superN;
+uniform float u_cornerSmoothing;
 uniform float u_magnification;
 uniform float u_distortion;
 uniform float u_distortionThicknessPx;
@@ -49,6 +48,12 @@ uniform float u_borderSaturation;
 uniform float u_borderSolidity;
 uniform float u_borderMode;
 
+// Capture-region mapping — see liquid_glass.frag. The bound texture
+// covers parent rect [u_imageOffset, u_imageOffset + u_imageSize].
+// Full-frame = (0,0)/u_resolution (old behavior); region = sub-rect.
+uniform vec2 u_imageOffset;
+uniform vec2 u_imageSize;
+
 out vec4 frag_color;
 
 #define REFRACTION_SHAPE    0
@@ -73,8 +78,11 @@ vec3 applySaturation(vec3 color, float saturation) {
     return mix(vec3(luminance), color, saturation);
 }
 
-vec3 sampleAmbientColor(vec2 refractedNorm, vec2 texScale) {
-    vec2 sampleUV = clamp(refractedNorm * texScale, vec2(0.001), vec2(0.999));
+vec3 sampleAmbientColor(vec2 refractedPx) {
+    // Map parent-pixel position into the bound texture's region rect.
+    // Full-frame = refractedPx / u_resolution (old behavior).
+    vec2 sampleUV = clamp((refractedPx - u_imageOffset) / u_imageSize,
+                          vec2(0.001), vec2(0.999));
     #ifdef IMPELLER_TARGET_OPENGLES
     sampleUV.y = 1.0 - sampleUV.y;
     #endif
@@ -90,7 +98,6 @@ void main() {
     vec2 fragPosPx = FlutterFragCoord().xy;
     float invResY  = 1.0 / u_resolution.y;
     vec2  uvNorm   = fragPosPx * invResY;
-    vec2  texScale = u_resolution.y / u_resolution;
 
     vec2 lensHalfSizePx = 0.5 * vec2(u_lensWidth, u_lensHeight);
     vec2 lensCenterPx   = u_touch + lensHalfSizePx;
@@ -100,20 +107,24 @@ void main() {
     // Shape distance (only this part changes per shape)
     // =====================================================
     ShapeData shapeData;
-    if (u_shapeType > 0.5) {
-        // Superellipse
-        float n = max(u_superN, 1.0001);
-        shapeData = evaluateShape(fragPosPx,lensCenterPx, lensHalfSizePx, n,u_shapeType);
+    // Rounded rectangle. u_cornerSmoothing carries the CONTINUOUS-CORNER
+    // smoothing (0 = plain circular corners, 1 = full Apple-style
+    // continuous corners). Must mirror the main shader's branch exactly
+    // so the rim hugs the same outline as the fill.
+    float maxCorner      = min(u_lensWidth, u_lensHeight) * 0.5;
+    float cornerRadiusPx = min(u_cornerRadius, maxCorner);
+    float smoothing      = clamp(u_cornerSmoothing, 0.0, 1.0);
+
+    if (smoothing > 0.001 && cornerRadiusPx > 0.5) {
+        vec2 zn = continuousCornerParams(cornerRadiusPx, smoothing, maxCorner);
+        shapeData = evaluateContinuousRRect(
+            fragPosPx, lensCenterPx, lensHalfSizePx, zn.x, zn.y);
     } else {
-        // Rounded rectangle
-        float maxCorner      = min(u_lensWidth, u_lensHeight) * 0.5;
-        float cornerRadiusPx = min(u_cornerRadius, maxCorner);
         shapeData = evaluateShape(
             fragPosPx,
             lensCenterPx,
             lensHalfSizePx,
-            cornerRadiusPx,
-            u_shapeType
+            cornerRadiusPx
         );
     }
 
@@ -122,8 +133,20 @@ void main() {
     // =====================================================
     vec3 ambientCol = vec3(0.0);
 
-    // Clip border to inner side only — discard fragments outside the shape
-    if (shapeData.orthoDist > 0.0) {
+    // Soft outer-edge mask. The Skia path got outer AA "for free"
+    // from the drawRRect call wrapping the border painter; on
+    // Impeller (ImageFilter.shader inside a BackdropFilter) there is
+    // no such wrapping draw, so we have to fade the border alpha
+    // ourselves over the last screen-space pixel of the shape.
+    //
+    // 1-pixel constant — fwidth(float) trips up SkSL on some
+    // devices, so don't use it.
+    float outerAa = 1.0;
+    float outerMask = 1.0 - smoothstep(-outerAa * 0.5, outerAa * 0.5,
+                                       shapeData.orthoDist);
+
+    // Cheap early-out for fragments well past the AA band.
+    if (shapeData.orthoDist > outerAa) {
         frag_color = vec4(0.0);
         return;
     }
@@ -133,8 +156,6 @@ void main() {
         lensCenterPx,
         u_magnification
     );
-    vec2 magUV = magPx * invResY;
-
     float distAbsPx = abs(shapeData.orthoDist);
     float zoneLimit = u_distortionThicknessPx;
     float zoneMask = step(distAbsPx, zoneLimit);
@@ -142,7 +163,7 @@ void main() {
     ambientCol = vec3(0.0);
     if (zoneMask < 0.5) {
         if (u_enableBackgroundTransparency <= 0.5) {
-            ambientCol = sampleAmbientColor(magUV, texScale);
+            ambientCol = sampleAmbientColor(magPx);
         }
     } else {
         float zoneT = 1.0 - clamp(distAbsPx / max(zoneLimit, EPS), 0.0, 1.0);
@@ -150,6 +171,8 @@ void main() {
         vec2 refrPx;
 
         if (u_refractionMode == REFRACTION_SHAPE) {
+            // Stable shape refraction (inset-anchor based) — keep in
+            // sync with liquid_glass.frag.
             refrPx = computeShapeRefraction(
                 magPx,
                 shapeData.normal,
@@ -160,6 +183,19 @@ void main() {
                 u_diagonalFlip,
                 zoneT
             );
+
+            // Experimental physical (Snell's law) refraction — disabled
+            // for now (suspected Impeller raster crash on some devices).
+            // Kept here to re-enable later; do not delete.
+            // refrPx = computeRefractedPosition(
+            //     magPx,
+            //     shapeData.normal,
+            //     shapeData.sdf,
+            //     u_distortionThicknessPx,
+            //     3.0,
+            //     u_distortion,
+            //     zoneT
+            // );
         } else {
             refrPx = refractFromAnchorPx(
                 magPx,
@@ -171,12 +207,14 @@ void main() {
             );
         }
 
-        ambientCol = sampleAmbientColor(refrPx * invResY, texScale);
+        ambientCol = sampleAmbientColor(refrPx);
     }
 
-    // Double the border width so that after clipping the outer half,
-    // the visible inner portion matches the intended width
-    float effectiveBorderWidth = u_borderWidth * 2.0;
+    // The caller already passes the full band width (pre-doubled, and
+    // including the optical-mode extra when applicable). After clipping
+    // the outer half, the visible inner portion matches the intended
+    // width. Kept as a named local for readability.
+    float effectiveBorderWidth = u_borderWidth;
 
     vec4 borderPremul = getSweepBorder(
         uvNorm,
@@ -197,5 +235,8 @@ void main() {
         u_borderSolidity,
         u_borderMode
     );
-    frag_color = borderPremul;
+    // Apply the soft outer-edge mask so the rounded corners fade
+    // out smoothly on Impeller (where there's no surrounding draw
+    // call to provide AA).
+    frag_color = borderPremul * outerMask;
 }

@@ -41,47 +41,40 @@ float roundedRectangleShape(vec2 p, vec2 c, vec2 h, float r){
 }
 
 /* ===========================
-   SUPEREllipse SDF
+   CONTINUOUS ROUNDED RECTANGLE (Apple-style corners)
+   ---------------------------------------------------
+   Same construction as the rounded rect, but the corner occupies a
+   WIDER zone than the visual radius (Apple's continuous corners run
+   ~1.528 × r along each edge) and uses an Ln-norm profile instead of
+   the circular L2. `zone` is the corner-zone size in px and `n` the
+   Ln exponent; both are derived ONCE per fragment from (radius,
+   smoothing) by the caller — see the .frag shape branches. When
+   zone == r and n == 2 this reduces exactly to the circular rounded
+   rect, which is also the automatic full-radius (capsule) limit.
    =========================== */
-float superellipseShape(vec2 p, vec2 c, vec2 hs, float n){
-    vec2 d = abs(p - c) / safe2(hs);
-    float k = fastPow(fastPow(d.x,n) + fastPow(d.y,n), 1.0/n);
-    float s = max(min(hs.x,hs.y), EPS);
-    return (k - 1.0) * s;
+float continuousRoundedRectShape(vec2 p, vec2 c, vec2 h, float zone, float n){
+    vec2 q = abs(p - c) - h + zone;
+    vec2 m = max(q, vec2(EPS));
+    float corner = fastPow(fastPow(m.x, n) + fastPow(m.y, n), 1.0 / n) - zone;
+    return min(max(q.x, q.y), 0.0) + corner;
 }
 
 /* ===========================
-   SHARED: Evaluate SDF + gradient
+   SHARED: Evaluate SDF + gradient (rounded rectangle)
    =========================== */
 ShapeData evaluateShape(
     vec2 fragPx,
     vec2 centerPx,
     vec2 halfSizePx,
-    float param,
-    float shapeType            // 0 = rrect, 1 = superellipse
+    float radius
 ){
     float h = 1.0;
 
-    float fC;
-    float fXp;
-    float fXm;
-    float fYp;
-    float fYm;
-
-    if (shapeType > 0.5) {
-        fC  = superellipseShape(fragPx,               centerPx, halfSizePx, param);
-        fXp = superellipseShape(fragPx + vec2(h,0.0), centerPx, halfSizePx, param);
-        fXm = superellipseShape(fragPx - vec2(h,0.0), centerPx, halfSizePx, param);
-        fYp = superellipseShape(fragPx + vec2(0.0,h), centerPx, halfSizePx, param);
-        fYm = superellipseShape(fragPx - vec2(0.0,h), centerPx, halfSizePx, param);
-    }
-    else {
-        fC  = roundedRectangleShape(fragPx,                  centerPx, halfSizePx, param);
-        fXp = roundedRectangleShape(fragPx + vec2(h,0.0),    centerPx, halfSizePx, param);
-        fXm = roundedRectangleShape(fragPx - vec2(h,0.0),    centerPx, halfSizePx, param);
-        fYp = roundedRectangleShape(fragPx + vec2(0.0,h),    centerPx, halfSizePx, param);
-        fYm = roundedRectangleShape(fragPx - vec2(0.0,h),    centerPx, halfSizePx, param);
-    }
+    float fC  = roundedRectangleShape(fragPx,                  centerPx, halfSizePx, radius);
+    float fXp = roundedRectangleShape(fragPx + vec2(h,0.0),    centerPx, halfSizePx, radius);
+    float fXm = roundedRectangleShape(fragPx - vec2(h,0.0),    centerPx, halfSizePx, radius);
+    float fYp = roundedRectangleShape(fragPx + vec2(0.0,h),    centerPx, halfSizePx, radius);
+    float fYm = roundedRectangleShape(fragPx - vec2(0.0,h),    centerPx, halfSizePx, radius);
 
     vec2 grad = 0.5 * vec2(fXp - fXm, fYp - fYm);
     float gL  = max(length(grad), EPS);
@@ -92,6 +85,62 @@ ShapeData evaluateShape(
     d.normal    = grad / gL;
     d.orthoDist = fC / gL;
 
+    return d;
+}
+
+/* ===========================
+   Continuous-corner zone + exponent from (radius, smoothing).
+   ---------------------------------------------------
+   smoothing 0 → zone = r, n = 2 (plain circular corner).
+   smoothing 1 → zone = 1.528 r (Apple's continuous-corner extension),
+   n ≈ 3.26 chosen so the curve passes through the SAME apex point as
+   the circular corner of radius r — the perceived radius stays r.
+   The zone is clamped to the shorter half-side, so as the radius
+   approaches full (capsule) the zone collapses back to r and n → 2:
+   a smooth degradation to a circular cap, exactly like iOS/Figma.
+   Returns vec2(zone, n).
+   =========================== */
+vec2 continuousCornerParams(float r, float smoothing, float maxCorner){
+    // Corner zone, clamped by the shorter half-side. As the radius
+    // approaches the maximum the zone collapses back to r and the
+    // exponent below lands exactly on n = 2 — the smoothing fades out
+    // and the shape returns to the PLAIN rounded rectangle (a clean
+    // capsule at full radius), matching iOS/Figma behavior.
+    float zone  = min(r * (1.0 + 0.528 * smoothing), maxCorner);
+    // Solve  1 - 2^(-1/n) = (1 - 1/sqrt(2)) * r / zone  for n, so the
+    // Ln corner's 45° apex coincides with the circular corner's apex.
+    float base  = 1.0 - 0.29289322 * (r / max(zone, EPS));
+    float n     = -1.0 / log2(clamp(base, 0.5, 1.0 - EPS));
+    return vec2(zone, n);
+}
+
+/* ===========================
+   Evaluate SDF + gradient for the CONTINUOUS ROUNDED RECT.
+   Same 5-tap central-difference scheme as evaluateShape; kept
+   separate because it needs both the zone size AND the exponent.
+   =========================== */
+ShapeData evaluateContinuousRRect(
+    vec2 fragPx,
+    vec2 centerPx,
+    vec2 halfSizePx,
+    float zone,
+    float n
+){
+    float h = 1.0;
+    float fC  = continuousRoundedRectShape(fragPx,               centerPx, halfSizePx, zone, n);
+    float fXp = continuousRoundedRectShape(fragPx + vec2(h,0.0), centerPx, halfSizePx, zone, n);
+    float fXm = continuousRoundedRectShape(fragPx - vec2(h,0.0), centerPx, halfSizePx, zone, n);
+    float fYp = continuousRoundedRectShape(fragPx + vec2(0.0,h), centerPx, halfSizePx, zone, n);
+    float fYm = continuousRoundedRectShape(fragPx - vec2(0.0,h), centerPx, halfSizePx, zone, n);
+
+    vec2 grad = 0.5 * vec2(fXp - fXm, fYp - fYm);
+    float gL  = max(length(grad), EPS);
+
+    ShapeData d;
+    d.sdf       = fC;
+    d.grad      = grad;
+    d.normal    = grad / gL;
+    d.orthoDist = fC / gL;
     return d;
 }
 
@@ -155,7 +204,6 @@ float computeDistortionFactor(float u_distortion, float t){
 
 /* ===========================
    FINAL UNIFIED REFRACTION (PX)
-   Works for rounded rect AND superellipse
    =========================== */
 vec2 computeShapeRefraction(
     vec2 fragPx,
@@ -176,6 +224,47 @@ vec2 computeShapeRefraction(
         diagonalFlip,
         zoneT
     );
+}
+
+/* ===========================
+   PHYSICAL REFRACTION (Snell's law via a 3D surface normal)
+   ---------------------------------------------------------
+   Lifts the 2D SDF gradient into a 3D normal that faces the viewer
+   deep inside the glass and tilts outward at the edge, then bends the
+   incident ray with refract() and displaces the sample by its
+   screen-space part.
+
+   Displacement strength = thickness * distortion (the public lens
+   `distortion` parameter, 0..1), tunable from Dart with no shader
+   edit. REFRACTION_DEPTH_SCALE is an extra global multiplier (1.0).
+   =========================== */
+#ifndef REFRACTION_DEPTH_SCALE
+#define REFRACTION_DEPTH_SCALE 1.0
+#endif
+
+vec2 computeRefractedPosition(
+    vec2 fragPx,
+    vec2 normal2D,
+    float sdf,
+    float thickness,
+    float refractiveIndex,
+    float distortion,
+    float zoneT
+){
+    // 2D gradient -> 3D surface normal.
+    float h     = clamp(-sdf / max(thickness, EPS), 0.0, 1.0);
+    float bulge = sqrt(max(1.0 - h * h, 0.0));
+    vec3  normal3D = normalize(vec3(normal2D * bulge, h));
+
+    // Incident ray straight into the screen.
+    vec3  I   = vec3(0.0, 0.0, -1.0);
+    float eta = 1.0 / max(refractiveIndex, EPS);
+
+    vec3 refr = refract(I, normal3D, eta);
+
+    // Displace by the refracted ray's screen-space (xy) component.
+    float depth = thickness * distortion * 5*REFRACTION_DEPTH_SCALE * zoneT;
+    return fragPx + refr.xy * depth;
 }
 
 vec2 applyLensMagnification(

@@ -20,9 +20,8 @@ uniform vec2  u_touch;
 uniform sampler2D u_texture_input;
 uniform float u_lensWidth;
 uniform float u_lensHeight;
-uniform float u_shapeType;
 uniform float u_cornerRadius;
-uniform float u_superN;
+uniform float u_cornerSmoothing;
 
 uniform float u_magnification;
 uniform float u_distortion;
@@ -50,6 +49,25 @@ uniform float u_doubleSideLightIntensity;
 uniform float u_borderSaturation;
 uniform float u_borderSolidity;
 uniform float u_borderMode;
+
+// Slider/toggle opt-in: when > 0.5, the refracted BACKGROUND sample's
+// captured alpha is honored — the lens output coverage is multiplied by
+// the texel's alpha so the real backdrop shows through in proportion to
+// its transparency (a fully transparent texel becomes fully transparent,
+// a 50%-alpha colored texel blends 50% with the backdrop). Keyed on the
+// background sample only; the border overlay is applied afterwards and
+// survives. No-op when 0 (every full-screen / opaque-background lens).
+uniform float u_transparentWhenBlack;
+
+// Capture-region mapping. The bound texture (u_texture_input) covers the
+// parent-space rectangle [u_imageOffset, u_imageOffset + u_imageSize] in
+// the SAME pixel space as FlutterFragCoord / u_resolution. For a normal
+// full-frame capture this is offset (0,0) and size u_resolution, which
+// reproduces the old `refrPx / u_resolution` mapping exactly. For a
+// region capture it is the captured sub-rect, so a smaller texture can be
+// bound without recompositing it back to full size.
+uniform vec2 u_imageOffset;
+uniform vec2 u_imageSize;
 
 
 out vec4 frag_color;
@@ -90,13 +108,16 @@ vec3 applySaturation(vec3 color, float saturation) {
 
 vec4 finalSample(
     vec2 refractedPx,
-    vec2 texScale,
     float shapeMask,
     out vec3 preTintColor
 ){
     vec3 refrColor;
 
-    vec2 sampleUV = clamp(refractedPx * texScale, vec2(0.001), vec2(0.999));
+    // Map the refracted PARENT-pixel position into the bound texture's
+    // [u_imageOffset, u_imageOffset + u_imageSize] rect. Full-frame =
+    // (refractedPx - 0) / u_resolution, identical to the old behavior.
+    vec2 sampleUV = clamp((refractedPx - u_imageOffset) / u_imageSize,
+                          vec2(0.001), vec2(0.999));
     #ifdef IMPELLER_TARGET_OPENGLES
     sampleUV.y = 1.0 - sampleUV.y;
     #endif
@@ -104,7 +125,26 @@ vec4 finalSample(
     // Apply saturation BEFORE tinting
     refrColor = applySaturation(refrColor,u_saturation);
     preTintColor = refrColor; // capture before tint for optical border
-    vec4 base = vec4(refrColor * shapeMask, shapeMask);
+
+    // Alpha-honoring transparency (slider/toggle opt-in). The captured
+    // background is a premultiplied RGBA texture: a fully transparent
+    // texel decodes to black (rgb 0, a 0) and a colored-but-semi-
+    // transparent texel keeps its premultiplied rgb plus a partial
+    // alpha. When the flag is on we sample that alpha and fold it into
+    // the output coverage so the real backdrop shows through in
+    // proportion to the texel's transparency — instead of forcing the
+    // sample opaque (the old binary black-key dropped only near-black
+    // pixels and also clobbered genuinely dark opaque content). Because
+    // the sample is premultiplied, refrColor * shapeMask stays the
+    // correct premultiplied rgb; only the alpha changes. The caller
+    // still lays the border on top afterwards, so the rim survives.
+    float coverage = shapeMask;
+    if (u_transparentWhenBlack > 0.5) {
+        float texAlpha = texture(u_texture_input, sampleUV).a;
+        coverage = shapeMask * texAlpha;
+    }
+
+    vec4 base = vec4(refrColor * shapeMask, coverage);
     // Then apply lens tint
     base.rgb = applyLensTint(base.rgb, shapeMask, u_lensColor, u_borderAlpha);
     return base;
@@ -112,12 +152,11 @@ vec4 finalSample(
 
 
 float computeShapeMask(float shapeDistPx) {
+    // Original behavior — always worked on Skia and Impeller.
+    // Don't try to use fwidth(): SkSL's transpiler chokes on
+    // fwidth(float) and the vec2 workaround was wrong on this
+    // device too. A 1-pixel constant is fine in practice.
     float aa = 1.0;
-
-    #ifdef GL_OES_standard_derivatives
-        aa = max(fwidth(shapeDistPx), 1.0);
-    #endif
-
     float mask = 1.0 - smoothstep(0.0, aa, shapeDistPx);
     mask *= step(shapeDistPx, 0.0);
     return mask;
@@ -134,7 +173,6 @@ void main() {
     vec2 fragPx   = FlutterFragCoord().xy;
     float invResY = 1.0 / u_resolution.y;
     vec2 uvNorm   = fragPx * invResY;
-    vec2 texScale = u_resolution.y / u_resolution;
 
     // ===============================
     // Lens geometry
@@ -150,27 +188,27 @@ void main() {
     float shapeMask;
     ShapeData shapeData;
 
-    // --- Compute shape distance depending on type ---
-    if (u_shapeType > 0.5) {
-        // Superellipse
-        float n = max(u_superN, 1.0001);
-        shapeData = evaluateShape(fragPx,lensCenterPx, lensHalfSizePx, n,u_shapeType);
-        shapeDistPx = shapeData.orthoDist;
-    } else {
-        // Rounded rectangle
-        float maxCorner      = min(u_lensWidth, u_lensHeight) * 0.5;
-        float cornerRadiusPx = min(u_cornerRadius, maxCorner);
+    // Rounded rectangle. u_cornerSmoothing carries the CONTINUOUS-CORNER
+    // smoothing (0 = plain circular corners, 1 = full Apple-style
+    // continuous corners).
+    float maxCorner      = min(u_lensWidth, u_lensHeight) * 0.5;
+    float cornerRadiusPx = min(u_cornerRadius, maxCorner);
+    float smoothing      = clamp(u_cornerSmoothing, 0.0, 1.0);
 
+    if (smoothing > 0.001 && cornerRadiusPx > 0.5) {
+        vec2 zn = continuousCornerParams(cornerRadiusPx, smoothing, maxCorner);
+        shapeData = evaluateContinuousRRect(
+            fragPx, lensCenterPx, lensHalfSizePx, zn.x, zn.y);
+    } else {
         shapeData = evaluateShape(
             fragPx,
             lensCenterPx,
             lensHalfSizePx,
-            cornerRadiusPx,
-            u_shapeType
+            cornerRadiusPx
         );
-
-        shapeDistPx = shapeData.orthoDist;
     }
+
+    shapeDistPx = shapeData.orthoDist;
 
     // --- Shared antialiasing + mask ---
     shapeMask = computeShapeMask(shapeDistPx);
@@ -192,13 +230,12 @@ void main() {
         u_magnification
     );
 
-    vec2 magUV=magPx*invResY;
     if (zoneMask < 0.5) {
         // Outside distortion zone
         vec3 preTintCol = vec3(0.0);
         vec4 base = (u_enableBackgroundTransparency > 0.5)
         ? vec4(0.0)
-        : finalSample(magUV, texScale, shapeMask, preTintCol);
+        : finalSample(magPx, shapeMask, preTintCol);
 
         vec3 ambientCol = preTintCol;
         vec4 borderPremul = getSweepBorder(
@@ -230,6 +267,7 @@ void main() {
     vec2 refrPx;
 
     if(u_refractionMode== REFRACTION_SHAPE) {
+        // Stable shape refraction (inset-anchor based).
         refrPx = computeShapeRefraction(
             magPx,
             shapeData.normal,
@@ -240,6 +278,19 @@ void main() {
             u_diagonalFlip,
             zoneT
         );
+
+        // Experimental physical (Snell's law) refraction — disabled
+        // for now (suspected Impeller raster crash on some devices).
+        // Kept here to re-enable later; do not delete.
+        // refrPx = computeRefractedPosition(
+        //     magPx,
+        //     shapeData.normal,
+        //     shapeData.sdf,
+        //     u_distortionThicknessPx,
+        //     3.0,
+        //     u_distortion,
+        //     zoneT
+        // );
     }
     else if(u_refractionMode== REFRACTION_RADIAL){
         vec2 distortionCenter = lensCenterPx;
@@ -252,12 +303,11 @@ void main() {
             zoneT
         );
     }
-    vec2 refrUV = refrPx * invResY;
     // ===============================
     // Final sample & border
     // ===============================
     vec3 preTintCol2 = vec3(0.0);
-    vec4 base = finalSample(refrUV, texScale, shapeMask, preTintCol2);
+    vec4 base = finalSample(refrPx, shapeMask, preTintCol2);
 
     vec3 ambientCol2 = preTintCol2;
     vec4 borderPremul = getSweepBorder(

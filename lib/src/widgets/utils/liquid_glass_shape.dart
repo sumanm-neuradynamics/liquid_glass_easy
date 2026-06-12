@@ -144,8 +144,23 @@ enum LiquidGlassBorderMode { classic, optical }
 
 class RoundedRectangleShape extends LiquidGlassShape {
   final double cornerRadius;
+
+  /// Apple-style continuous-corner smoothing, `0.0`–`1.0`.
+  ///
+  /// At `0.0` (the default) corners are plain circular arcs of
+  /// [cornerRadius]. At `1.0` the curvature region extends ~1.528 ×
+  /// [cornerRadius] along each edge — the same proportion as iOS
+  /// continuous corners — while the perceived corner radius stays
+  /// [cornerRadius] (the curve passes through the same apex point).
+  ///
+  /// The smoothing automatically fades out as [cornerRadius]
+  /// approaches half the lens's shorter side, degrading to a plain
+  /// circular cap at full radius (a capsule), exactly like iOS.
+  final double cornerSmoothing;
+
   const RoundedRectangleShape({
     this.cornerRadius = 50.0,
+    this.cornerSmoothing = 0.0,
     super.borderWidth,
     super.borderColor,
     super.lightIntensity,
@@ -156,17 +171,13 @@ class RoundedRectangleShape extends LiquidGlassShape {
   });
 }
 
-class SuperellipseShape extends LiquidGlassShape {
-  final double curveExponent;
+/// The corner radius used to **clip** a lens to its outline. The rounded-rect
+/// clips to a circular `RRect` of this radius; other shapes return `0`
+/// (rectangle clip, shader mask defines the shape).
+double liquidGlassClipCornerRadius(LiquidGlassShape shape) =>
+    shape is RoundedRectangleShape ? shape.cornerRadius : 0.0;
 
-  const SuperellipseShape({
-    this.curveExponent = 3.0,
-    super.borderWidth,
-    super.borderColor,
-    super.lightIntensity,
-    super.lightColor,
-    super.lightDirection,
-    super.lightMode,
-    super.borderType,
-  });
-}
+/// Whether the shape uses a rounded clip (rounded-rect) for its blur-backdrop
+/// and child clips.
+bool liquidGlassUsesRoundedClip(LiquidGlassShape shape) =>
+    shape is RoundedRectangleShape;

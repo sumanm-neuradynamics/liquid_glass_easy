@@ -29,6 +29,7 @@ class LiquidGlassExampleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      showPerformanceOverlay: false,
       theme: ThemeData(
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
@@ -411,8 +412,9 @@ class LensDemoPage extends StatelessWidget {
                 distortionWidth: 80,
                 draggable: true,
                 outOfBoundaries: true,
-                shape: const SuperellipseShape(
-                    curveExponent: 3,
+                shape: const RoundedRectangleShape(
+                    cornerRadius: 80,
+                    cornerSmoothing: 1,
                     borderWidth: 1,
                     borderType: OpticalBorder(),
                     lightIntensity: 1,
@@ -447,12 +449,13 @@ class LensDemoPage extends StatelessWidget {
               distortionWidth: 70,
               position: const LiquidGlassAlignPosition(
                   alignment: Alignment.center),
-              shape: const SuperellipseShape(
+              shape: const RoundedRectangleShape(
                   lightDirection: 140,
                   lightIntensity: 2,
                   borderWidth: 1,
                   borderType: OpticalBorder(borderSolidity: 0.5),
-                  curveExponent: 4),
+                  cornerRadius: 60,
+                  cornerSmoothing: 1),
             ),
           if (bgIndex == 5)
             LiquidGlass(

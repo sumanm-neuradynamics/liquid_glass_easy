@@ -144,8 +144,12 @@ vec4 getOpticalBorder(
 ){
     if (borderWidthPx <= 0.0 || borderAlpha <= 0.0) return vec4(0.0);
 
-    // Optical-mode width adjustment: add 1 px to the requested width.
-    borderWidthPx = borderWidthPx + 2;
+    // NOTE: the optical-mode width adjustment (historically `+ 2` here)
+    // is now applied on the Dart side, in *logical* px, before the
+    // per-path `scale` is applied. Doing it there keeps the rim the same
+    // logical width on both the Skia (logical-px) and Impeller
+    // (physical-px) shader spaces; adding a fixed constant here would be
+    // ~dpr too thin on Impeller. `borderWidthPx` already includes it.
 
     float sd = signedEdgeOrthoDistPx;
 

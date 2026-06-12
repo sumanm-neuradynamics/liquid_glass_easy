@@ -29,7 +29,6 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   // all the state values
-  bool shape = false;
   double lensWidth = 280;
   double lensHeight = 60;
   double cornerRadius = 30;
@@ -44,7 +43,7 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
   double chromaticAberration = 0.003;
   double saturation = 1;
   double lightDirection = 39.0;
-  double curveExponent = 3;
+  double cornerSmoothing = 0;
   double pixelRatio = 1.0;
   bool realTimeCapture = true;
   bool useSync = true;
@@ -121,6 +120,7 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
               realTimeCapture: realTimeCapture,
               refreshRate: liquidGlassRefreshRate,
               useSync: useSync,
+              
               children: [
                 LiquidGlass(
                   controller: controller,
@@ -142,27 +142,17 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
                   draggable: true,
                   color: glassColor,
                   blur: LiquidGlassBlur(sigmaX: blur, sigmaY: blur),
-                  shape: shape
-                      ? SuperellipseShape(
-                          curveExponent: curveExponent,
-                          borderWidth: borderWidth,
-                          lightIntensity: lightIntensity,
-                          lightDirection: lightDirection,
-                          lightColor: lightColorValue,
-                          borderType: _buildBorderType(),
-                          lightMode: isRadialLightMode
-                              ? LiquidGlassLightMode.radial
-                              : LiquidGlassLightMode.edge)
-                      : RoundedRectangleShape(
-                          cornerRadius: cornerRadius,
-                          borderWidth: borderWidth,
-                          lightIntensity: lightIntensity,
-                          lightDirection: lightDirection,
-                          lightColor: lightColorValue,
-                          borderType: _buildBorderType(),
-                          lightMode: isRadialLightMode
-                              ? LiquidGlassLightMode.radial
-                              : LiquidGlassLightMode.edge),
+                  shape: RoundedRectangleShape(
+                      cornerRadius: cornerRadius,
+                      cornerSmoothing: cornerSmoothing,
+                      borderWidth: borderWidth,
+                      lightIntensity: lightIntensity,
+                      lightDirection: lightDirection,
+                      lightColor: lightColorValue,
+                      borderType: _buildBorderType(),
+                      lightMode: isRadialLightMode
+                          ? LiquidGlassLightMode.radial
+                          : LiquidGlassLightMode.edge),
                   visibility: visibility,
 
                   //child:_GlassInputBar()
@@ -174,7 +164,6 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
           SlidersPageView(
             controller: _pageController,
             currentPage: _currentPage,
-            shape: shape,
             lensWidth: lensWidth,
             lensHeight: lensHeight,
             cornerRadius: cornerRadius,
@@ -185,7 +174,7 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
             diagonalFlip: diagonalFlip,
             borderWidth: borderWidth,
             borderSoftness: borderSoftness,
-            curveExponent: curveExponent,
+            cornerSmoothing: cornerSmoothing,
             lightDirection: lightDirection,
             lightIntensity: lightIntensity,
             oneSideLightIntensity: oneSideLightIntensity,
@@ -208,7 +197,6 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
             enableInnerRadiusTransparent: enableInnerRadiusTransparent,
             // callbacks update state
             onPageChanged: (i) => setState(() => _currentPage = i),
-            onShapeChanged: (i) => setState(() => shape = i),
             onLensWidthChanged: (v) => setState(() => lensWidth = v),
             onLensHeightChanged: (v) => setState(() => lensHeight = v),
             onCornerRadiusChanged: (v) => setState(() => cornerRadius = v),
@@ -221,7 +209,8 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
             onDiagonalFlipChanged: (v) => setState(() => diagonalFlip = v),
             onBorderWidthChanged: (v) => setState(() => borderWidth = v),
             onBorderSoftnessChanged: (v) => setState(() => borderSoftness = v),
-            onCurveExponentChanged: (v) => setState(() => curveExponent = v),
+            onCornerSmoothingChanged: (v) =>
+                setState(() => cornerSmoothing = v),
             onLightIntensityChanged: (v) => setState(() => lightIntensity = v),
             onOneSideLightIntensityChanged: (v) =>
                 setState(() => oneSideLightIntensity = v),

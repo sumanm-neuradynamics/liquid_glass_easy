@@ -10,8 +10,6 @@ class SlidersPageView extends StatelessWidget {
   final int currentPage;
 
   // values + callbacks
-  final bool shape;
-
   final double lensWidth;
   final double lensHeight;
   final double cornerRadius;
@@ -36,7 +34,7 @@ class SlidersPageView extends StatelessWidget {
   final Color shadowColorValue;
   final double chromaticAberration;
   final double saturation;
-  final double curveExponent;
+  final double cornerSmoothing;
   final double pixelRatio;
   final double blur;
   final double refreshRate;
@@ -45,7 +43,6 @@ class SlidersPageView extends StatelessWidget {
   final bool enableInnerRadiusTransparent;
 
   final ValueChanged<int> onPageChanged;
-  final ValueChanged<bool> onShapeChanged;
 
   final ValueChanged<double> onLensWidthChanged;
   final ValueChanged<double> onLensHeightChanged;
@@ -73,7 +70,7 @@ class SlidersPageView extends StatelessWidget {
   final ValueChanged<double> onChromaticAberrationChanged;
   final ValueChanged<double> onSaturationChanged;
 
-  final ValueChanged<double> onCurveExponentChanged;
+  final ValueChanged<double> onCornerSmoothingChanged;
   final ValueChanged<double> onBlurChanged;
   final ValueChanged<double> onRefreshRateChanged;
   final ValueChanged<double> onPixelRatioChanged;
@@ -85,7 +82,6 @@ class SlidersPageView extends StatelessWidget {
     super.key,
     required this.controller,
     required this.currentPage,
-    required this.shape,
     required this.lensWidth,
     required this.lensHeight,
     required this.cornerRadius,
@@ -110,7 +106,7 @@ class SlidersPageView extends StatelessWidget {
     required this.shadowColorValue,
     required this.chromaticAberration,
     required this.saturation,
-    required this.curveExponent,
+    required this.cornerSmoothing,
     required this.pixelRatio,
     required this.blur,
     required this.refreshRate,
@@ -118,7 +114,6 @@ class SlidersPageView extends StatelessWidget {
     required this.useSync,
     required this.enableInnerRadiusTransparent,
     required this.onPageChanged,
-    required this.onShapeChanged,
     required this.onLensWidthChanged,
     required this.onLensHeightChanged,
     required this.onCornerRadiusChanged,
@@ -144,7 +139,7 @@ class SlidersPageView extends StatelessWidget {
     required this.onShadowColorChanged,
     required this.onChromaticAberrationChanged,
     required this.onSaturationChanged,
-    required this.onCurveExponentChanged,
+    required this.onCornerSmoothingChanged,
     required this.onBlurChanged,
     required this.onRefreshRateChanged,
     required this.onPixelRatioChanged,
@@ -235,18 +230,6 @@ class SlidersPageView extends StatelessWidget {
                     },
                   ),
                   sliders: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Expanded(
-                          child: Text("Rounded Rectangle - Superellipse"),
-                        ),
-                        Switch(
-                          value: shape,
-                          onChanged: onShapeChanged,
-                        ),
-                      ],
-                    ),
                     SliderWidget(
                       label: "Width",
                       value: lensWidth,
@@ -264,7 +247,7 @@ class SlidersPageView extends StatelessWidget {
                       onChanged: onLensHeightChanged,
                     ),
                     SliderWidget(
-                      label: "Corner Radius (Rounded Rectangle)",
+                      label: "Corner Radius",
                       value: cornerRadius,
                       min: 0,
                       max: 100,
@@ -272,12 +255,12 @@ class SlidersPageView extends StatelessWidget {
                       onChanged: onCornerRadiusChanged,
                     ),
                     SliderWidget(
-                      label: "Curve Exponent (Superellipse)",
-                      value: curveExponent,
-                      min: 0.1,
-                      max: 7.0,
+                      label: "Corner Smoothing (Continuous Corners)",
+                      value: cornerSmoothing,
+                      min: 0.0,
+                      max: 1.0,
                       devision: 100,
-                      onChanged: onCurveExponentChanged,
+                      onChanged: onCornerSmoothingChanged,
                     ),
                   ],
                 ),
@@ -605,21 +588,10 @@ class SlidersPageView extends StatelessWidget {
     doubleSideLightIntensity: $doubleSideLightIntensity,
   )''';
 
-    final shapeCode = shape
-        ? '''
-SuperellipseShape(
-  curveExponent: $curveExponent,
-  borderWidth: $borderWidth,
-  lightIntensity: $lightIntensity,
-  lightDirection: $lightDirection,
-  lightMode: $lightModeCode,
-  lightColor: $lightColorValue,
-  borderType: $borderModeCode,
-)
-'''
-        : '''
+    final shapeCode = '''
 RoundedRectangleShape(
   cornerRadius: $cornerRadius,
+  cornerSmoothing: $cornerSmoothing,
   borderWidth: $borderWidth,
   lightIntensity: $lightIntensity,
   lightDirection: $lightDirection,

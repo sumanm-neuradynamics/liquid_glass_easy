@@ -44,7 +44,7 @@ It captures and refracts live background content in real time, producing **immer
 
 - 💠 **True liquid glass visuals** — replicate the look and physics of real glass with fluid transparency, soft highlights, and refraction that bends light naturally through your UI.
 - 🌀 **Real-time lens rendering** — see distortion, blur, tint, and refraction react instantly as elements move behind the glass.
-- 🎨 **Custom shapes** — design lenses as rounded rectangles, circles, or smooth superellipses that perfectly match your interface style.
+- 🎨 **Custom shapes** — design lenses as rounded rectangles, capsules, or Apple-style continuous-corner squircles that perfectly match your interface style.
 - 🌈 **Fully customizable effects** — control tint color, intensity, softness, refraction depth, and light direction for precise glass behavior.
 - 🧠 **Controller-driven animations** — show, hide, or animate lenses in real time through the `LiquidGlassController`.
 - ⚙️ **Shader-driven, GPU-accelerated pipeline** — ensures smooth, high-FPS performance even with multiple dynamic lenses.
@@ -279,8 +279,7 @@ LiquidGlass(
 ### Shape Types
 | Class | Description |
 |--------|-------------|
-| `RoundedRectangleShape` | Use `cornerRadius`. |
-| `SuperellipseShape` | Use `curveExponent`. |
+| `RoundedRectangleShape` | Use `cornerRadius`, plus optional `cornerSmoothing` (`0.0`–`1.0`) for Apple-style continuous corners. |
 
 ---
 
