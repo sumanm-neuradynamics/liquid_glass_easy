@@ -611,23 +611,31 @@ LiquidGlassView(
   backgroundWidget: YourBackgroundWidget(),
   children: [
     LiquidGlass(
-      controller: controller,
-      position: const LiquidGlassAlignPosition(
-        alignment: Alignment.center,
+      geometry: LiquidGlassGeometry(
+        position: const LiquidGlassAlignPosition(
+          alignment: Alignment.center,
+        ),
+        width: $lensWidth,
+        height: $lensHeight,
+        shape: $shapeCode,
       ),
-      width: $lensWidth,
-      height: $lensHeight,
-      magnification: $magnification,
-      refractionMode:$refractionModeCode,
-      enableInnerRadiusTransparent: $enableInnerRadiusTransparent,
-      diagonalFlip: $diagonalFlip,
-      distortion: $distortion,
-      distortionWidth: $distortionWidth,
-      draggable: true,
-      blur: LiquidGlassBlur(sigmaX: $blur, sigmaY: $blur),
-      shape: $shapeCode,
-      chromaticAberration:$chromaticAberration,
-      saturation:$saturation
+      refraction: LiquidGlassRefraction(
+        magnification: $magnification,
+        refractionMode:$refractionModeCode,
+        diagonalFlip: $diagonalFlip,
+        distortion: $distortion,
+        distortionWidth: $distortionWidth,
+        chromaticAberration:$chromaticAberration,
+      ),
+      appearance: LiquidGlassAppearance(
+        enableInnerRadiusTransparent: $enableInnerRadiusTransparent,
+        blur: LiquidGlassBlur(sigmaX: $blur, sigmaY: $blur),
+        saturation:$saturation,
+      ),
+      behavior: LiquidGlassBehavior(
+        controller: controller,
+        draggable: true,
+      ),
     ),
   ],
 );

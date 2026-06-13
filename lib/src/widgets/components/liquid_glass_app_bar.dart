@@ -52,15 +52,15 @@ class LiquidGlassAppBar extends LiquidGlass {
     /// Whether the [title] is centered. When `false` the title is
     /// left-aligned next to the [leading] widget (Material style).
     bool centerTitle = true,
-    super.controller,
+    LiquidGlassController? controller,
 
     // ── Size & position ────────────────────────────────────
-    super.height = 56,
+    double height = 56,
 
     /// Width of the floating bar. Defaults to a wide floating capsule.
     /// For a full-bleed bar pass
     /// `MediaQuery.of(context).size.width - 2 * margin`.
-    super.width = 360,
+    double width = 360,
 
     /// Where the bar sits. Defaults to top-center with [topMargin] of
     /// breathing room. Pass any [LiquidGlassPosition] to override.
@@ -88,11 +88,11 @@ class LiquidGlassAppBar extends LiquidGlass {
     // ── Glass look ─────────────────────────────────────────
     /// Base tint of the glass bar.
     Color glassColor = const Color(0x1CFFFFFF), // white, alpha 28
-    super.blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-    super.distortion = 0.07,
-    super.distortionWidth = 28,
-    super.chromaticAberration = 0.002,
-    super.magnification = 1,
+    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+    double distortion = 0.07,
+    double distortionWidth = 28,
+    double chromaticAberration = 0.002,
+    double magnification = 1,
 
     /// Border styling of the bar rim.
     double borderWidth = 1.2,
@@ -110,21 +110,39 @@ class LiquidGlassAppBar extends LiquidGlass {
 
     /// Font size of the [title] when it is a plain [Text].
     double titleFontSize = 18,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          position: position ??
-              LiquidGlassAlignPosition(
-                alignment: Alignment.topCenter,
-                margin: EdgeInsets.only(top: topMargin),
-              ),
-          color: glassColor,
-          shape: RoundedRectangleShape(
-            cornerRadius: cornerRadius ?? height / 2,
-            borderWidth: borderWidth,
-            lightIntensity: lightIntensity,
-            lightDirection: lightDirection,
-            borderType: borderType,
+          geometry: LiquidGlassGeometry(
+            position: position ??
+                LiquidGlassAlignPosition(
+                  alignment: Alignment.topCenter,
+                  margin: EdgeInsets.only(top: topMargin),
+                ),
+            width: width,
+            height: height,
+            shape: RoundedRectangleShape(
+              cornerRadius: cornerRadius ?? height / 2,
+              borderWidth: borderWidth,
+              lightIntensity: lightIntensity,
+              lightDirection: lightDirection,
+              borderType: borderType,
+            ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: LiquidGlassRefraction(
+            distortion: distortion,
+            distortionWidth: distortionWidth,
+            chromaticAberration: chromaticAberration,
+            magnification: magnification,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: glassColor,
+            blur: blur,
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: _AppBarContent(
             leading: leading,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refresh_rate.dart';
 
-import '../controllers/liquid_glass_controller.dart';
 import '../controllers/liquid_glass_view_controller.dart';
 import '../helpers/slider_page_view.dart';
 import '../widgets/liquid_glass.dart';
@@ -121,34 +120,42 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
               useSync: useSync,
               children: [
                 LiquidGlass(
-                  controller: controller,
-                  position: const LiquidGlassAlignPosition(
-                      alignment: Alignment.center),
-                  width: lensWidth,
-                  height: lensHeight,
-                  magnification: magnification,
-                  refractionMode: isRadialRefractionMode
-                      ? LiquidGlassRefractionMode.radialRefraction
-                      : LiquidGlassRefractionMode.shapeRefraction,
-                  distortion: distortion,
-                  distortionWidth: distortionWidth,
-                  chromaticAberration: chromaticAberration,
-                  saturation: saturation,
-                  draggable: true,
-                  color: glassColor,
-                  blur: LiquidGlassBlur(sigmaX: blur, sigmaY: blur),
-                  shape: RoundedRectangleShape(
-                      cornerRadius: cornerRadius,
-                      cornerSmoothing: cornerSmoothing,
-                      borderWidth: borderWidth,
-                      lightIntensity: lightIntensity,
-                      lightDirection: lightDirection,
-                      lightColor: lightColorValue,
-                      borderType: _buildBorderType(),
-                      lightMode: isRadialLightMode
-                          ? LiquidGlassLightMode.radial
-                          : LiquidGlassLightMode.edge),
-                  visibility: visibility,
+                  geometry: LiquidGlassGeometry(
+                    position: const LiquidGlassAlignPosition(
+                        alignment: Alignment.center),
+                    width: lensWidth,
+                    height: lensHeight,
+                    shape: RoundedRectangleShape(
+                        cornerRadius: cornerRadius,
+                        cornerSmoothing: cornerSmoothing,
+                        borderWidth: borderWidth,
+                        lightIntensity: lightIntensity,
+                        lightDirection: lightDirection,
+                        lightColor: lightColorValue,
+                        borderType: _buildBorderType(),
+                        lightMode: isRadialLightMode
+                            ? LiquidGlassLightMode.radial
+                            : LiquidGlassLightMode.edge),
+                  ),
+                  refraction: LiquidGlassRefraction(
+                    magnification: magnification,
+                    refractionMode: isRadialRefractionMode
+                        ? LiquidGlassRefractionMode.radialRefraction
+                        : LiquidGlassRefractionMode.shapeRefraction,
+                    distortion: distortion,
+                    distortionWidth: distortionWidth,
+                    chromaticAberration: chromaticAberration,
+                  ),
+                  appearance: LiquidGlassAppearance(
+                    saturation: saturation,
+                    color: glassColor,
+                    blur: LiquidGlassBlur(sigmaX: blur, sigmaY: blur),
+                  ),
+                  behavior: LiquidGlassBehavior(
+                    controller: controller,
+                    draggable: true,
+                    visibility: visibility,
+                  ),
                 ),
               ],
               backgroundWidget: widget.backgroundWidget, // <-- passed in

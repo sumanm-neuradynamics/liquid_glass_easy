@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_easy/src/controllers/liquid_glass_controller.dart';
 import 'package:liquid_glass_easy/src/controllers/liquid_glass_view_controller.dart';
 import 'package:liquid_glass_easy/src/helpers/slider_page_view.dart';
 import 'package:liquid_glass_easy/src/widgets/liquid_glass.dart';
@@ -123,37 +122,46 @@ class _LiquidGlassShowcaseState extends State<LiquidGlassShowcase> {
               
               children: [
                 LiquidGlass(
-                  controller: controller,
-                  position: const LiquidGlassAlignPosition(
-                      alignment: Alignment.bottomLeft,
-                      margin: EdgeInsets.only(top: 20, bottom: 20, left: 20)),
-                  width: lensWidth,
-                  height: lensHeight,
-                  magnification: magnification,
-                  refractionMode: isRadialRefractionMode
-                      ? LiquidGlassRefractionMode.radialRefraction
-                      : LiquidGlassRefractionMode.shapeRefraction,
-                  enableInnerRadiusTransparent: enableInnerRadiusTransparent,
-                  diagonalFlip: diagonalFlip,
-                  distortion: distortion,
-                  distortionWidth: distortionWidth,
-                  chromaticAberration: chromaticAberration,
-                  saturation: saturation,
-                  draggable: true,
-                  color: glassColor,
-                  blur: LiquidGlassBlur(sigmaX: blur, sigmaY: blur),
-                  shape: RoundedRectangleShape(
-                      cornerRadius: cornerRadius,
-                      cornerSmoothing: cornerSmoothing,
-                      borderWidth: borderWidth,
-                      lightIntensity: lightIntensity,
-                      lightDirection: lightDirection,
-                      lightColor: lightColorValue,
-                      borderType: _buildBorderType(),
-                      lightMode: isRadialLightMode
-                          ? LiquidGlassLightMode.radial
-                          : LiquidGlassLightMode.edge),
-                  visibility: visibility,
+                  geometry: LiquidGlassGeometry(
+                    position: const LiquidGlassAlignPosition(
+                        alignment: Alignment.bottomLeft,
+                        margin:
+                            EdgeInsets.only(top: 20, bottom: 20, left: 20)),
+                    width: lensWidth,
+                    height: lensHeight,
+                    shape: RoundedRectangleShape(
+                        cornerRadius: cornerRadius,
+                        cornerSmoothing: cornerSmoothing,
+                        borderWidth: borderWidth,
+                        lightIntensity: lightIntensity,
+                        lightDirection: lightDirection,
+                        lightColor: lightColorValue,
+                        borderType: _buildBorderType(),
+                        lightMode: isRadialLightMode
+                            ? LiquidGlassLightMode.radial
+                            : LiquidGlassLightMode.edge),
+                  ),
+                  refraction: LiquidGlassRefraction(
+                    magnification: magnification,
+                    refractionMode: isRadialRefractionMode
+                        ? LiquidGlassRefractionMode.radialRefraction
+                        : LiquidGlassRefractionMode.shapeRefraction,
+                    diagonalFlip: diagonalFlip,
+                    distortion: distortion,
+                    distortionWidth: distortionWidth,
+                    chromaticAberration: chromaticAberration,
+                  ),
+                  appearance: LiquidGlassAppearance(
+                    enableInnerRadiusTransparent: enableInnerRadiusTransparent,
+                    saturation: saturation,
+                    color: glassColor,
+                    blur: LiquidGlassBlur(sigmaX: blur, sigmaY: blur),
+                  ),
+                  behavior: LiquidGlassBehavior(
+                    controller: controller,
+                    draggable: true,
+                    visibility: visibility,
+                  ),
 
                   //child:_GlassInputBar()
                 ),

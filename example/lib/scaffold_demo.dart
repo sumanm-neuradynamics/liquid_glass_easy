@@ -79,25 +79,24 @@ class _ScaffoldDemoState extends State<ScaffoldDemo> {
 
       // ── floating glass bottom nav bar ─────────────────────
       bottomNavigationBar: LiquidGlassBottomNavBar(
-        pillGrowHeight :15,
-      pillDistortion: 0.05,
-        pillDistortionWidth: 12,
-        
         items: _items,
         selectedIndex: _index,
         onChanged: (i) => setState(() => _index = i),
         // Glass-refracting morphing pill on Impeller; soft sliding
         // highlight (animated) as the Skia fallback.
-        glassPill: LiquidGlassPillMode.both,
-        animated: true,
+        pillStyle: const LiquidGlassNavPillStyle(
+          mode: LiquidGlassPillMode.both,
+          animated: true,
+          growHeight: 15,
+          distortion: 0.05,
+          distortionWidth: 12,
+        ),
         // Custom position is now honored by the glass-pill bar too.
         position: const LiquidGlassAlignPosition(
           alignment: Alignment.bottomLeft,
-          margin: EdgeInsets.only(bottom: 20,left:20),
+          margin: EdgeInsets.only(bottom: 20, left: 20),
         ),
-                  width: 260,
-                  
-
+        width: 260,
       ),
 
       // ── the "alone" side action button next to the nav bar ─

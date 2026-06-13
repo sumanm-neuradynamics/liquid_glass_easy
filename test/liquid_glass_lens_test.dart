@@ -18,8 +18,10 @@ void main() {
             useImpellerBackdrop: false,
             children: const [
               LiquidGlass(
-                position: LiquidGlassAlignPosition(
-                    alignment: Alignment.center),
+                geometry: LiquidGlassGeometry(
+                  position: LiquidGlassAlignPosition(
+                      alignment: Alignment.center),
+                ),
               ),
             ],
           ),

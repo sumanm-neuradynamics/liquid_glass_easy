@@ -14,14 +14,27 @@ void main() {
     LiquidGlassAppearance? appearance,
     LiquidGlassRefraction? refraction,
   }) {
+    // The bar's appearance/refraction params are non-nullable with
+    // defaults, so a null here means "don't pass the argument" — mirror
+    // the bar's own default values to keep `bar()` equal to a bare
+    // LiquidGlassBottomNavBar(...).
     return LiquidGlassBottomNavBar(
       items: items,
       selectedIndex: 0,
       onChanged: (_) {},
       pillStyle: pillStyle,
       itemStyle: itemStyle,
-      appearance: appearance,
-      refraction: refraction,
+      appearance: appearance ??
+          const LiquidGlassAppearance(
+            color: Color(0x16FFFFFF), // white, alpha 22
+            blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
+          ),
+      refraction: refraction ??
+          const LiquidGlassRefraction(
+            distortion: 0.07,
+            distortionWidth: 28,
+            chromaticAberration: 0.002,
+          ),
     );
   }
 

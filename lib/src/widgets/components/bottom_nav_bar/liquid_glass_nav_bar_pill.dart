@@ -79,29 +79,35 @@ LiquidGlass buildLiquidGlassBottomNavPill({
 
   return LiquidGlass(
     key: key,
-    position: LiquidGlassOffsetPosition(
-      left: adjustedLeft,
-      bottom: pillBottom,
-    ),
-    width: pillW,
-    height: pillH,
-    magnification: magnification,
-    distortion: distortion,
-    distortionWidth: distortionWidth,
-    enableInnerRadiusTransparent: enableInnerRadiusTransparent,
-    chromaticAberration: 0.002,
-    color: Colors.white.withAlpha(28),
-    blur: blur,
-    shape: RoundedRectangleShape(
-      cornerRadius: pillH / 2,
-      borderWidth: 1.0,
-      lightIntensity: 1.3,
-      lightDirection: 80,
-      borderType: const OpticalBorder(
-        borderSaturation: 1.4,
-        ambientIntensity: 1.0,
-        borderSolidity: 0.5,
+    geometry: LiquidGlassGeometry(
+      position: LiquidGlassOffsetPosition(
+        left: adjustedLeft,
+        bottom: pillBottom,
       ),
+      width: pillW,
+      height: pillH,
+      shape: RoundedRectangleShape(
+        cornerRadius: pillH / 2,
+        borderWidth: 1.0,
+        lightIntensity: 1.3,
+        lightDirection: 80,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.4,
+          ambientIntensity: 1.0,
+          borderSolidity: 0.5,
+        ),
+      ),
+    ),
+    refraction: LiquidGlassRefraction(
+      magnification: magnification,
+      distortion: distortion,
+      distortionWidth: distortionWidth,
+      chromaticAberration: 0.002,
+    ),
+    appearance: LiquidGlassAppearance(
+      color: Colors.white.withAlpha(28),
+      blur: blur,
+      enableInnerRadiusTransparent: enableInnerRadiusTransparent,
     ),
   );
 }
@@ -121,29 +127,34 @@ LiquidGlass buildLiquidGlassBottomNavCapsule({
   LiquidGlassPosition? position,
 }) {
   return LiquidGlass(
-    position: position ??
-        LiquidGlassAlignPosition(
-          alignment: Alignment.bottomCenter,
-          margin: EdgeInsets.only(bottom: layout.bottomMargin),
+    geometry: LiquidGlassGeometry(
+      position: position ??
+          LiquidGlassAlignPosition(
+            alignment: Alignment.bottomCenter,
+            margin: EdgeInsets.only(bottom: layout.bottomMargin),
+          ),
+      width: layout.width,
+      height: layout.height,
+      shape: RoundedRectangleShape(
+        cornerRadius: 40,
+        borderWidth: 1.2,
+        lightIntensity: 1.1,
+        lightDirection: 80,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.2,
+          ambientIntensity: 1.0,
+          borderSolidity: 0.35,
         ),
-    width: layout.width,
-    height: layout.height,
-    magnification: 1,
-    distortion: 0.07,
-    distortionWidth: 28,
-    chromaticAberration: 0.002,
-    color: Colors.white.withAlpha(22),
-    blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-    shape: RoundedRectangleShape(
-      cornerRadius: 40,
-      borderWidth: 1.2,
-      lightIntensity: 1.1,
-      lightDirection: 80,
-      borderType: const OpticalBorder(
-        borderSaturation: 1.2,
-        ambientIntensity: 1.0,
-        borderSolidity: 0.35,
       ),
+    ),
+    refraction: const LiquidGlassRefraction(
+      distortion: 0.07,
+      distortionWidth: 28,
+      chromaticAberration: 0.002,
+    ),
+    appearance: LiquidGlassAppearance(
+      color: Colors.white.withAlpha(22),
+      blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
     ),
   );
 }

@@ -203,7 +203,9 @@ class LiquidGlassScaffold extends StatelessWidget {
   LiquidGlass _inset(LiquidGlass lens, {double dx = 0, double dy = 0}) {
     if (dx == 0 && dy == 0) return lens;
     return lens.copyWith(
-      position: _InsetPosition(lens.position, dx: dx, dy: dy),
+      geometry: lens.geometry.copyWith(
+        position: _InsetPosition(lens.position, dx: dx, dy: dy),
+      ),
     );
   }
 }

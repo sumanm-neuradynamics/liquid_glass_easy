@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../liquid_glass.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
+import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 import 'liquid_glass_app_icon.dart';
 
@@ -24,36 +25,48 @@ class LiquidGlassDockApp {
 /// by iOS / iPadOS.
 class LiquidGlassDock extends LiquidGlass {
   LiquidGlassDock({
-    required super.position,
+    required LiquidGlassPosition position,
     required List<LiquidGlassDockApp> apps,
-    super.controller,
+    LiquidGlassController? controller,
     double iconSize = 52,
     double spacing = 14,
     double horizontalPadding = 14,
     double verticalPadding = 12,
-    super.draggable = false,
-    super.outOfBoundaries = false,
-    super.blur = const LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
+    bool draggable = false,
+    bool outOfBoundaries = false,
+    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
   }) : super(
-          width: apps.length * iconSize +
-              (apps.length - 1) * spacing +
-              horizontalPadding * 2,
-          height: iconSize + verticalPadding * 2,
-          magnification: 1,
-          distortion: 0.08,
-          distortionWidth: 36,
-          chromaticAberration: 0.002,
-          color: Colors.white.withAlpha(28),
-          shape: const RoundedRectangleShape(
-            cornerRadius: 30,
-            borderWidth: 1.2,
-            lightIntensity: 1.2,
-            lightDirection: 70,
-            borderType: OpticalBorder(
-              borderSaturation: 1.3,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.4,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: apps.length * iconSize +
+                (apps.length - 1) * spacing +
+                horizontalPadding * 2,
+            height: iconSize + verticalPadding * 2,
+            shape: const RoundedRectangleShape(
+              cornerRadius: 30,
+              borderWidth: 1.2,
+              lightIntensity: 1.2,
+              lightDirection: 70,
+              borderType: OpticalBorder(
+                borderSaturation: 1.3,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.4,
+              ),
             ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: const LiquidGlassRefraction(
+            distortion: 0.08,
+            distortionWidth: 36,
+            chromaticAberration: 0.002,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: Colors.white.withAlpha(28),
+            blur: blur,
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Padding(
             padding: EdgeInsets.symmetric(

@@ -144,26 +144,32 @@ class _ContinuousCornerDemoPageState extends State<ContinuousCornerDemoPage> {
     required double height,
   }) {
     return LiquidGlass(
-      position: LiquidGlassOffsetPosition(left: left, top: top),
-      width: width,
-      height: height,
-      magnification: 1,
-      distortion: 0.12,
-      distortionWidth: _distortionWidth,
-      chromaticAberration: 0.003,
-      color: Colors.white.withAlpha(20),
-      blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
-      shape: RoundedRectangleShape(
-        cornerRadius: _radius,
-        cornerSmoothing: _smoothing,
-        borderWidth: 1.2,
-        lightIntensity: 1.2,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.3,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.5,
+      geometry: LiquidGlassGeometry(
+        position: LiquidGlassOffsetPosition(left: left, top: top),
+        width: width,
+        height: height,
+        shape: RoundedRectangleShape(
+          cornerRadius: _radius,
+          cornerSmoothing: _smoothing,
+          borderWidth: 1.2,
+          lightIntensity: 1.2,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.3,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.5,
+          ),
         ),
+      ),
+      refraction: LiquidGlassRefraction(
+        magnification: 1,
+        distortion: 0.12,
+        distortionWidth: _distortionWidth,
+        chromaticAberration: 0.003,
+      ),
+      appearance: LiquidGlassAppearance(
+        color: Colors.white.withAlpha(20),
+        blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
       ),
     );
   }

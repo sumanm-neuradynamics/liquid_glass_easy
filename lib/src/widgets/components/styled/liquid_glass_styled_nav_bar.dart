@@ -26,8 +26,6 @@ import 'package:flutter/scheduler.dart';
 
 import '../../../controllers/liquid_glass_view_controller.dart';
 import '../../liquid_glass.dart';
-import '../../liquid_glass_config.dart'
-    show LiquidGlassGeometry, LiquidGlassRefraction, LiquidGlassAppearance;
 import '../../liquid_glass_view.dart';
 import '../../utils/liquid_glass_blur.dart';
 import '../../utils/liquid_glass_border_mode.dart';
@@ -602,7 +600,7 @@ LiquidGlass _buildStyledNavCapsule({
   LiquidGlassShape? shape,
   LiquidGlassPosition? position,
 }) {
-  return LiquidGlass.grouped(
+  return LiquidGlass(
     geometry: LiquidGlassGeometry(
       position: position ??
           LiquidGlassAlignPosition(
@@ -664,7 +662,7 @@ LiquidGlass _buildStyledNavPill({
   final pillW = layout.pillWidth + extraWidth;
   final adjustedLeft = pillLeft - extraWidth / 2;
 
-  return LiquidGlass.grouped(
+  return LiquidGlass(
     key: key,
     geometry: LiquidGlassGeometry(
       position:

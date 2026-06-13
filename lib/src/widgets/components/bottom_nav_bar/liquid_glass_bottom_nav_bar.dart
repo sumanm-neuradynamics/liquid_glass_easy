@@ -3,12 +3,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../liquid_glass.dart';
-import '../../liquid_glass_config.dart'
-    show LiquidGlassAppearance, LiquidGlassRefraction;
 import '../../utils/liquid_glass_blur.dart';
 import '../../utils/liquid_glass_border_mode.dart';
 import '../../utils/liquid_glass_position.dart';
-import '../../utils/liquid_glass_refraction_mode.dart';
 import '../../utils/liquid_glass_shape.dart';
 import '../liquid_glass_tab_bar.dart' show LiquidGlassTabBarItem;
 import 'liquid_glass_animated_nav_bar.dart';
@@ -118,43 +115,33 @@ class LiquidGlassBottomNavBar extends LiquidGlass {
     required this.selectedIndex,
     required this.onChanged,
 
-    // ── Grouped configuration (preferred) ──────────────────
-    // Each group, when provided, takes precedence over the matching
-    // flat parameters below — including the group's own defaults. The
-    // flat parameters are kept for compatibility and will be replaced
-    // by the groups in 3.0.
-
-    /// Icon + label styling of the tabs. Overrides [selectedItemColor],
-    /// [unselectedItemColor], [iconSize] and [labelFontSize].
+    // ── Grouped configuration ──────────────────────────────
+    /// Icon + label styling of the tabs (colors, icon size, label font).
     LiquidGlassNavItemStyle? itemStyle,
 
     /// Everything about the selection pill — highlight look, slide
-    /// animation, and the glass-refracting morph mode. Overrides
-    /// [glassPill], [showSelectionPill], [selectionColor], [animated],
-    /// [animationDuration], [animationCurve] and the `pill*` params.
+    /// animation, and the glass-refracting morph mode.
     LiquidGlassNavPillStyle? pillStyle,
 
     /// Appearance of the bar capsule (tint, blur, saturation).
-    /// Overrides [glassColor] and [blur].
-    LiquidGlassAppearance? appearance,
+    super.appearance = const LiquidGlassAppearance(
+      color: Color(0x16FFFFFF), // white, alpha 22
+      blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
+    ),
 
-    /// Refraction of the bar capsule. Overrides [distortion],
-    /// [distortionWidth], [chromaticAberration] and [magnification].
-    LiquidGlassRefraction? refraction,
+    /// Refraction of the bar capsule.
+    super.refraction = const LiquidGlassRefraction(
+      distortion: 0.07,
+      distortionWidth: 28,
+      chromaticAberration: 0.002,
+    ),
 
-    // ── Glass-refracting morph pill (flat) ─────────────────
-    LiquidGlassPillMode glassPill = LiquidGlassPillMode.none,
-    LiquidGlassBlur pillBlur = const LiquidGlassBlur(),
-    double pillGrowHeight = 16,
-    double pillDistortion = 0.06,
-    double pillDistortionWidth = 10,
-    double pillMagnification = 1,
-    bool pillEnableInnerRadiusTransparent = false,
-    super.controller,
+    /// Programmatic show/hide control of the bar lens.
+    LiquidGlassController? controller,
 
     // ── Size & position ────────────────────────────────────
-    super.width = 300,
-    super.height = 64,
+    double width = 300,
+    double height = 64,
 
     /// Where the bar sits. Defaults to bottom-center with
     /// [bottomMargin] of breathing room. Pass any
@@ -172,15 +159,6 @@ class LiquidGlassBottomNavBar extends LiquidGlass {
     /// (`height / 2`).
     double? cornerRadius,
 
-    // ── Glass look (flat) ──────────────────────────────────
-    /// Base tint of the glass capsule.
-    Color glassColor = const Color(0x16FFFFFF), // white, alpha 22
-    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-    double distortion = 0.07,
-    double distortionWidth = 28,
-    double chromaticAberration = 0.002,
-    double magnification = 1,
-
     /// Border styling of the capsule rim.
     double borderWidth = 1.2,
     double lightIntensity = 1.1,
@@ -190,59 +168,17 @@ class LiquidGlassBottomNavBar extends LiquidGlass {
       ambientIntensity: 1.0,
       borderSolidity: 0.35,
     ),
-
-    // ── Selection highlight (flat) ─────────────────────────
-    /// Whether to draw the soft pill behind the selected item.
-    bool showSelectionPill = true,
-
-    /// Color of the selection pill behind the active item.
-    Color selectionColor = const Color(0x26FFFFFF), // white, alpha 38
-
-    // ── Items (flat) ───────────────────────────────────────
-    /// Color of the selected item's icon + label.
-    Color selectedItemColor = Colors.white,
-
-    /// Color of unselected items' icons + labels.
-    Color unselectedItemColor = Colors.white70,
-
-    /// Icon size for every item.
-    double iconSize = 24,
-
-    /// Label font size. Labels are only shown for items that
-    /// provide a [LiquidGlassTabBarItem.label].
-    double labelFontSize = 10.5,
-
-    // ── Animation (flat) ───────────────────────────────────
-    /// When `true`, the selection pill **slides** between tabs and the
-    /// icon under the pill fills in (the iOS-26 "icon highlights
-    /// through the moving pill" reveal) as it travels. When `false`
-    /// (default) the selection jumps instantly.
-    ///
-    /// The animation is drawn entirely inside the lens `child`, so it
-    /// composites identically on both Skia and Impeller — no extra
-    /// pipeline or controller wiring is required from the caller.
-    bool animated = false,
-
-    /// How long the pill takes to slide between tabs. Only used when
-    /// [animated] is `true`.
-    Duration animationDuration = const Duration(milliseconds: 320),
-
-    /// Easing curve for the pill slide. Only used when [animated] is
-    /// `true`.
-    Curve animationCurve = Curves.easeOutCubic,
   })  : assert(items.isNotEmpty, 'Provide at least one item'),
         assert(selectedIndex >= 0 && selectedIndex < items.length,
             'selectedIndex out of range'),
-        glassPill = pillStyle?.mode ?? glassPill,
-        pillBlur = pillStyle?.blur ?? pillBlur,
-        pillGrowHeight = pillStyle?.growHeight ?? pillGrowHeight,
-        pillDistortion = pillStyle?.distortion ?? pillDistortion,
-        pillDistortionWidth =
-            pillStyle?.distortionWidth ?? pillDistortionWidth,
-        pillMagnification = pillStyle?.magnification ?? pillMagnification,
+        glassPill = pillStyle?.mode ?? LiquidGlassPillMode.none,
+        pillBlur = pillStyle?.blur ?? const LiquidGlassBlur(),
+        pillGrowHeight = pillStyle?.growHeight ?? 16,
+        pillDistortion = pillStyle?.distortion ?? 0.06,
+        pillDistortionWidth = pillStyle?.distortionWidth ?? 10,
+        pillMagnification = pillStyle?.magnification ?? 1,
         pillEnableInnerRadiusTransparent =
-            pillStyle?.enableInnerRadiusTransparent ??
-                pillEnableInnerRadiusTransparent,
+            pillStyle?.enableInnerRadiusTransparent ?? false,
         navLayout = LiquidGlassBottomNavBarLayout(
           itemCount: items.length,
           width: width,
@@ -252,61 +188,54 @@ class LiquidGlassBottomNavBar extends LiquidGlass {
         ),
         customPosition = position,
         super(
-          position: position ??
-              LiquidGlassAlignPosition(
-                alignment: Alignment.bottomCenter,
-                margin: EdgeInsets.only(bottom: bottomMargin),
-              ),
-          color: appearance?.color ?? glassColor,
-          blur: appearance?.blur ?? blur,
-          saturation: appearance?.saturation ?? 1.0,
-          enableInnerRadiusTransparent:
-              appearance?.enableInnerRadiusTransparent ?? false,
-          distortion: refraction?.distortion ?? distortion,
-          distortionWidth: refraction?.distortionWidth ?? distortionWidth,
-          chromaticAberration:
-              refraction?.chromaticAberration ?? chromaticAberration,
-          magnification: refraction?.magnification ?? magnification,
-          refractionMode: refraction?.refractionMode ??
-              LiquidGlassRefractionMode.shapeRefraction,
-          diagonalFlip: refraction?.diagonalFlip ?? 0,
-          shape: RoundedRectangleShape(
-            cornerRadius: cornerRadius ?? height / 2,
-            borderWidth: borderWidth,
-            lightIntensity: lightIntensity,
-            lightDirection: lightDirection,
-            borderType: borderType,
+          geometry: LiquidGlassGeometry(
+            position: position ??
+                LiquidGlassAlignPosition(
+                  alignment: Alignment.bottomCenter,
+                  margin: EdgeInsets.only(bottom: bottomMargin),
+                ),
+            width: width,
+            height: height,
+            shape: RoundedRectangleShape(
+              cornerRadius: cornerRadius ?? height / 2,
+              borderWidth: borderWidth,
+              lightIntensity: lightIntensity,
+              lightDirection: lightDirection,
+              borderType: borderType,
+            ),
           ),
-          child: (pillStyle?.animated ?? animated)
+          behavior: LiquidGlassBehavior(controller: controller),
+          child: (pillStyle?.animated ?? false)
               ? AnimatedBottomNavBarContent(
                   items: items,
                   selectedIndex: selectedIndex,
                   onChanged: onChanged,
                   itemPadding: itemPadding,
-                  showSelectionPill: pillStyle?.show ?? showSelectionPill,
-                  selectionColor: pillStyle?.color ?? selectionColor,
-                  selectedItemColor:
-                      itemStyle?.selectedColor ?? selectedItemColor,
+                  showSelectionPill: pillStyle?.show ?? true,
+                  selectionColor:
+                      pillStyle?.color ?? const Color(0x26FFFFFF),
+                  selectedItemColor: itemStyle?.selectedColor ?? Colors.white,
                   unselectedItemColor:
-                      itemStyle?.unselectedColor ?? unselectedItemColor,
-                  iconSize: itemStyle?.iconSize ?? iconSize,
-                  labelFontSize: itemStyle?.labelFontSize ?? labelFontSize,
-                  duration: pillStyle?.animationDuration ?? animationDuration,
-                  curve: pillStyle?.animationCurve ?? animationCurve,
+                      itemStyle?.unselectedColor ?? Colors.white70,
+                  iconSize: itemStyle?.iconSize ?? 24,
+                  labelFontSize: itemStyle?.labelFontSize ?? 10.5,
+                  duration: pillStyle?.animationDuration ??
+                      const Duration(milliseconds: 320),
+                  curve: pillStyle?.animationCurve ?? Curves.easeOutCubic,
                 )
               : BottomNavBarContent(
                   items: items,
                   selectedIndex: selectedIndex,
                   onChanged: onChanged,
                   itemPadding: itemPadding,
-                  showSelectionPill: pillStyle?.show ?? showSelectionPill,
-                  selectionColor: pillStyle?.color ?? selectionColor,
-                  selectedItemColor:
-                      itemStyle?.selectedColor ?? selectedItemColor,
+                  showSelectionPill: pillStyle?.show ?? true,
+                  selectionColor:
+                      pillStyle?.color ?? const Color(0x26FFFFFF),
+                  selectedItemColor: itemStyle?.selectedColor ?? Colors.white,
                   unselectedItemColor:
-                      itemStyle?.unselectedColor ?? unselectedItemColor,
-                  iconSize: itemStyle?.iconSize ?? iconSize,
-                  labelFontSize: itemStyle?.labelFontSize ?? labelFontSize,
+                      itemStyle?.unselectedColor ?? Colors.white70,
+                  iconSize: itemStyle?.iconSize ?? 24,
+                  labelFontSize: itemStyle?.labelFontSize ?? 10.5,
                 ),
         );
 

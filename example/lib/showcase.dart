@@ -1292,28 +1292,34 @@ class _LiquidGlassShowcasePageState extends State<LiquidGlassShowcasePage>
     double size = 56,
   }) {
     return LiquidGlass(
-      position: LiquidGlassAlignPosition(
-        alignment: alignment,
-        margin: margin,
-      ),
-      width: size,
-      height: size,
-      magnification: 1,
-      distortion: 0.07,
-      distortionWidth: 28,
-      chromaticAberration: 0.002,
-      color: Colors.black.withAlpha(60),
-      blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-      shape: RoundedRectangleShape(
-        cornerRadius: size / 2,
-        borderWidth: 1.2,
-        lightIntensity: 1.1,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.2,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.35,
+      geometry: LiquidGlassGeometry(
+        position: LiquidGlassAlignPosition(
+          alignment: alignment,
+          margin: margin,
         ),
+        width: size,
+        height: size,
+        shape: RoundedRectangleShape(
+          cornerRadius: size / 2,
+          borderWidth: 1.2,
+          lightIntensity: 1.1,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.2,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.35,
+          ),
+        ),
+      ),
+      refraction: const LiquidGlassRefraction(
+        magnification: 1,
+        distortion: 0.07,
+        distortionWidth: 28,
+        chromaticAberration: 0.002,
+      ),
+      appearance: LiquidGlassAppearance(
+        color: Colors.black.withAlpha(60),
+        blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
       ),
       child: Center(
         child: Icon(icon, color: Colors.white, size: size * 0.42),

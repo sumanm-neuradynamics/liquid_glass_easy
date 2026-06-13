@@ -5,7 +5,32 @@ import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_position.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_shape.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_mode.dart';
 
-// Represents a single lens in the LiquidGlass system
+/// Represents a single lens in the LiquidGlass system, configured
+/// through four grouped objects:
+///
+///  • [LiquidGlassGeometry]   — size, shape, placement (required).
+///  • [LiquidGlassRefraction] — how the glass bends light (distortion,
+///    magnification, chromatic aberration, refraction mode).
+///  • [LiquidGlassAppearance] — tint, blur, saturation.
+///  • [LiquidGlassBehavior]   — interaction & lifecycle.
+///
+/// ```dart
+/// LiquidGlass(
+///   geometry: LiquidGlassGeometry(
+///     position: const LiquidGlassAlignPosition(alignment: Alignment.center),
+///     width: 240, height: 160,
+///     shape: const RoundedRectangleShape(cornerRadius: 36),
+///   ),
+///   refraction: const LiquidGlassRefraction(
+///     distortion: 0.12, distortionWidth: 28,
+///   ),
+///   appearance: const LiquidGlassAppearance(
+///     blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2), color: Color(0x16FFFFFF),
+///   ),
+///   behavior: const LiquidGlassBehavior(draggable: true),
+///   child: const Center(child: Text('drag me')),
+/// );
+/// ```
 class LiquidGlass {
   /// Optional widget key, propagated to the underlying `LiquidGlassWidget`
   /// inside `LiquidGlassView`. Use it to bind a lens `State` to a logical
@@ -14,300 +39,124 @@ class LiquidGlass {
   /// bar) can cause Flutter to reuse the wrong `State` for a lens.
   final Key? key;
 
-  /// Controls the lens behavior programmatically, such as toggling visibility or
-  /// updating properties dynamically at runtime.
-  final LiquidGlassController? controller;
-
-  /// The width of the lens in logical pixels.
-  final double width;
-
-  /// The height of the lens in logical pixels.
-  final double height;
-
-  /// Defines how much the lens magnifies (zooms in on) the distorted content.
-  ///
-  /// - `1.0` means no magnification.
-  final double magnification;
-
-  /// Defines how light is refracted through the liquid glass surface.
-  ///
-  /// This determines the visual distortion pattern applied to the
-  /// background behind the glass effect:
-  ///
-  /// • [LiquidGlassRefractionMode.shapeRefraction] — Refracts light
-  ///   based on the underlying shape geometry, following the contours
-  ///   of the glass for a more physically accurate distortion.
-  ///
-  /// • [LiquidGlassRefractionMode.radialRefraction] — Refracts light
-  ///   radially from a central point, creating a circular
-  ///   distortion pattern.
-  final LiquidGlassRefractionMode refractionMode;
-
-  /// The bending strength of the distortion effect.
-  ///
-  /// Controls how much the refracted (bent) background is warped inside the
-  /// distortion width area. Higher values increase compression within the
-  /// distortion zone, creating a stronger bending effect. Lower values reduce
-  /// compression and produce softer distortion.
-  ///
-  /// - **Range:** `0.0` (no distortion) to `1.0` (maximum distortion).
-  final double distortion;
-
-  /// The thickness of the distortion band around the lens perimeter.
-  ///
-  /// This defines how wide the bending/refraction zone is. Larger values create
-  /// a thicker distortion border, affecting more of the background. Smaller values
-  /// produce a thinner, tighter distortion edge.
-  ///
-  /// - **Unit:** logical pixels
-  /// - **Typical range:** `0.0` (no distortion band) to around `50.0`+ depending
-  ///   on the lens size and desired visual intensity.
-  final double distortionWidth;
-
-  /// Applies a diagonal mirroring or flip effect to the refraction direction.
-  ///
-  /// Used to create artistic or mirrored lens effects.
-  final double diagonalFlip;
-
-  /// Determines whether the lens can be dragged (moved) by the user.
-  final bool draggable;
-
   /// Optional widget content displayed inside the lens area.
   ///
   /// Can be used to show overlays, icons, or custom visual elements.
   final Widget? child;
 
-  /// The position of the lens on screen.
-  ///
-  /// Can be defined either as an absolute `Offset` or a relative `Alignment` value.
-  final LiquidGlassPosition position;
+  /// Size, shape and placement of the lens.
+  final LiquidGlassGeometry geometry;
 
-  /// The geometric shape of the lens and its optional border.
-  ///
-  /// Use [RoundedRectangleShape]; its `cornerSmoothing` enables
-  /// Apple-style continuous corners.
-  final LiquidGlassShape shape;
+  /// How the glass bends light.
+  final LiquidGlassRefraction refraction;
 
-  /// The blur configuration for the lens background.
-  ///
-  /// Controls how the underlying content is blurred beneath the glass.
-  final LiquidGlassBlur blur;
+  /// The lens material: tint, blur, saturation.
+  final LiquidGlassAppearance appearance;
 
-  /// Controls the intensity of the chromatic aberration effect.
-  ///
-  /// Higher values increase the separation of color channels,
-  /// creating a stronger chromatic distortion. The default value is 0.003. A value of `0.0`
-  /// disables the effect.
-  final double chromaticAberration;
+  /// Interaction & lifecycle: dragging, visibility, controller.
+  final LiquidGlassBehavior behavior;
 
-  /// Controls the color saturation level of the rendered output.
-  ///
-  /// Values greater than `1.0` increase color intensity, while
-  /// values between `0.0` and `1.0` reduce saturation. A value of
-  /// `0.0` results in a grayscale image.
-  final double saturation;
-
-  /// Whether the inner, non-distorted region should be transparent.
-  ///
-  /// When enabled, the unaffected center area will reveal the background directly.
-  final bool enableInnerRadiusTransparent;
-
-  /// Whether the lens is currently visible or hidden in the view.
-  final bool visibility;
-
-  /// The base color tint of the lens.
-  ///
-  /// Can be semi-transparent to create colored glass effects.
-  final Color color;
-
-  /// Whether this lens is allowed to move outside the boundaries
-  /// of its parent container.
-  ///
-  /// When set to `true`, the lens can partially or fully extend beyond
-  /// the visible area of the parent, which can be useful for creative
-  /// transitions or edge-based effects.
-  ///
-  /// When set to `false` (default), the lens position is automatically
-  /// clamped to remain fully within the parent’s bounds.
-  final bool outOfBoundaries;
-
-  const LiquidGlass(
-      {this.key,
-      this.controller,
-      this.width = 200,
-      this.height = 100,
-      this.magnification = 1,
-      this.distortion = 0.1,
-      this.distortionWidth = 30,
-      this.enableInnerRadiusTransparent = false,
-      this.diagonalFlip = 0,
-      this.draggable = false,
-      this.child,
-      required this.position,
-      this.shape = const RoundedRectangleShape(),
-      this.blur = const LiquidGlassBlur(),
-      this.chromaticAberration = 0.003,
-      this.saturation = 1.0,
-      this.refractionMode = LiquidGlassRefractionMode.shapeRefraction,
-      this.visibility = true,
-      this.color = Colors.transparent,
-      this.outOfBoundaries = false});
-
-  /// Categorized constructor — the same lens, configured through grouped
-  /// objects instead of one flat parameter list:
-  ///
-  ///  • [LiquidGlassGeometry]   — size, shape, placement.
-  ///  • [LiquidGlassRefraction] — how the glass bends light (distortion,
-  ///    magnification, chromatic aberration, refraction mode).
-  ///  • [LiquidGlassAppearance] — appearance: tint, blur, saturation.
-  ///  • [LiquidGlassBehavior]   — interaction & lifecycle.
-  ///
-  /// This is purely additive: it unpacks the groups into the same flat
-  /// fields the renderer reads, so the default [LiquidGlass] constructor
-  /// keeps working exactly as before. Pick whichever reads better at the
-  /// call site.
-  ///
-  /// ```dart
-  /// LiquidGlass.grouped(
-  ///   geometry: LiquidGlassGeometry(
-  ///     position: const LiquidGlassAlignPosition(alignment: Alignment.center),
-  ///     width: 240, height: 160,
-  ///     shape: const RoundedRectangleShape(cornerRadius: 36),
-  ///   ),
-  ///   refraction: const LiquidGlassRefraction(
-  ///     distortion: 0.12, distortionWidth: 28,
-  ///   ),
-  ///   appearance: const LiquidGlassAppearance(
-  ///     blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2), color: Color(0x16FFFFFF),
-  ///   ),
-  ///   behavior: const LiquidGlassBehavior(draggable: true),
-  ///   child: const Center(child: Text('drag me')),
-  /// );
-  /// ```
-  LiquidGlass.grouped({
+  const LiquidGlass({
     this.key,
     this.child,
-    required LiquidGlassGeometry geometry,
-    LiquidGlassRefraction refraction = const LiquidGlassRefraction(),
-    LiquidGlassAppearance appearance = const LiquidGlassAppearance(),
-    LiquidGlassBehavior behavior = const LiquidGlassBehavior(),
-  })  : // ── geometry ──
-        width = geometry.width,
-        height = geometry.height,
-        position = geometry.position,
-        shape = geometry.shape,
-        outOfBoundaries = geometry.outOfBoundaries,
-        // ── refraction ──
-        distortion = refraction.distortion,
-        distortionWidth = refraction.distortionWidth,
-        magnification = refraction.magnification,
-        chromaticAberration = refraction.chromaticAberration,
-        refractionMode = refraction.refractionMode,
-        diagonalFlip = refraction.diagonalFlip,
-        // ── appearance ──
-        saturation = appearance.saturation,
-        blur = appearance.blur,
-        color = appearance.color,
-        enableInnerRadiusTransparent =
-            appearance.enableInnerRadiusTransparent,
-        // ── behavior ──
-        draggable = behavior.draggable,
-        visibility = behavior.visibility,
-        controller = behavior.controller;
+    required this.geometry,
+    this.refraction = const LiquidGlassRefraction(),
+    this.appearance = const LiquidGlassAppearance(),
+    this.behavior = const LiquidGlassBehavior(),
+  });
 
-  /// The geometry group (size, shape, placement) for this lens.
-  LiquidGlassGeometry get geometry => LiquidGlassGeometry(
-        position: position,
-        width: width,
-        height: height,
-        shape: shape,
-        outOfBoundaries: outOfBoundaries,
-      );
+  // ── Flat read accessors ──────────────────────────────────────────
+  // Plumbing for the renderers (and subclass components), which read
+  // individual values. Configuration happens through the groups above.
 
-  /// The refraction group (how the glass bends light) for this lens.
-  LiquidGlassRefraction get refraction => LiquidGlassRefraction(
-        distortion: distortion,
-        distortionWidth: distortionWidth,
-        magnification: magnification,
-        chromaticAberration: chromaticAberration,
-        refractionMode: refractionMode,
-        diagonalFlip: diagonalFlip,
-      );
+  /// Programmatic controller. See [LiquidGlassBehavior.controller].
+  LiquidGlassController? get controller => behavior.controller;
 
-  /// The appearance group (tint, blur, saturation) for this lens.
-  LiquidGlassAppearance get appearance => LiquidGlassAppearance(
-        saturation: saturation,
-        blur: blur,
-        color: color,
-        enableInnerRadiusTransparent: enableInnerRadiusTransparent,
-      );
+  /// Lens width in logical pixels. See [LiquidGlassGeometry.width].
+  double get width => geometry.width;
 
-  /// The behavior group (interaction, lifecycle) for this lens.
-  LiquidGlassBehavior get behavior => LiquidGlassBehavior(
-        draggable: draggable,
-        visibility: visibility,
-        controller: controller,
-      );
+  /// Lens height in logical pixels. See [LiquidGlassGeometry.height].
+  double get height => geometry.height;
 
-  /// Returns a copy of this lens config with the given fields replaced.
+  /// Lens placement. See [LiquidGlassGeometry.position].
+  LiquidGlassPosition get position => geometry.position;
+
+  /// Lens shape + border styling. See [LiquidGlassGeometry.shape].
+  LiquidGlassShape get shape => geometry.shape;
+
+  /// Whether the lens may leave the parent's bounds.
+  /// See [LiquidGlassGeometry.outOfBoundaries].
+  bool get outOfBoundaries => geometry.outOfBoundaries;
+
+  /// Content magnification. See [LiquidGlassRefraction.magnification].
+  double get magnification => refraction.magnification;
+
+  /// Refraction pattern. See [LiquidGlassRefraction.refractionMode].
+  LiquidGlassRefractionMode get refractionMode => refraction.refractionMode;
+
+  /// Bending strength. See [LiquidGlassRefraction.distortion].
+  double get distortion => refraction.distortion;
+
+  /// Distortion band thickness. See [LiquidGlassRefraction.distortionWidth].
+  double get distortionWidth => refraction.distortionWidth;
+
+  /// Diagonal refraction flip. See [LiquidGlassRefraction.diagonalFlip].
+  double get diagonalFlip => refraction.diagonalFlip;
+
+  /// Color-channel separation. See [LiquidGlassRefraction.chromaticAberration].
+  double get chromaticAberration => refraction.chromaticAberration;
+
+  /// Output saturation. See [LiquidGlassAppearance.saturation].
+  double get saturation => appearance.saturation;
+
+  /// Background blur under the glass. See [LiquidGlassAppearance.blur].
+  LiquidGlassBlur get blur => appearance.blur;
+
+  /// Lens tint. See [LiquidGlassAppearance.color].
+  Color get color => appearance.color;
+
+  /// Transparent non-distorted center.
+  /// See [LiquidGlassAppearance.enableInnerRadiusTransparent].
+  bool get enableInnerRadiusTransparent =>
+      appearance.enableInnerRadiusTransparent;
+
+  /// Whether the lens is user-draggable. See [LiquidGlassBehavior.draggable].
+  bool get draggable => behavior.draggable;
+
+  /// Whether the lens is shown. See [LiquidGlassBehavior.visibility].
+  bool get visibility => behavior.visibility;
+
+  /// Returns a copy of this lens config with the given groups replaced.
   ///
   /// Note this always returns a base [LiquidGlass]; subclass identity
   /// (e.g. [LiquidGlass] components) is not preserved, but every visual
-  /// field is — which is all [LiquidGlassView] reads. Used internally by
+  /// value is — which is all [LiquidGlassView] reads. Used internally by
   /// `LiquidGlassScaffold` to re-position a slot (e.g. shift the app bar
   /// below the status bar) without rebuilding the developer's widget.
+  /// To change a single value, copy the group:
+  /// `lens.copyWith(geometry: lens.geometry.copyWith(width: 240))`.
   LiquidGlass copyWith({
     Key? key,
-    LiquidGlassController? controller,
-    double? width,
-    double? height,
-    double? magnification,
-    LiquidGlassRefractionMode? refractionMode,
-    double? distortion,
-    double? distortionWidth,
-    double? diagonalFlip,
-    bool? draggable,
     Widget? child,
-    LiquidGlassPosition? position,
-    LiquidGlassShape? shape,
-    LiquidGlassBlur? blur,
-    double? chromaticAberration,
-    double? saturation,
-    bool? enableInnerRadiusTransparent,
-    bool? visibility,
-    Color? color,
-    bool? outOfBoundaries,
+    LiquidGlassGeometry? geometry,
+    LiquidGlassRefraction? refraction,
+    LiquidGlassAppearance? appearance,
+    LiquidGlassBehavior? behavior,
   }) {
     return LiquidGlass(
       key: key ?? this.key,
-      controller: controller ?? this.controller,
-      width: width ?? this.width,
-      height: height ?? this.height,
-      magnification: magnification ?? this.magnification,
-      refractionMode: refractionMode ?? this.refractionMode,
-      distortion: distortion ?? this.distortion,
-      distortionWidth: distortionWidth ?? this.distortionWidth,
-      diagonalFlip: diagonalFlip ?? this.diagonalFlip,
-      draggable: draggable ?? this.draggable,
       child: child ?? this.child,
-      position: position ?? this.position,
-      shape: shape ?? this.shape,
-      blur: blur ?? this.blur,
-      chromaticAberration: chromaticAberration ?? this.chromaticAberration,
-      saturation: saturation ?? this.saturation,
-      enableInnerRadiusTransparent:
-          enableInnerRadiusTransparent ?? this.enableInnerRadiusTransparent,
-      visibility: visibility ?? this.visibility,
-      color: color ?? this.color,
-      outOfBoundaries: outOfBoundaries ?? this.outOfBoundaries,
+      geometry: geometry ?? this.geometry,
+      refraction: refraction ?? this.refraction,
+      appearance: appearance ?? this.appearance,
+      behavior: behavior ?? this.behavior,
     );
   }
 }
 
 /// **Geometry** group: where the lens is and what shape/size it has.
 ///
-/// One of the three categories accepted by [LiquidGlass.grouped]. Defaults
-/// mirror the flat [LiquidGlass] constructor, so swapping APIs is lossless.
+/// One of the four configuration groups accepted by [LiquidGlass].
 class LiquidGlassGeometry {
   /// The placement of the lens (absolute offset or relative alignment).
   final LiquidGlassPosition position;
@@ -353,8 +202,7 @@ class LiquidGlassGeometry {
 /// **Refraction** group: how the glass bends light — the optical
 /// distortion of the content behind the lens.
 ///
-/// One of the categories accepted by [LiquidGlass.grouped]. Defaults
-/// mirror the flat [LiquidGlass] constructor, so swapping APIs is lossless.
+/// One of the four configuration groups accepted by [LiquidGlass].
 class LiquidGlassRefraction {
   /// Bending strength of the distortion (`0.0`–`1.0`).
   final double distortion;
@@ -405,8 +253,7 @@ class LiquidGlassRefraction {
 /// **Material** group: the lens's appearance — tint, blur, saturation and
 /// inner transparency (everything visual that isn't optical refraction).
 ///
-/// One of the categories accepted by [LiquidGlass.grouped]. Defaults
-/// mirror the flat [LiquidGlass] constructor, so swapping APIs is lossless.
+/// One of the four configuration groups accepted by [LiquidGlass].
 class LiquidGlassAppearance {
   /// Color saturation of the output (`1.0` = unchanged, `0.0` = grayscale).
   final double saturation;
@@ -445,8 +292,7 @@ class LiquidGlassAppearance {
 
 /// **Behavior** group: interaction and lifecycle.
 ///
-/// One of the three categories accepted by [LiquidGlass.grouped]. Defaults
-/// mirror the flat [LiquidGlass] constructor, so swapping APIs is lossless.
+/// One of the four configuration groups accepted by [LiquidGlass].
 class LiquidGlassBehavior {
   /// Whether the lens can be dragged by the user.
   final bool draggable;

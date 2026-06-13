@@ -4,7 +4,7 @@
 // These are the *scalable* categorization groups for the package's drop-in
 // components (bottom nav bar, app bar, slider, toggle, and future ones).
 //
-// The idea mirrors the existing `LiquidGlass.grouped` API in
+// The idea mirrors the existing grouped `LiquidGlass` API in
 // `liquid_glass_config.dart`: small immutable group objects with `copyWith`
 // and defaults that exactly reproduce the values currently hardcoded across
 // the components — so adopting a group is lossless until a caller opts in.

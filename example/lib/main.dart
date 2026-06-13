@@ -322,28 +322,31 @@ class LensDemoPage extends StatelessWidget {
         children: [
           if (bgIndex == 0)
             LiquidGlass(
-              position:
-                  const LiquidGlassAlignPosition(alignment: Alignment.center),
-              width: 100,
-              height: 100,
-              magnification: 1,
-              enableInnerRadiusTransparent: false,
-              diagonalFlip: 0,
-              distortion: 0.1125,
-              distortionWidth: 50,
-              chromaticAberration: 0.002,
-              draggable: true,
-              outOfBoundaries: true,
-              blur: const LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
-              shape: const RoundedRectangleShape(
-                  cornerRadius: 50,
-                  borderWidth: 3,
-                  lightIntensity: 1,
-                  lightDirection: 39.0,
-                  borderType: OpticalBorder(
-                      borderSaturation: 1,
-                      ambientIntensity: 0,
-                      borderSolidity: 1)),
+              geometry: const LiquidGlassGeometry(
+                position: LiquidGlassAlignPosition(alignment: Alignment.center),
+                width: 100,
+                height: 100,
+                outOfBoundaries: true,
+                shape: RoundedRectangleShape(
+                    cornerRadius: 50,
+                    borderWidth: 3,
+                    lightIntensity: 1,
+                    lightDirection: 39.0,
+                    borderType: OpticalBorder(
+                        borderSaturation: 1,
+                        ambientIntensity: 0,
+                        borderSolidity: 1)),
+              ),
+              refraction: const LiquidGlassRefraction(
+                magnification: 1,
+                distortion: 0.1125,
+                distortionWidth: 50,
+                chromaticAberration: 0.002,
+              ),
+              appearance: const LiquidGlassAppearance(
+                blur: LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
+              ),
+              behavior: const LiquidGlassBehavior(draggable: true),
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(50),
@@ -362,30 +365,32 @@ class LensDemoPage extends StatelessWidget {
             ),
           if (bgIndex == 1)
             LiquidGlass(
-              position:
-                  const LiquidGlassAlignPosition(alignment: Alignment.center),
-              width: 240 * 0.8,
-              height: 312 * 0.8,
-              magnification: 1,
-              enableInnerRadiusTransparent: false,
-              diagonalFlip: 0,
-              distortion: 0.075,
-              distortionWidth: 70,
-              draggable: true,
-              outOfBoundaries: true,
-              chromaticAberration: 0.002,
-              color: Colors.grey.withAlpha(60),
-              blur: const LiquidGlassBlur(sigmaX: 0.5, sigmaY: 0.5),
-              shape: const RoundedRectangleShape(
-                  cornerRadius: 70 * 0.8,
-                  borderWidth: 1,
-                  lightMode: LiquidGlassLightMode.radial,
-                  borderType: ClassicBorder(
-                    borderSoftness: 7.5,
-                  ),
-                  lightIntensity: 2 * 0.6,
-                  lightDirection: 39.0),
-              visibility: true,
+              geometry: const LiquidGlassGeometry(
+                position: LiquidGlassAlignPosition(alignment: Alignment.center),
+                width: 240 * 0.8,
+                height: 312 * 0.8,
+                outOfBoundaries: true,
+                shape: RoundedRectangleShape(
+                    cornerRadius: 70 * 0.8,
+                    borderWidth: 1,
+                    lightMode: LiquidGlassLightMode.radial,
+                    borderType: ClassicBorder(
+                      borderSoftness: 7.5,
+                    ),
+                    lightIntensity: 2 * 0.6,
+                    lightDirection: 39.0),
+              ),
+              refraction: const LiquidGlassRefraction(
+                magnification: 1,
+                distortion: 0.075,
+                distortionWidth: 70,
+                chromaticAberration: 0.002,
+              ),
+              appearance: LiquidGlassAppearance(
+                color: Colors.grey.withAlpha(60),
+                blur: const LiquidGlassBlur(sigmaX: 0.5, sigmaY: 0.5),
+              ),
+              behavior: const LiquidGlassBehavior(draggable: true),
               child: const Center(
                 child: WeatherWidget(
                   cityName: "City",
@@ -400,83 +405,99 @@ class LensDemoPage extends StatelessWidget {
               ),
             ),
           if (bgIndex == 2)
-            LiquidGlass(
-                position: const LiquidGlassAlignPosition(
-                    alignment: Alignment.center),
-                width: 250,
-                height: 250,
-                magnification: 1,
-                enableInnerRadiusTransparent: false,
-                diagonalFlip: 0,
-                distortion: 0.0875,
-                distortionWidth: 80,
-                draggable: true,
-                outOfBoundaries: true,
-                shape: const RoundedRectangleShape(
-                    cornerRadius: 80,
-                    cornerSmoothing: 1,
-                    borderWidth: 1,
-                    borderType: OpticalBorder(),
-                    lightIntensity: 1,
-                    lightDirection: 0)),
+            const LiquidGlass(
+                geometry: LiquidGlassGeometry(
+                  position: LiquidGlassAlignPosition(
+                      alignment: Alignment.center),
+                  width: 250,
+                  height: 250,
+                  outOfBoundaries: true,
+                  shape: RoundedRectangleShape(
+                      cornerRadius: 80,
+                      cornerSmoothing: 1,
+                      borderWidth: 1,
+                      borderType: OpticalBorder(),
+                      lightIntensity: 1,
+                      lightDirection: 0),
+                ),
+                refraction: LiquidGlassRefraction(
+                  magnification: 1,
+                  distortion: 0.0875,
+                  distortionWidth: 80,
+                ),
+                behavior: LiquidGlassBehavior(draggable: true)),
           if (bgIndex == 3)
             LiquidGlass(
-              width: 240,
-              height: 200,
-              magnification: 1,
-              distortion: 0.25,
-              draggable: true,
-              distortionWidth: 70,
-              chromaticAberration: 0.002,
-              blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-              position: const LiquidGlassAlignPosition(
-                  alignment: Alignment.center),
-              shape: const RoundedRectangleShape(
-                lightDirection: 140,
-                lightIntensity: 1,
-                borderWidth: 1,
-                borderType: OpticalBorder(borderSolidity: 0.5),
-              ),
-            ),
-          if (bgIndex == 4)
-            LiquidGlass(
-              width: 240,
-              height: 200,
-              magnification: 1,
-              distortion: 0.1,
-              draggable: true,
-              outOfBoundaries: true,
-              distortionWidth: 70,
-              position: const LiquidGlassAlignPosition(
-                  alignment: Alignment.center),
-              shape: const RoundedRectangleShape(
+              geometry: const LiquidGlassGeometry(
+                position: LiquidGlassAlignPosition(
+                    alignment: Alignment.center),
+                width: 240,
+                height: 200,
+                shape: RoundedRectangleShape(
                   lightDirection: 140,
-                  lightIntensity: 2,
+                  lightIntensity: 1,
                   borderWidth: 1,
                   borderType: OpticalBorder(borderSolidity: 0.5),
-                  cornerRadius: 60,
-                  cornerSmoothing: 1),
+                ),
+              ),
+              refraction: const LiquidGlassRefraction(
+                magnification: 1,
+                distortion: 0.25,
+                distortionWidth: 70,
+                chromaticAberration: 0.002,
+              ),
+              appearance: const LiquidGlassAppearance(
+                blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
+              ),
+              behavior: const LiquidGlassBehavior(draggable: true),
+            ),
+          if (bgIndex == 4)
+            const LiquidGlass(
+              geometry: LiquidGlassGeometry(
+                position: LiquidGlassAlignPosition(
+                    alignment: Alignment.center),
+                width: 240,
+                height: 200,
+                outOfBoundaries: true,
+                shape: RoundedRectangleShape(
+                    lightDirection: 140,
+                    lightIntensity: 2,
+                    borderWidth: 1,
+                    borderType: OpticalBorder(borderSolidity: 0.5),
+                    cornerRadius: 60,
+                    cornerSmoothing: 1),
+              ),
+              refraction: LiquidGlassRefraction(
+                magnification: 1,
+                distortion: 0.1,
+                distortionWidth: 70,
+              ),
+              behavior: LiquidGlassBehavior(draggable: true),
             ),
           if (bgIndex == 5)
-            LiquidGlass(
-              width: 150,
-              height: 150,
-              magnification: 1,
-              distortion: 0.075,
-              draggable: true,
-              outOfBoundaries: true,
-              distortionWidth: 50,
-              position: const LiquidGlassAlignPosition(
-                  alignment: Alignment.center),
-              shape: const RoundedRectangleShape(
-                  lightDirection: 140,
-                  lightIntensity: 1.5,
-                  borderWidth: 2,
-                  borderType: OpticalBorder(
-                      borderSaturation: 1,
-                      ambientIntensity: 0,
-                      borderSolidity: 0.5),
-                  cornerRadius: 75),
+            const LiquidGlass(
+              geometry: LiquidGlassGeometry(
+                position: LiquidGlassAlignPosition(
+                    alignment: Alignment.center),
+                width: 150,
+                height: 150,
+                outOfBoundaries: true,
+                shape: RoundedRectangleShape(
+                    lightDirection: 140,
+                    lightIntensity: 1.5,
+                    borderWidth: 2,
+                    borderType: OpticalBorder(
+                        borderSaturation: 1,
+                        ambientIntensity: 0,
+                        borderSolidity: 0.5),
+                    cornerRadius: 75),
+              ),
+              refraction: LiquidGlassRefraction(
+                magnification: 1,
+                distortion: 0.075,
+                distortionWidth: 50,
+              ),
+              behavior: LiquidGlassBehavior(draggable: true),
             ),
         ],
       ),
@@ -652,35 +673,50 @@ class WeatherWidget extends StatelessWidget {
 /// glass content widgets.
 class NotificationCard extends LiquidGlass {
   NotificationCard({
-    required super.position,
+    required LiquidGlassPosition position,
     required String appName,
     required String title,
     required String body,
     required IconData appIcon,
     String time = 'now',
     Color appIconColor = const Color(0xFF007AFF),
-    super.color = const Color(0x1CFFFFFF),
-    super.width = 340,
-    super.height = 92,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    Color color = const Color(0x1CFFFFFF),
+    double width = 340,
+    double height = 92,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          magnification: 1,
-          distortion: 0.07,
-          distortionWidth: 32,
-          chromaticAberration: 0.002,
-          blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-          shape: const RoundedRectangleShape(
-            cornerRadius: 22,
-            borderWidth: 1.0,
-            lightIntensity: 1.0,
-            lightDirection: 70,
-            borderType: OpticalBorder(
-              borderSaturation: 1.1,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.3,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            outOfBoundaries: outOfBoundaries,
+            shape: const RoundedRectangleShape(
+              cornerRadius: 22,
+              borderWidth: 1.0,
+              lightIntensity: 1.0,
+              lightDirection: 70,
+              borderType: OpticalBorder(
+                borderSaturation: 1.1,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.3,
+              ),
             ),
+          ),
+          refraction: const LiquidGlassRefraction(
+            magnification: 1,
+            distortion: 0.07,
+            distortionWidth: 32,
+            chromaticAberration: 0.002,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: color,
+            blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -914,25 +950,31 @@ class _NotificationPageState extends State<NotificationPage> {
     double size = 56,
   }) {
     return LiquidGlass(
-      position: LiquidGlassAlignPosition(alignment: alignment, margin: margin),
-      width: size,
-      height: size,
-      magnification: 1,
-      distortion: 0.07,
-      distortionWidth: 28,
-      chromaticAberration: 0.002,
-      color: Colors.black.withAlpha(60),
-      blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-      shape: RoundedRectangleShape(
-        cornerRadius: size / 2,
-        borderWidth: 1.2,
-        lightIntensity: 1.1,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.2,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.35,
+      geometry: LiquidGlassGeometry(
+        position: LiquidGlassAlignPosition(alignment: alignment, margin: margin),
+        width: size,
+        height: size,
+        shape: RoundedRectangleShape(
+          cornerRadius: size / 2,
+          borderWidth: 1.2,
+          lightIntensity: 1.1,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.2,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.35,
+          ),
         ),
+      ),
+      refraction: const LiquidGlassRefraction(
+        magnification: 1,
+        distortion: 0.07,
+        distortionWidth: 28,
+        chromaticAberration: 0.002,
+      ),
+      appearance: LiquidGlassAppearance(
+        color: Colors.black.withAlpha(60),
+        blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
       ),
       child: Center(
         child: Icon(icon, color: Colors.white, size: size * 0.42),
@@ -1002,7 +1044,7 @@ class CcConnectivityState {
 
 class LiquidGlassConnectivityCard extends LiquidGlass {
   LiquidGlassConnectivityCard({
-    required super.position,
+    required LiquidGlassPosition position,
     required CcConnectivityState state,
     required VoidCallback onToggleAirplane,
     required VoidCallback onToggleAirdrop,
@@ -1010,29 +1052,41 @@ class LiquidGlassConnectivityCard extends LiquidGlass {
     required VoidCallback onToggleBluetooth,
     required VoidCallback onToggleCellular,
     required VoidCallback onToggleData,
-    super.width = 200,
-    super.height = 200,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    double width = 200,
+    double height = 200,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          magnification: 1,
-          distortion: 0.08,
-          distortionWidth: 34,
-          chromaticAberration: 0,
-          saturation: 1.25,
-          color: Colors.white.withAlpha(50),
-          blur: const LiquidGlassBlur(),
-          shape: const RoundedRectangleShape(
-            cornerRadius: 32,
-            borderWidth: 1.0,
-            lightIntensity: 1.1,
-            lightDirection: 80,
-            borderType: OpticalBorder(
-              borderSaturation: 0.8,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.35,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            outOfBoundaries: outOfBoundaries,
+            shape: const RoundedRectangleShape(
+              cornerRadius: 32,
+              borderWidth: 1.0,
+              lightIntensity: 1.1,
+              lightDirection: 80,
+              borderType: OpticalBorder(
+                borderSaturation: 0.8,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.35,
+              ),
             ),
+          ),
+          refraction: const LiquidGlassRefraction(
+            magnification: 1,
+            distortion: 0.08,
+            distortionWidth: 34,
+          ),
+          appearance: LiquidGlassAppearance(
+            saturation: 1.25,
+            color: Colors.white.withAlpha(50),
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: _ConnectivityGrid(
             state: state,
@@ -1190,7 +1244,7 @@ class _CcRoundIcon extends StatelessWidget {
 
 class LiquidGlassNowPlayingCard extends LiquidGlass {
   LiquidGlassNowPlayingCard({
-    required super.position,
+    required LiquidGlassPosition position,
     required String track,
     required String artist,
     required bool isPlaying,
@@ -1199,29 +1253,41 @@ class LiquidGlassNowPlayingCard extends LiquidGlass {
     VoidCallback? onNext,
     VoidCallback? onAirplay,
     Widget? artwork,
-    super.width = 200,
-    super.height = 200,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    double width = 200,
+    double height = 200,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          magnification: 1,
-          distortion: 0.08,
-          distortionWidth: 34,
-          chromaticAberration: 0,
-          saturation: 1.25,
-          color: Colors.white.withAlpha(50),
-          blur: const LiquidGlassBlur(),
-          shape: const RoundedRectangleShape(
-            cornerRadius: 32,
-            borderWidth: 1.0,
-            lightIntensity: 1.1,
-            lightDirection: 80,
-            borderType: OpticalBorder(
-              borderSaturation: 0.8,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.35,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            outOfBoundaries: outOfBoundaries,
+            shape: const RoundedRectangleShape(
+              cornerRadius: 32,
+              borderWidth: 1.0,
+              lightIntensity: 1.1,
+              lightDirection: 80,
+              borderType: OpticalBorder(
+                borderSaturation: 0.8,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.35,
+              ),
             ),
+          ),
+          refraction: const LiquidGlassRefraction(
+            magnification: 1,
+            distortion: 0.08,
+            distortionWidth: 34,
+          ),
+          appearance: LiquidGlassAppearance(
+            saturation: 1.25,
+            color: Colors.white.withAlpha(50),
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: _NowPlayingBody(
             track: track,
@@ -1375,38 +1441,48 @@ class _CcTransportButton extends StatelessWidget {
 
 class LiquidGlassRoundTile extends LiquidGlass {
   LiquidGlassRoundTile({
-    required super.position,
+    required LiquidGlassPosition position,
     required IconData icon,
     bool active = false,
     Color activeColor = const Color(0xFFFF9500),
     Color iconColor = Colors.white,
     VoidCallback? onTap,
     double size = 60,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          width: size,
-          height: size,
-          magnification: 1,
-          distortion: 0.1,
-          distortionWidth: 30,
-          chromaticAberration: 0,
-          saturation: 1.25,
-          color: active
-              ? activeColor.withAlpha(180)
-              : Colors.white.withAlpha(50),
-          blur: const LiquidGlassBlur(),
-          shape: RoundedRectangleShape(
-            cornerRadius: size / 2,
-            borderWidth: 1.0,
-            lightIntensity: active ? 1.5 : 1.1,
-            lightDirection: 80,
-            borderType: const OpticalBorder(
-              borderSaturation: 0.8,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.4,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: size,
+            height: size,
+            outOfBoundaries: outOfBoundaries,
+            shape: RoundedRectangleShape(
+              cornerRadius: size / 2,
+              borderWidth: 1.0,
+              lightIntensity: active ? 1.5 : 1.1,
+              lightDirection: 80,
+              borderType: const OpticalBorder(
+                borderSaturation: 0.8,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.4,
+              ),
             ),
+          ),
+          refraction: const LiquidGlassRefraction(
+            magnification: 1,
+            distortion: 0.1,
+            distortionWidth: 30,
+          ),
+          appearance: LiquidGlassAppearance(
+            saturation: 1.25,
+            color: active
+                ? activeColor.withAlpha(180)
+                : Colors.white.withAlpha(50),
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Material(
             color: Colors.transparent,
@@ -1477,26 +1553,30 @@ LiquidGlass buildVerticalSliderLens({
   required ValueChanged<double> onChanged,
 }) {
   return LiquidGlass(
-    position: LiquidGlassOffsetPosition(left: left, top: top),
-    width: width,
-    height: height,
-    magnification: 1,
-    distortion: 0.1,
-    distortionWidth: 30,
-    chromaticAberration: 0,
-    saturation: 1.25,
-    color: Colors.white.withAlpha(50),
-    blur: const LiquidGlassBlur(),
-    shape: RoundedRectangleShape(
-      cornerRadius: width / 2,
-      borderWidth: 1.0,
-      lightIntensity: 1.2,
-      lightDirection: 80,
-      borderType: const OpticalBorder(
-        borderSaturation: 0.8,
-        ambientIntensity: 1.0,
-        borderSolidity: 0.5,
+    geometry: LiquidGlassGeometry(
+      position: LiquidGlassOffsetPosition(left: left, top: top),
+      width: width,
+      height: height,
+      shape: RoundedRectangleShape(
+        cornerRadius: width / 2,
+        borderWidth: 1.0,
+        lightIntensity: 1.2,
+        lightDirection: 80,
+        borderType: const OpticalBorder(
+          borderSaturation: 0.8,
+          ambientIntensity: 1.0,
+          borderSolidity: 0.5,
+        ),
       ),
+    ),
+    refraction: const LiquidGlassRefraction(
+      magnification: 1,
+      distortion: 0.1,
+      distortionWidth: 30,
+    ),
+    appearance: LiquidGlassAppearance(
+      saturation: 1.25,
+      color: Colors.white.withAlpha(50),
     ),
     child: _VerticalSliderGestureChild(
       width: width,
@@ -1538,31 +1618,43 @@ class _VerticalSliderGestureChild extends StatelessWidget {
 
 class LiquidGlassFocusPill extends LiquidGlass {
   LiquidGlassFocusPill({
-    required super.position,
+    required LiquidGlassPosition position,
     required VoidCallback onTap,
-    super.width = 200,
-    super.height = 64,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    double width = 200,
+    double height = 64,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          magnification: 1,
-          distortion: 0.08,
-          distortionWidth: 32,
-          chromaticAberration: 0,
-          saturation: 1.25,
-          color: Colors.white.withAlpha(50),
-          blur: const LiquidGlassBlur(),
-          shape: RoundedRectangleShape(
-            cornerRadius: height / 2,
-            borderWidth: 1.0,
-            lightIntensity: 1.1,
-            lightDirection: 80,
-            borderType: const OpticalBorder(
-              borderSaturation: 0.8,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.35,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            outOfBoundaries: outOfBoundaries,
+            shape: RoundedRectangleShape(
+              cornerRadius: height / 2,
+              borderWidth: 1.0,
+              lightIntensity: 1.1,
+              lightDirection: 80,
+              borderType: const OpticalBorder(
+                borderSaturation: 0.8,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.35,
+              ),
             ),
+          ),
+          refraction: const LiquidGlassRefraction(
+            distortion: 0.08,
+            distortionWidth: 32,
+            chromaticAberration: 0,
+          ),
+          appearance: LiquidGlassAppearance(
+            saturation: 1.25,
+            color: Colors.white.withAlpha(50),
+          ),
+          behavior: LiquidGlassBehavior(
+            controller: controller,
+            draggable: draggable,
           ),
           child: Material(
             color: Colors.transparent,

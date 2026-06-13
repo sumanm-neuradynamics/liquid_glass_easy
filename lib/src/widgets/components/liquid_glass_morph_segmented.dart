@@ -136,28 +136,33 @@ LiquidGlass buildLiquidGlassMorphSegmentedCapsule({
   required double topMargin,
 }) {
   return LiquidGlass(
-    position: LiquidGlassAlignPosition(
-      alignment: Alignment.topCenter,
-      margin: EdgeInsets.only(top: topMargin),
-    ),
-    width: layout.width,
-    height: layout.height,
-    magnification: 1,
-    distortion: 0.06,
-    distortionWidth: 22,
-    chromaticAberration: 0.002,
-    color: Colors.white.withAlpha(20),
-    blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-    shape: RoundedRectangleShape(
-      cornerRadius: layout.height / 2,
-      borderWidth: 1.0,
-      lightIntensity: 1.0,
-      lightDirection: 80,
-      borderType: const OpticalBorder(
-        borderSaturation: 1.1,
-        ambientIntensity: 1.0,
-        borderSolidity: 0.25,
+    geometry: LiquidGlassGeometry(
+      position: LiquidGlassAlignPosition(
+        alignment: Alignment.topCenter,
+        margin: EdgeInsets.only(top: topMargin),
       ),
+      width: layout.width,
+      height: layout.height,
+      shape: RoundedRectangleShape(
+        cornerRadius: layout.height / 2,
+        borderWidth: 1.0,
+        lightIntensity: 1.0,
+        lightDirection: 80,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.1,
+          ambientIntensity: 1.0,
+          borderSolidity: 0.25,
+        ),
+      ),
+    ),
+    refraction: const LiquidGlassRefraction(
+      distortion: 0.06,
+      distortionWidth: 22,
+      chromaticAberration: 0.002,
+    ),
+    appearance: LiquidGlassAppearance(
+      color: Colors.white.withAlpha(20),
+      blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
     ),
   );
 }
@@ -206,28 +211,33 @@ LiquidGlass buildLiquidGlassMorphSegmentedPill({
   final adjustedLeft = pillLeft - extraW / 2;
 
   return LiquidGlass(
-    position: LiquidGlassOffsetPosition(
-      left: adjustedLeft,
-      top: pillTop,
-    ),
-    width: pillW,
-    height: pillH,
-    magnification: 1,
-    distortion: 0.06,
-    distortionWidth: 10,
-    chromaticAberration: 0.002,
-    color: Colors.white.withAlpha(28),
-    blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
-    shape: RoundedRectangleShape(
-      cornerRadius: pillH / 2,
-      borderWidth: 1.0,
-      lightIntensity: 1.3,
-      lightDirection: 80,
-      borderType: const OpticalBorder(
-        borderSaturation: 1.4,
-        ambientIntensity: 1.0,
-        borderSolidity: 0.5,
+    geometry: LiquidGlassGeometry(
+      position: LiquidGlassOffsetPosition(
+        left: adjustedLeft,
+        top: pillTop,
       ),
+      width: pillW,
+      height: pillH,
+      shape: RoundedRectangleShape(
+        cornerRadius: pillH / 2,
+        borderWidth: 1.0,
+        lightIntensity: 1.3,
+        lightDirection: 80,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.4,
+          ambientIntensity: 1.0,
+          borderSolidity: 0.5,
+        ),
+      ),
+    ),
+    refraction: const LiquidGlassRefraction(
+      distortion: 0.06,
+      distortionWidth: 10,
+      chromaticAberration: 0.002,
+    ),
+    appearance: LiquidGlassAppearance(
+      color: Colors.white.withAlpha(28),
+      blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
     ),
   );
 }

@@ -5,7 +5,14 @@ import 'liquid_glass_config.dart';
 import 'render/impeller_liquid_glass_lens.dart';
 import 'render/skia_liquid_glass_lens.dart';
 
-export 'liquid_glass_config.dart' show LiquidGlass;
+export '../controllers/liquid_glass_controller.dart' show LiquidGlassController;
+export 'liquid_glass_config.dart'
+    show
+        LiquidGlass,
+        LiquidGlassGeometry,
+        LiquidGlassRefraction,
+        LiquidGlassAppearance,
+        LiquidGlassBehavior;
 
 /// Lens widget that uses the shared shader + image.
 ///

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../liquid_glass.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
+import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// A miniature "Now Playing" widget rendered as liquid glass.
@@ -12,34 +13,47 @@ import '../utils/liquid_glass_shape.dart';
 /// and a play / pause button on the right.
 class LiquidGlassMusicPlayer extends LiquidGlass {
   LiquidGlassMusicPlayer({
-    required super.position,
+    required LiquidGlassPosition position,
     required String track,
     required String artist,
     required bool isPlaying,
     VoidCallback? onPlayPause,
     Widget? artwork,
-    super.width = 320,
-    super.height = 86,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    double width = 320,
+    double height = 86,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          magnification: 1,
-          distortion: 0.08,
-          distortionWidth: 32,
-          chromaticAberration: 0.002,
-          color: Colors.white.withAlpha(28),
-          blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-          shape: const RoundedRectangleShape(
-            cornerRadius: 22,
-            borderWidth: 1.0,
-            lightIntensity: 1.1,
-            lightDirection: 80,
-            borderType: OpticalBorder(
-              borderSaturation: 1.2,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.35,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            shape: const RoundedRectangleShape(
+              cornerRadius: 22,
+              borderWidth: 1.0,
+              lightIntensity: 1.1,
+              lightDirection: 80,
+              borderType: OpticalBorder(
+                borderSaturation: 1.2,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.35,
+              ),
             ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: const LiquidGlassRefraction(
+            distortion: 0.08,
+            distortionWidth: 32,
+            chromaticAberration: 0.002,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: Colors.white.withAlpha(28),
+            blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

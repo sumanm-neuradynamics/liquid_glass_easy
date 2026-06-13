@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../liquid_glass.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
+import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// A lock-screen style notification banner rendered as liquid glass.
@@ -12,7 +13,7 @@ import '../utils/liquid_glass_shape.dart';
 /// [LiquidGlassView]'s `children:` list.
 class LiquidGlassNotificationCard extends LiquidGlass {
   LiquidGlassNotificationCard({
-    required super.position,
+    required LiquidGlassPosition position,
     required String appName,
     required String title,
     required String body,
@@ -23,28 +24,42 @@ class LiquidGlassNotificationCard extends LiquidGlass {
     /// Glass tint of the card body. Defaults to a faint white.
     /// Pass a translucent black (e.g. `Colors.black.withAlpha(40)`)
     /// for a darker, dimmed-glass look.
-    super.color = const Color(0x1CFFFFFF), // white, alpha 28
-    super.width = 340,
-    super.height = 92,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    Color color = const Color(0x1CFFFFFF), // white, alpha 28
+    double width = 340,
+    double height = 92,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          magnification: 1,
-          distortion: 0.07,
-          distortionWidth: 32,
-          chromaticAberration: 0.002,
-          blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-          shape: const RoundedRectangleShape(
-            cornerRadius: 22,
-            borderWidth: 1.0,
-            lightIntensity: 1.0,
-            lightDirection: 70,
-            borderType: OpticalBorder(
-              borderSaturation: 1.1,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.3,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            shape: const RoundedRectangleShape(
+              cornerRadius: 22,
+              borderWidth: 1.0,
+              lightIntensity: 1.0,
+              lightDirection: 70,
+              borderType: OpticalBorder(
+                borderSaturation: 1.1,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.3,
+              ),
             ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: const LiquidGlassRefraction(
+            distortion: 0.07,
+            distortionWidth: 32,
+            chromaticAberration: 0.002,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: color,
+            blur: const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),

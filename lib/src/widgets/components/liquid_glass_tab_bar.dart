@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../liquid_glass.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
+import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// Description of a single tab in [LiquidGlassTabBar].
@@ -43,13 +44,13 @@ class LiquidGlassTabBarItem {
 ///   color.
 class LiquidGlassTabBar extends LiquidGlass {
   LiquidGlassTabBar({
-    required super.position,
+    required LiquidGlassPosition position,
     required List<LiquidGlassTabBarItem> items,
     required int selectedIndex,
     required ValueChanged<int> onChanged,
-    super.height = 64,
-    super.width = 320,
-    super.controller,
+    double height = 64,
+    double width = 320,
+    LiquidGlassController? controller,
 
     /// Corner radius of the capsule. Defaults to a full pill
     /// (`height / 2`).
@@ -57,11 +58,11 @@ class LiquidGlassTabBar extends LiquidGlass {
 
     /// Translucent glass tint of the capsule.
     Color glassColor = const Color(0x1CFFFFFF), // white, alpha 28
-    super.blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-    super.distortion = 0.08,
-    super.distortionWidth = 32,
-    super.chromaticAberration = 0.002,
-    super.magnification = 1,
+    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+    double distortion = 0.08,
+    double distortionWidth = 32,
+    double chromaticAberration = 0.002,
+    double magnification = 1,
 
     // ── Border ─────────────────────────────────────────────
     double borderWidth = 1.2,
@@ -95,19 +96,38 @@ class LiquidGlassTabBar extends LiquidGlass {
 
     /// Label font size (labels show only when an item has a label).
     double labelFontSize = 10.5,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   })  : assert(items.length >= 2 && items.length <= 5,
             'Tab bars use 2–5 tabs'),
         assert(selectedIndex >= 0 && selectedIndex < items.length),
         super(
-          color: glassColor,
-          shape: RoundedRectangleShape(
-            cornerRadius: cornerRadius ?? height / 2,
-            borderWidth: borderWidth,
-            lightIntensity: lightIntensity,
-            lightDirection: lightDirection,
-            borderType: borderType,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            shape: RoundedRectangleShape(
+              cornerRadius: cornerRadius ?? height / 2,
+              borderWidth: borderWidth,
+              lightIntensity: lightIntensity,
+              lightDirection: lightDirection,
+              borderType: borderType,
+            ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: LiquidGlassRefraction(
+            distortion: distortion,
+            distortionWidth: distortionWidth,
+            chromaticAberration: chromaticAberration,
+            magnification: magnification,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: glassColor,
+            blur: blur,
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Padding(
             padding: const EdgeInsets.all(6),
@@ -170,13 +190,13 @@ class LiquidGlassTabBar extends LiquidGlass {
 /// [LiquidGlassTabBar] plus [selectionDuration] and [selectionCurve].
 class LiquidGlassAnimatedTabBar extends LiquidGlass {
   LiquidGlassAnimatedTabBar({
-    required super.position,
+    required LiquidGlassPosition position,
     required List<LiquidGlassTabBarItem> items,
     required int selectedIndex,
     required ValueChanged<int> onChanged,
-    super.height = 64,
-    super.width = 320,
-    super.controller,
+    double height = 64,
+    double width = 320,
+    LiquidGlassController? controller,
 
     /// Corner radius of the capsule. Defaults to a full pill
     /// (`height / 2`).
@@ -184,11 +204,11 @@ class LiquidGlassAnimatedTabBar extends LiquidGlass {
 
     /// Translucent glass tint of the capsule.
     Color glassColor = const Color(0x1CFFFFFF), // white, alpha 28
-    super.blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-    super.distortion = 0.08,
-    super.distortionWidth = 32,
-    super.chromaticAberration = 0.002,
-    super.magnification = 1,
+    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+    double distortion = 0.08,
+    double distortionWidth = 32,
+    double chromaticAberration = 0.002,
+    double magnification = 1,
 
     // ── Border ─────────────────────────────────────────────
     double borderWidth = 1.2,
@@ -228,19 +248,38 @@ class LiquidGlassAnimatedTabBar extends LiquidGlass {
 
     /// Label font size (labels show only when an item has a label).
     double labelFontSize = 10.5,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   })  : assert(items.length >= 2 && items.length <= 5,
             'Tab bars use 2–5 tabs'),
         assert(selectedIndex >= 0 && selectedIndex < items.length),
         super(
-          color: glassColor,
-          shape: RoundedRectangleShape(
-            cornerRadius: cornerRadius ?? height / 2,
-            borderWidth: borderWidth,
-            lightIntensity: lightIntensity,
-            lightDirection: lightDirection,
-            borderType: borderType,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            shape: RoundedRectangleShape(
+              cornerRadius: cornerRadius ?? height / 2,
+              borderWidth: borderWidth,
+              lightIntensity: lightIntensity,
+              lightDirection: lightDirection,
+              borderType: borderType,
+            ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: LiquidGlassRefraction(
+            distortion: distortion,
+            distortionWidth: distortionWidth,
+            chromaticAberration: chromaticAberration,
+            magnification: magnification,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: glassColor,
+            blur: blur,
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Padding(
             padding: const EdgeInsets.all(6),
@@ -353,7 +392,7 @@ class _TabButton extends StatelessWidget {
 /// a separate, side-floating action (often Search).
 class LiquidGlassTabBarAction extends LiquidGlass {
   LiquidGlassTabBarAction({
-    required super.position,
+    required LiquidGlassPosition position,
     required IconData icon,
     VoidCallback? onTap,
     Color iconColor = Colors.white,
@@ -361,36 +400,46 @@ class LiquidGlassTabBarAction extends LiquidGlass {
         'that pass `tint:` still compile.')
     Color? tint,
     double size = 56,
-    super.controller,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    LiquidGlassController? controller,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   }) : super(
-          width: size,
-          height: size,
-          magnification: 1,
-          distortion: 0.07,
-          distortionWidth: 28,
-          chromaticAberration: 0.002,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: size,
+            height: size,
+            shape: RoundedRectangleShape(
+              // Border profile mirrors the bottom-nav capsule (see
+              // [buildLiquidGlassBottomNavCapsule]) so the search
+              // button reads as part of the same family rather than
+              // a brighter standalone pill.
+              cornerRadius: size / 2,
+              borderWidth: 1.2,
+              lightIntensity: 1.1,
+              lightDirection: 80,
+              borderType: const OpticalBorder(
+                borderSaturation: 1.2,
+                ambientIntensity: 1.0,
+                borderSolidity: 0.35,
+              ),
+            ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: const LiquidGlassRefraction(
+            distortion: 0.07,
+            distortionWidth: 28,
+            chromaticAberration: 0.002,
+          ),
           // Transparent body — let the underlying liquid-glass
           // refraction speak for itself. The icon color is
           // independently controlled by [iconColor] (defaults to
           // white) so the button doesn't look "tinted".
-          color: Colors.transparent,
-          blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-          shape: RoundedRectangleShape(
-            // Border profile mirrors the bottom-nav capsule (see
-            // [buildLiquidGlassBottomNavCapsule]) so the search
-            // button reads as part of the same family rather than
-            // a brighter standalone pill.
-            cornerRadius: size / 2,
-            borderWidth: 1.2,
-            lightIntensity: 1.1,
-            lightDirection: 80,
-            borderType: const OpticalBorder(
-              borderSaturation: 1.2,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.35,
-            ),
+          appearance: const LiquidGlassAppearance(
+            blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Material(
             color: Colors.transparent,

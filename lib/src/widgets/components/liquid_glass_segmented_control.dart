@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../liquid_glass.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
+import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// A segmented control rendered on top of liquid glass.
@@ -16,13 +17,13 @@ import '../utils/liquid_glass_shape.dart';
 /// selection-pill color/border, and the segment label styling.
 class LiquidGlassSegmentedControl extends LiquidGlass {
   LiquidGlassSegmentedControl({
-    required super.position,
+    required LiquidGlassPosition position,
     required List<String> segments,
     required int selectedIndex,
     required ValueChanged<int> onChanged,
-    super.width = 320,
-    super.height = 36,
-    super.controller,
+    double width = 320,
+    double height = 36,
+    LiquidGlassController? controller,
 
     /// Corner radius of the capsule. Defaults to a full pill
     /// (`height / 2`).
@@ -30,11 +31,11 @@ class LiquidGlassSegmentedControl extends LiquidGlass {
 
     /// Translucent glass tint of the capsule.
     Color glassColor = const Color(0x14FFFFFF), // white, alpha 20
-    super.blur = const LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
-    super.distortion = 0.06,
-    super.distortionWidth = 22,
-    super.chromaticAberration = 0.002,
-    super.magnification = 1,
+    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
+    double distortion = 0.06,
+    double distortionWidth = 22,
+    double chromaticAberration = 0.002,
+    double magnification = 1,
 
     // ── Border ─────────────────────────────────────────────
     double borderWidth = 1.0,
@@ -62,18 +63,37 @@ class LiquidGlassSegmentedControl extends LiquidGlass {
 
     /// Font size of segment labels.
     double fontSize = 13,
-    super.draggable = false,
-    super.outOfBoundaries = false,
+    bool draggable = false,
+    bool outOfBoundaries = false,
   })  : assert(segments.length >= 2, 'Need at least two segments'),
         assert(selectedIndex >= 0 && selectedIndex < segments.length),
         super(
-          color: glassColor,
-          shape: RoundedRectangleShape(
-            cornerRadius: cornerRadius ?? height / 2,
-            borderWidth: borderWidth,
-            lightIntensity: lightIntensity,
-            lightDirection: lightDirection,
-            borderType: borderType,
+          geometry: LiquidGlassGeometry(
+            position: position,
+            width: width,
+            height: height,
+            shape: RoundedRectangleShape(
+              cornerRadius: cornerRadius ?? height / 2,
+              borderWidth: borderWidth,
+              lightIntensity: lightIntensity,
+              lightDirection: lightDirection,
+              borderType: borderType,
+            ),
+            outOfBoundaries: outOfBoundaries,
+          ),
+          refraction: LiquidGlassRefraction(
+            distortion: distortion,
+            distortionWidth: distortionWidth,
+            chromaticAberration: chromaticAberration,
+            magnification: magnification,
+          ),
+          appearance: LiquidGlassAppearance(
+            color: glassColor,
+            blur: blur,
+          ),
+          behavior: LiquidGlassBehavior(
+            draggable: draggable,
+            controller: controller,
           ),
           child: Padding(
             padding: const EdgeInsets.all(3),

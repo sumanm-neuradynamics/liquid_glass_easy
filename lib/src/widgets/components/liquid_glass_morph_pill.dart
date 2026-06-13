@@ -98,28 +98,32 @@ LiquidGlass buildLiquidGlassMorphPill({
   final h = spec.restHeight + extraHeight;
   return LiquidGlass(
     child: child,
-    position: LiquidGlassOffsetPosition(
-      left: left,
-      bottom: bottom - extraHeight / 2,
-    ),
-    width: spec.width,
-    height: h,
-    magnification: 1,
-    distortion: 0.12,
-    distortionWidth: 18,
-    chromaticAberration: 0.003,
-    color: Colors.white.withAlpha(28),
-    blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
-    shape: RoundedRectangleShape(
-      cornerRadius: h / 2,
-      borderWidth: 1.0,
-      lightIntensity: 1.3,
-      lightDirection: 80,
-      borderType: const OpticalBorder(
-        borderSaturation: 1.4,
-        ambientIntensity: 1.0,
-        borderSolidity: 0.5,
+    geometry: LiquidGlassGeometry(
+      position: LiquidGlassOffsetPosition(
+        left: left,
+        bottom: bottom - extraHeight / 2,
       ),
+      width: spec.width,
+      height: h,
+      shape: RoundedRectangleShape(
+        cornerRadius: h / 2,
+        borderWidth: 1.0,
+        lightIntensity: 1.3,
+        lightDirection: 80,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.4,
+          ambientIntensity: 1.0,
+          borderSolidity: 0.5,
+        ),
+      ),
+    ),
+    refraction: const LiquidGlassRefraction(
+      distortion: 0.12,
+      distortionWidth: 18,
+    ),
+    appearance: LiquidGlassAppearance(
+      color: Colors.white.withAlpha(28),
+      blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
     ),
   );
 }
