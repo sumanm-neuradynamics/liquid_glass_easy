@@ -151,6 +151,41 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+        'statically hidden lens shows child and can animate in later',
+        (tester) async {
+      Future<void> pumpLens(bool visible) {
+        return tester.pumpWidget(
+          MaterialApp(
+            home: Center(
+              child: SizedBox(
+                width: 200,
+                height: 100,
+                child: LiquidGlassLens(
+                  useImpellerBackdrop: false,
+                  visibility: visible,
+                  visibilityDuration: const Duration(milliseconds: 100),
+                  child: const Center(child: Text('static-hidden')),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      // Starts hidden: no controller exists yet, child still paints.
+      await pumpLens(false);
+      expect(find.text('static-hidden'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // First visibility change creates the controller lazily and
+      // animates from the hidden state.
+      await pumpLens(true);
+      await tester.pumpAndSettle();
+      expect(find.text('static-hidden'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('LiquidGlassLens refraction path (Skia capture)', () {

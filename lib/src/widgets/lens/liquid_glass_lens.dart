@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../liquid_glass_config.dart';
+import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_shape.dart';
 import 'liquid_glass_lens_scope.dart';
 import 'liquid_glass_shaders.dart';
@@ -90,10 +91,12 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
   /// One-time debug notice when a lens has to degrade to frosted glass.
   static bool _warnedFrostedFallback = false;
 
-  // Created eagerly in [initState] — a lazy `late final` here would get
-  // its first touch inside dispose(), creating a ticker during tree
-  // finalization (illegal ancestor lookup).
-  late final AnimationController _visibilityController;
+  /// Show/hide animation driver. Created lazily on the FIRST visibility
+  /// change — a lens whose `visibility` never changes carries no
+  /// controller and no ticker at all. (Never a lazy `late final`: that
+  /// would get its first touch inside dispose(), creating a ticker
+  /// during tree finalization — an illegal ancestor lookup.)
+  AnimationController? _visibilityController;
 
   /// Per-lens shader instances, created from the shared program cache.
   /// Deliberately not disposed manually: retained layers may still
@@ -105,12 +108,6 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
   @override
   void initState() {
     super.initState();
-    _visibilityController = AnimationController(
-      vsync: this,
-      duration: widget.visibilityDuration,
-      // 0 = fully shown, 1 = fully hidden (legacy convention).
-      value: widget.visibility ? 0.0 : 1.0,
-    );
     if (!LiquidGlassShaders.isLoaded) {
       LiquidGlassShaders.ensureLoaded().then((_) {
         if (mounted) setState(() {});
@@ -124,20 +121,62 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
   @override
   void didUpdateWidget(covariant LiquidGlassLens oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _visibilityController.duration = widget.visibilityDuration;
+    _visibilityController?.duration = widget.visibilityDuration;
     if (widget.visibility != oldWidget.visibility) {
-      if (widget.visibility) {
-        _visibilityController.animateTo(0.0, curve: Curves.easeInOut);
-      } else {
-        _visibilityController.animateTo(1.0, curve: Curves.easeInOut);
-      }
+      final controller = _visibilityController ??= AnimationController(
+        vsync: this,
+        duration: widget.visibilityDuration,
+        // 0 = fully shown, 1 = fully hidden (legacy convention). Start
+        // from the state we are leaving.
+        value: oldWidget.visibility ? 0.0 : 1.0,
+      );
+      controller.animateTo(
+        widget.visibility ? 0.0 : 1.0,
+        curve: Curves.easeInOut,
+      );
     }
   }
 
   @override
   void dispose() {
-    _visibilityController.dispose();
+    _visibilityController?.dispose();
     super.dispose();
+  }
+
+  /// Resolves the show/hide animation into plain parameter values —
+  /// the ONE place the hide interpolation is defined for this widget.
+  /// At `anim == 0` the caller's values pass through untouched; at
+  /// `anim == 1` the glass is optically neutral (and the render object
+  /// is disabled entirely via `glassEnabled`).
+  ({
+    LiquidGlassRefraction refraction,
+    LiquidGlassAppearance appearance,
+    double borderAlpha,
+  }) _resolveHideAnimation(double anim) {
+    if (anim == 0.0) {
+      return (
+        refraction: widget.refraction,
+        appearance: widget.appearance,
+        borderAlpha: 1.0,
+      );
+    }
+    final r = widget.refraction;
+    final a = widget.appearance;
+    return (
+      refraction: r.copyWith(
+        magnification: anim + r.magnification * (1 - anim),
+        distortionWidth: r.distortionWidth * (1 - anim),
+        chromaticAberration: r.chromaticAberration * (1 - anim),
+      ),
+      appearance: a.copyWith(
+        saturation: anim + a.saturation * (1 - anim),
+        blur: LiquidGlassBlur(
+          sigmaX: a.blur.sigmaX * (1 - anim),
+          sigmaY: a.blur.sigmaY * (1 - anim),
+        ),
+      ),
+      borderAlpha: 1 - anim,
+    );
   }
 
   void _warnFrostedOnce(String reason) {
@@ -203,21 +242,33 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
             child: widget.child,
           );
 
-    return AnimatedBuilder(
-      animation: _visibilityController,
-      builder: (context, _) => _RawLiquidGlassLens(
+    Widget buildLens(double anim) {
+      final effective = _resolveHideAnimation(anim);
+      return _RawLiquidGlassLens(
         mode: mode!,
         mainShader: _mainShader!,
         borderShader: _borderShader,
         shape: widget.shape,
-        refraction: widget.refraction,
-        appearance: widget.appearance,
-        animValue: _visibilityController.value,
+        refraction: effective.refraction,
+        appearance: effective.appearance,
+        borderAlpha: effective.borderAlpha,
+        glassEnabled: anim < 1.0,
         screenSize: screenSize,
         devicePixelRatio: dpr,
         scope: scope,
         child: clippedChild,
-      ),
+      );
+    }
+
+    final AnimationController? controller = _visibilityController;
+    if (controller == null) {
+      // Visibility never changed: no ticker, no per-frame work — the
+      // lens is statically shown or statically hidden.
+      return buildLens(widget.visibility ? 0.0 : 1.0);
+    }
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => buildLens(controller.value),
     );
   }
 }
@@ -229,7 +280,8 @@ class _RawLiquidGlassLens extends SingleChildRenderObjectWidget {
   final LiquidGlassShape shape;
   final LiquidGlassRefraction refraction;
   final LiquidGlassAppearance appearance;
-  final double animValue;
+  final double borderAlpha;
+  final bool glassEnabled;
   final Size screenSize;
   final double devicePixelRatio;
   final LiquidGlassLensScope? scope;
@@ -241,7 +293,8 @@ class _RawLiquidGlassLens extends SingleChildRenderObjectWidget {
     required this.shape,
     required this.refraction,
     required this.appearance,
-    required this.animValue,
+    required this.borderAlpha,
+    required this.glassEnabled,
     required this.screenSize,
     required this.devicePixelRatio,
     required this.scope,
@@ -257,7 +310,8 @@ class _RawLiquidGlassLens extends SingleChildRenderObjectWidget {
       shape: shape,
       refraction: refraction,
       appearance: appearance,
-      animValue: animValue,
+      borderAlpha: borderAlpha,
+      glassEnabled: glassEnabled,
       screenSize: screenSize,
       devicePixelRatio: devicePixelRatio,
       captureRevision: scope?.captureRevision,
@@ -277,7 +331,8 @@ class _RawLiquidGlassLens extends SingleChildRenderObjectWidget {
       ..shape = shape
       ..refraction = refraction
       ..appearance = appearance
-      ..animValue = animValue
+      ..borderAlpha = borderAlpha
+      ..glassEnabled = glassEnabled
       ..screenSize = screenSize
       ..devicePixelRatio = devicePixelRatio
       ..captureRevision = scope?.captureRevision

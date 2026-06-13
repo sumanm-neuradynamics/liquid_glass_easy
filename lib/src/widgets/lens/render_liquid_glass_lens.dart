@@ -30,6 +30,12 @@ enum LiquidGlassLensRenderMode {
 /// and [LensTransformTrackingMixin] repaints the lens whenever an
 /// ancestor moves it (scroll, transitions) without rebuilding anything.
 ///
+/// This render object is **animation-free by design**: it paints exactly
+/// the [refraction]/[appearance]/[borderAlpha] values it is given. The
+/// show/hide animation lives entirely in the widget layer, which passes
+/// already-interpolated values down (and flips [glassEnabled] off when
+/// fully hidden so the backdrop cost disappears).
+///
 /// Paint order (both modes): glass effect first, then the child on top.
 /// The child itself is clipped by the widget layer, not here.
 class RenderLiquidGlassLens extends RenderProxyBox
@@ -41,7 +47,8 @@ class RenderLiquidGlassLens extends RenderProxyBox
     required LiquidGlassShape shape,
     required LiquidGlassRefraction refraction,
     required LiquidGlassAppearance appearance,
-    required double animValue,
+    required double borderAlpha,
+    required bool glassEnabled,
     required Size screenSize,
     required double devicePixelRatio,
     ValueListenable<int>? captureRevision,
@@ -54,7 +61,8 @@ class RenderLiquidGlassLens extends RenderProxyBox
         _shape = shape,
         _refraction = refraction,
         _appearance = appearance,
-        _animValue = animValue,
+        _borderAlpha = borderAlpha,
+        _glassEnabled = glassEnabled,
         _screenSize = screenSize,
         _devicePixelRatio = devicePixelRatio,
         _captureRevision = captureRevision,
@@ -104,11 +112,22 @@ class RenderLiquidGlassLens extends RenderProxyBox
     markNeedsPaint();
   }
 
-  /// Show/hide animation value: `0` fully shown, `1` fully hidden.
-  double _animValue;
-  set animValue(double value) {
-    if (_animValue == value) return;
-    _animValue = value;
+  /// Opacity of the lens border/rim (`1` = fully drawn). The widget
+  /// layer fades this during the show/hide animation.
+  double _borderAlpha;
+  set borderAlpha(double value) {
+    if (_borderAlpha == value) return;
+    _borderAlpha = value;
+    markNeedsPaint();
+  }
+
+  /// Whether the glass effect paints at all. The widget layer turns
+  /// this off when the lens is fully hidden, so a hidden lens costs no
+  /// backdrop passes — only its child is painted.
+  bool _glassEnabled;
+  set glassEnabled(bool value) {
+    if (_glassEnabled == value) return;
+    _glassEnabled = value;
     markNeedsPaint();
   }
 
@@ -191,8 +210,9 @@ class RenderLiquidGlassLens extends RenderProxyBox
   bool get _useBlur =>
       _appearance.blur.sigmaX > 0 || _appearance.blur.sigmaY > 0;
 
-  /// Packs the shared uniform block with the show/hide animation applied,
-  /// exactly mirroring the legacy lens paths so visuals stay identical.
+  /// Packs the shared uniform block straight from the current values —
+  /// no interpolation here; the widget layer already resolved any
+  /// show/hide animation into [_refraction]/[_appearance]/[_borderAlpha].
   void _packUniforms(
     ui.FragmentShader shader, {
     required Size resolution,
@@ -203,7 +223,6 @@ class RenderLiquidGlassLens extends RenderProxyBox
     Offset imageOffset = Offset.zero,
     Size? imageSize,
   }) {
-    final double anim = _animValue;
     packLiquidGlassUniforms(
       shader,
       shape: _shape,
@@ -212,17 +231,16 @@ class RenderLiquidGlassLens extends RenderProxyBox
       lensPosition: lensPosition,
       lensWidth: size.width,
       lensHeight: size.height,
-      magnification: anim + (_refraction.magnification * (1 - anim)),
+      magnification: _refraction.magnification,
       distortion: _refraction.distortion,
-      distortionWidth:
-          _refraction.distortionWidth - anim * _refraction.distortionWidth,
+      distortionWidth: _refraction.distortionWidth,
       enableInnerRadiusTransparent:
           _appearance.enableInnerRadiusTransparent,
       diagonalFlip: _refraction.diagonalFlip,
       borderWidth: borderWidth,
-      borderAlpha: 1 - anim,
-      chromaticAberration: _refraction.chromaticAberration * (1 - anim),
-      saturation: anim + (_appearance.saturation * (1 - anim)),
+      borderAlpha: _borderAlpha,
+      chromaticAberration: _refraction.chromaticAberration,
+      saturation: _appearance.saturation,
       refractionMode: _refraction.refractionMode,
       includeLensColor: includeLensColor,
       lensColor: _appearance.color,
@@ -239,14 +257,10 @@ class RenderLiquidGlassLens extends RenderProxyBox
   void paint(PaintingContext context, Offset offset) {
     pushTransformTracking(context, offset);
 
-    if (size.isEmpty) {
-      super.paint(context, offset);
-      return;
-    }
-
-    // Fully hidden: skip the glass entirely (no backdrop cost), keep
-    // painting the child so its own visibility stays the caller's call.
-    if (_animValue >= 1.0) {
+    // Disabled (fully hidden) or zero-sized: skip the glass entirely —
+    // no backdrop cost — but keep painting the child; whether IT hides
+    // stays the caller's call.
+    if (!_glassEnabled || size.isEmpty) {
       super.paint(context, offset);
       return;
     }
@@ -298,8 +312,8 @@ class RenderLiquidGlassLens extends RenderProxyBox
           final blurLayer =
               _blurLayerHandle.layer ??= BackdropFilterLayer();
           blurLayer.filter = ui.ImageFilter.blur(
-            sigmaX: _appearance.blur.sigmaX * (1 - _animValue),
-            sigmaY: _appearance.blur.sigmaY * (1 - _animValue),
+            sigmaX: _appearance.blur.sigmaX,
+            sigmaY: _appearance.blur.sigmaY,
           );
           context.pushLayer(
               blurLayer, (PaintingContext context, Offset offset) {}, offset);
@@ -383,8 +397,8 @@ class RenderLiquidGlassLens extends RenderProxyBox
           final blurLayer =
               _blurLayerHandle.layer ??= BackdropFilterLayer();
           blurLayer.filter = ui.ImageFilter.blur(
-            sigmaX: _appearance.blur.sigmaX * (1 - _animValue),
-            sigmaY: _appearance.blur.sigmaY * (1 - _animValue),
+            sigmaX: _appearance.blur.sigmaX,
+            sigmaY: _appearance.blur.sigmaY,
           );
           context.pushLayer(
               blurLayer, (PaintingContext context, Offset offset) {}, offset);
