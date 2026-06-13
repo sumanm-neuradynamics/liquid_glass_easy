@@ -187,32 +187,42 @@ class _InViewPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return LiquidGlassView(
       backgroundWidget: const _Background(),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 40),
-        children: [
-          for (int i = 0; i < 8; i++) ...[
-            SizedBox(
-              height: 110,
-              child: LiquidGlassLens(
-                shape: RoundedRectangleShape(
-                  cornerRadius: 28 + (i % 3) * 14.0,
-                  cornerSmoothing: 1.0,
-                ),
-                refraction: const LiquidGlassRefraction(
-                  distortion: 0.12,
-                  distortionWidth: 28,
-                ),
-                child: Center(
-                  child: Text(
-                    'scrolling lens #${i + 1}',
-                    style: const TextStyle(color: Colors.white, fontSize: 18),
+      // IMPORTANT: Android's stretch overscroll isolates the scrollable
+      // into its own layer, which blinds BackdropFilter-based lenses on
+      // Impeller (they sample transparent → render black) while the
+      // stretch plays. Disable the overscroll indicator for scrollables
+      // that contain lenses.
+      child: ScrollConfiguration(
+        behavior:
+            const MaterialScrollBehavior().copyWith(overscroll: false),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 40),
+          children: [
+            for (int i = 0; i < 8; i++) ...[
+              SizedBox(
+                height: 110,
+                child: LiquidGlassLens(
+                  shape: RoundedRectangleShape(
+                    cornerRadius: 28 + (i % 3) * 14.0,
+                    cornerSmoothing: 1.0,
+                  ),
+                  refraction: const LiquidGlassRefraction(
+                    distortion: 0.12,
+                    distortionWidth: 28,
+                  ),
+                  child: Center(
+                    child: Text(
+                      'scrolling lens #${i + 1}',
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 18),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 28),
+              const SizedBox(height: 28),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

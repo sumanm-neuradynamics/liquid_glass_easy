@@ -33,6 +33,21 @@ import 'render_liquid_glass_lens.dart';
 /// The mode is an implementation detail: the widget tree you write is
 /// identical in all three cases.
 ///
+/// ## Lenses inside scrollables (Impeller)
+///
+/// Android's stretch overscroll effect isolates the scrollable's
+/// content into its own compositing layer while the stretch plays. A
+/// `BackdropFilter`-based lens inside that layer can no longer see the
+/// real backdrop and renders **black** at both scroll edges. Disable
+/// the overscroll indicator for scrollables that contain lenses:
+///
+/// ```dart
+/// ScrollConfiguration(
+///   behavior: const MaterialScrollBehavior().copyWith(overscroll: false),
+///   child: ListView(children: [ ...LiquidGlassLens(...)... ]),
+/// )
+/// ```
+///
 /// ```dart
 /// SizedBox(
 ///   width: 220,
