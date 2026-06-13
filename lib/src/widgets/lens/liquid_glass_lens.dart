@@ -69,9 +69,10 @@ class LiquidGlassLens extends StatefulWidget {
   /// The lens material: tint, blur, saturation.
   final LiquidGlassAppearance appearance;
 
-  /// Whether the glass effect is shown. Changing this animates the
-  /// glass in/out over [visibilityDuration] (the [child] stays —
-  /// control it separately if it should hide too).
+  /// Whether the lens is shown. Changing this animates the glass — and
+  /// its [child] — in/out over [visibilityDuration]: the glass uniforms
+  /// relax to neutral and the child fades, so a hidden lens leaves
+  /// nothing behind.
   final bool visibility;
 
   /// Duration of the show/hide animation driven by [visibility].
@@ -259,6 +260,15 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
 
     Widget buildLens(double anim) {
       final effective = _resolveHideAnimation(anim);
+      // The child fades out together with the glass, so hiding the lens
+      // hides its content too. At anim 0 it is fully opaque; at anim 1
+      // (fully hidden) it is gone.
+      final Widget? animatedChild = clippedChild == null
+          ? null
+          : Opacity(
+              opacity: (1.0 - anim).clamp(0.0, 1.0),
+              child: clippedChild,
+            );
       return _RawLiquidGlassLens(
         mode: mode!,
         mainShader: _mainShader!,
@@ -271,7 +281,7 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
         screenSize: screenSize,
         devicePixelRatio: dpr,
         scope: scope,
-        child: clippedChild,
+        child: animatedChild,
       );
     }
 
