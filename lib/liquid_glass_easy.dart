@@ -8,6 +8,16 @@ export 'package:liquid_glass_easy/src/widgets/liquid_glass_config.dart'
         LiquidGlassAppearance,
         LiquidGlassBehavior;
 
+// ── Lens-anywhere API ───────────────────────────────────────
+// Layout-driven lens widget: place it anywhere in the tree. Works
+// standalone on Impeller (no background needed); inside a
+// LiquidGlassView's `child` it also refracts the captured background
+// on Skia / Web.
+export 'package:liquid_glass_easy/src/widgets/lens/liquid_glass_lens.dart'
+    show LiquidGlassLens;
+export 'package:liquid_glass_easy/src/widgets/lens/liquid_glass_shaders.dart'
+    show LiquidGlassShaders;
+
 export 'package:liquid_glass_easy/src/controllers/liquid_glass_controller.dart';
 export 'package:liquid_glass_easy/src/controllers/liquid_glass_view_controller.dart';
 

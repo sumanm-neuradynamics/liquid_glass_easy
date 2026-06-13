@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:liquid_glass_easy/src/controllers/liquid_glass_view_controller.dart';
+import 'package:liquid_glass_easy/src/widgets/lens/liquid_glass_lens_scope.dart';
+import 'package:liquid_glass_easy/src/widgets/lens/liquid_glass_shaders.dart';
 import 'package:liquid_glass_easy/src/widgets/liquid_glass.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refresh_rate.dart';
 
@@ -15,7 +17,21 @@ class LiquidGlassView extends StatefulWidget {
 
   /// The list of individual `LiquidGlass` lenses rendered in this view.
   /// Each lens defines its own shape, distortion, and behavior.
+  ///
+  /// This is the classic, position-driven API. For layout-driven lenses
+  /// placed anywhere in a normal widget tree, put `LiquidGlassLens`
+  /// widgets inside [child] instead — both can be used together.
   final List<LiquidGlass> children;
+
+  /// An arbitrary widget tree rendered **on top of** [backgroundWidget]
+  /// and below the [children] lenses. Place `LiquidGlassLens` widgets
+  /// anywhere inside it — in a `Stack`, a `Column`, a scrollable — and
+  /// they connect to this view automatically:
+  ///
+  ///  * On Impeller they refract the live backdrop behind them.
+  ///  * On Skia / Web they refract this view's captured
+  ///    [backgroundWidget] (which is required for refraction there).
+  final Widget? child;
 
   /// The device pixel ratio used when capturing and rendering the lens effects.
   /// Higher values enhance lens content quality and clarity but also significantly
@@ -52,7 +68,13 @@ class LiquidGlassView extends StatefulWidget {
   /// The widget tree drawn behind all LiquidGlass lenses.
   /// Typically a static or animated background (such as an `Image`, `Stack`, or
   /// complex layout) over which the lenses apply refraction and effects.
-  final Widget backgroundWidget;
+  ///
+  /// Optional since the lens-anywhere API: on **Impeller** lenses sample
+  /// the live backdrop and need no background at all. On **Skia / Web**
+  /// this is what lenses refract — without it, `LiquidGlassLens`
+  /// children degrade to a frosted (non-refracting) look and the
+  /// classic [children] lenses render nothing.
+  final Widget? backgroundWidget;
 
   /// Controls how frequently the background is re-captured while real-time updates are enabled.
   ///
@@ -99,8 +121,9 @@ class LiquidGlassView extends StatefulWidget {
   const LiquidGlassView(
       {super.key,
       this.controller,
-      required this.backgroundWidget,
-      required this.children,
+      this.backgroundWidget,
+      this.children = const [],
+      this.child,
       this.pixelRatio = 1.0,
       this.realTimeCapture = true,
       this.useSync = true,
@@ -123,14 +146,15 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
   /// mis-sample). Drives the shader's `u_imageOffset`/`u_imageSize`.
   Rect? _imageRegion;
 
-  /// Compiled fragment programs, shared across every [LiquidGlassView]
-  /// instance in the app. Static so a page change (which recreates the
-  /// State) can build its shaders synchronously in [initState] instead
-  /// of re-awaiting `FragmentProgram.fromAsset` — that async hop is
-  /// what made lenses appear a few frames late on every navigation.
-  static ui.FragmentProgram? _mainProgram;
-  static ui.FragmentProgram? _borderProgram;
   Map<String, dynamic> _shaders = {};
+
+  /// Bumped after every successful background capture. Descendant
+  /// `LiquidGlassLens` widgets (the lens-anywhere API) listen to this
+  /// through [LiquidGlassLensScope] and repaint, reading the new
+  /// [_image] at paint time. Deliberately NOT bumped by the paint-time
+  /// fallback capture — notifying listeners mid-paint is illegal; the
+  /// lenses read that fallback directly through the scope instead.
+  final ValueNotifier<int> _captureRevision = ValueNotifier<int>(0);
 
   /// Drives the per-frame capture pipeline on the **Skia / Web** path
   /// only. On the Impeller path each lens samples the live backdrop
@@ -200,7 +224,7 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
     // page after the first), build the shaders synchronously so
     // `shadersReady` is true on the very first frame. Otherwise fall
     // back to the async load (first launch only).
-    if (_mainProgram != null && _borderProgram != null) {
+    if (LiquidGlassShaders.isLoaded) {
       _buildShaders();
     } else {
       _loadShaders().then((_) {
@@ -257,44 +281,29 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
     return renderBox?.size ?? Size.zero;
   }
 
-  // Future<void> _loadShaders() async {
-  //   final liquidGlassProgram = await ui.FragmentProgram.fromAsset(
-  //       'packages/liquid_glass_easy/lib/assets/shaders/liquid_glass.frag');
-  //   final borderProgram = await ui.FragmentProgram.fromAsset(
-  //       'packages/liquid_glass_easy/lib/assets/shaders/liquid_glass_border.frag');
-  //
-  //   _shaders = {
-  //     'liquid_glass': liquidGlassProgram.fragmentShader(),
-  //     'liquid_glass_border':borderProgram.fragmentShader(),
-  //   };
-  // }
-
-  Future<void> _loadProgramsOnce() async {
-    _mainProgram ??= await ui.FragmentProgram.fromAsset(
-        'packages/liquid_glass_easy/lib/assets/shaders/liquid_glass.frag');
-    _borderProgram ??= await ui.FragmentProgram.fromAsset(
-        'packages/liquid_glass_easy/lib/assets/shaders/liquid_glass_border.frag');
-  }
-
   List<ui.FragmentShader> _createShaderList(
-    ui.FragmentProgram program,
+    ui.FragmentShader Function() create,
     int count,
   ) {
-    return List.generate(count, (_) => program.fragmentShader());
+    return List.generate(count, (_) => create());
   }
 
   Future<void> _loadShaders() async {
-    await _loadProgramsOnce();
+    try {
+      await LiquidGlassShaders.ensureLoaded();
+    } catch (_) {
+      // Shaders unavailable (broken build / unsupported test env):
+      // `_shaders` stays empty, so lenses simply don't render instead
+      // of crashing the surrounding app.
+      return;
+    }
     _buildShaders();
   }
 
   /// Builds the per-view shader instances from the already-compiled
-  /// static programs. Synchronous so it can run inside [initState]
-  /// when the programs are cached.
+  /// shared programs (see [LiquidGlassShaders]). Synchronous so it can
+  /// run inside [initState] when the programs are cached.
   void _buildShaders() {
-    final main = _mainProgram!;
-    final border = _borderProgram!;
-
     if (_usePerLensShaders) {
       // Impeller and web need one dedicated FragmentShader per lens.
       // BackdropFilter compositing (Impeller) and the web pipeline are
@@ -304,29 +313,30 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
       // appearing transparent).
       final count = widget.children.length;
       _shaders = {
-        'liquid_glass_list': _createShaderList(main, count),
-        'liquid_glass_border_list': _createShaderList(border, count),
+        'liquid_glass_list':
+            _createShaderList(LiquidGlassShaders.createMainShader, count),
+        'liquid_glass_border_list':
+            _createShaderList(LiquidGlassShaders.createBorderShader, count),
       };
     } else {
       // Skia native draws each CustomPaint immediately, so a single
       // shared shader instance is safe and cheaper.
       _shaders = {
-        'liquid_glass': main.fragmentShader(),
-        'liquid_glass_border': border.fragmentShader(),
+        'liquid_glass': LiquidGlassShaders.createMainShader(),
+        'liquid_glass_border': LiquidGlassShaders.createBorderShader(),
       };
     }
   }
 
   Future<void> _recreateShaders(int newCount) async {
     if (!_usePerLensShaders) return;
-    if (_mainProgram == null || _borderProgram == null) return;
-    final main = _mainProgram!;
-    final border = _borderProgram!;
+    if (!LiquidGlassShaders.isLoaded) return;
 
     setState(() {
-      _shaders['liquid_glass_list'] = _createShaderList(main, newCount);
+      _shaders['liquid_glass_list'] =
+          _createShaderList(LiquidGlassShaders.createMainShader, newCount);
       _shaders['liquid_glass_border_list'] =
-          _createShaderList(border, newCount);
+          _createShaderList(LiquidGlassShaders.createBorderShader, newCount);
     });
   }
 
@@ -390,7 +400,11 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
             // full-size recomposite is needed. Opt-in per view via
             // LiquidGlassView.regionCapture; when false the original
             // full-frame path runs.
-            if (widget.regionCapture) {
+            // Region capture only updates the per-legacy-lens images,
+            // not the shared full-frame [_image] that lens-anywhere
+            // lenses sample — so force full-frame whenever a `child`
+            // subtree (which may contain such lenses) is present.
+            if (widget.regionCapture && widget.child == null) {
               // ignore: invalid_use_of_protected_member
               final layer = boundary.layer as OffsetLayer?;
               if (layer != null && widget.children.isNotEmpty) {
@@ -449,6 +463,10 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
           _imageRegion = null;
           _imagesPerLens = null;
           _regionsPerLens = null;
+          // Wake the lens-anywhere lenses (scope listeners). Safe here:
+          // captures run from the ticker / post-frame callbacks, never
+          // inside paint.
+          _captureRevision.value++;
         }
       }
     } catch (_) {
@@ -548,8 +566,20 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
   void dispose() {
     widget.controller?.detach();
     _controller?.dispose();
+    _captureRevision.dispose();
     super.dispose();
   }
+
+  // ===== Lens-anywhere scope accessors =====
+  // Instance-method tear-offs stay `==` across rebuilds, so the scope
+  // only notifies dependents on real configuration changes.
+
+  /// Latest full-frame capture for descendant `LiquidGlassLens` widgets.
+  ui.Image? _currentImageForLens() => _image;
+
+  /// The background boundary box — the coordinate space captures live in.
+  RenderBox? _backgroundBoxForLens() =>
+      _repaintKey.currentContext?.findRenderObject() as RenderBox?;
 
   @override
   Widget build(BuildContext context) {
@@ -565,8 +595,23 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
       children: [
         RepaintBoundary(
           key: _repaintKey,
-          child: widget.backgroundWidget,
+          // Kept even when no background is given so the capture
+          // pipeline and coordinate space stay well-defined.
+          child: widget.backgroundWidget ?? const SizedBox.expand(),
         ),
+        // Lens-anywhere subtree: any widget tree with `LiquidGlassLens`
+        // widgets inside it, connected to this view through the scope.
+        // Painted above the background and below the classic lenses.
+        if (widget.child != null)
+          LiquidGlassLensScope(
+            useImpellerBackdrop: _useImpeller,
+            hasBackground: widget.backgroundWidget != null,
+            captureRevision: _captureRevision,
+            currentImage: _currentImageForLens,
+            captureFallback: _capturePaintTimeSync,
+            backgroundRenderBox: _backgroundBoxForLens,
+            child: widget.child!,
+          ),
         // The lens layout itself is identical on both paths. The
         // difference is what triggers it to rebuild:
         //  - Skia / Web: rebuilds whenever the captured background
