@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
@@ -126,15 +124,10 @@ class _Wallpaper extends StatelessWidget {
   }
 }
 
-/// A frosted-glass surface for the static cards.
-///
-/// Deliberately a plain `BackdropFilter` (blur + tint + hairline rim),
-/// NOT a refracting `LiquidGlassLens`: a real app screen stacks many
-/// cards, and many simultaneous backdrop-shader lenses are costly (and
-/// can exceed the device's live-lens budget on Impeller). The genuine
-/// liquid-glass refraction here is spent where it sells the effect —
-/// the slider/toggle thumbs, the app bar and the nav bar — while the
-/// chrome stays cheap, crisp frosted glass on every renderer.
+/// A refracting glass card built on the new lens-anywhere API —
+/// [LiquidGlassLens] dropped straight into the screen. On Impeller it
+/// refracts the live wallpaper behind it; on Skia it falls back to
+/// frosted glass. A light blur + tint keeps content legible on top.
 class GlassCard extends StatelessWidget {
   final double? width;
   final double? height;
@@ -156,23 +149,21 @@ class GlassCard extends StatelessWidget {
     return SizedBox(
       width: width,
       height: height,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.22),
-                width: 1,
-              ),
-            ),
-            child: child,
-          ),
+      child: LiquidGlassLens(
+        shape: RoundedRectangleShape(
+          cornerRadius: radius,
+          cornerSmoothing: 1,
+          borderWidth: 1.1,
         ),
+        refraction: const LiquidGlassRefraction(
+          distortion: 0.1,
+          distortionWidth: 22,
+        ),
+        appearance: const LiquidGlassAppearance(
+          blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
+          color: Color(0x12FFFFFF),
+        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
   }
