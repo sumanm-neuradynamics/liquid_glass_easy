@@ -141,7 +141,6 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
       refractionMode: cfg.refractionMode,
       includeLensColor: true,
       lensColor: cfg.color,
-      transparentWhenBlack: cfg.transparentWhenBlack,
     );
   }
 

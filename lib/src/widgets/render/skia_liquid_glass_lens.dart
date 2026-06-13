@@ -106,7 +106,6 @@ class SkiaLiquidGlassLens extends StatelessWidget {
                       saturation:
                           (animValue) + (config.saturation * (1 - animValue)),
                       refractionMode: config.refractionMode,
-                      transparentWhenBlack: config.transparentWhenBlack,
                       imageOffset: imageRegion?.topLeft,
                       imageSize: imageRegion?.size,
                     )

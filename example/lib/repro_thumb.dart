@@ -104,7 +104,6 @@ class _FrozenToggle extends StatelessWidget {
             trackBottom: padY,
             travelFraction: travelFraction,
             growFraction: growFraction,
-            transparentWhenBlack: true,
           ),
         ],
       ),

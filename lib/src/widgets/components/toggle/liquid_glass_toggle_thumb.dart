@@ -24,12 +24,6 @@ LiquidGlass buildLiquidGlassToggleThumb({
   required double travelFraction,
   required double growFraction,
 
-  /// When true, the parts of the glass thumb that overhang past the
-  /// (opaque) track and would otherwise sample a transparent — i.e.
-  /// black — captured background are rendered transparent instead, so
-  /// the real backdrop shows through. See [LiquidGlass.transparentWhenBlack].
-  bool transparentWhenBlack = false,
-
   /// Optional content rendered inside the lens, above the glass (e.g.
   /// the white rest handle + its gesture surface).
   Widget? child,
@@ -68,7 +62,6 @@ LiquidGlass buildLiquidGlassToggleThumb({
     left: left,
     bottom: bottom,
     extraHeight: 0,
-    transparentWhenBlack: transparentWhenBlack,
     child: child,
   );
 }

@@ -244,7 +244,6 @@ class RenderLiquidGlassLens extends RenderProxyBox
       refractionMode: _refraction.refractionMode,
       includeLensColor: includeLensColor,
       lensColor: _appearance.color,
-      transparentWhenBlack: _appearance.transparentWhenBlack,
       imageOffset: imageOffset,
       imageSize: imageSize,
     );

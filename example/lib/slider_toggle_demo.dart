@@ -12,12 +12,9 @@ import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 // background and give them a value + onChanged, like a normal Slider /
 // Switch. No outer LiquidGlassView required.
 //
-// The "Transparent when black" switch at the bottom flips the
-// `transparentWhenBlack` option on both controls so you can see the
-// difference: with it ON, the glass thumb's overhang passes the
-// background through; with it OFF (on the Skia capture path) the
-// overhang draws black where it samples the transparent area around the
-// track.
+// The glass thumb's overhang passes the background through wherever the
+// captured texture is transparent — the shader honors the texel's alpha
+// (always on, no option needed).
 // =============================================================
 
 void main() {
@@ -59,7 +56,6 @@ class _SliderToggleDemoPageState extends State<SliderToggleDemoPage> {
 
   /// Flipped live so you can compare the black overhang vs transparent
   /// passthrough on the glass thumbs.
-  bool _transparentWhenBlack = true;
 
   // ── Jelly lab — live tuning for the thumb deformation ────────────
   // Tune on the device, then report the numbers shown in the readout.
@@ -130,7 +126,6 @@ class _SliderToggleDemoPageState extends State<SliderToggleDemoPage> {
                     value: _volume,
                     onChanged: (v) => setState(() => _volume = v),
                     layout: LiquidGlassSliderLayout(width: sliderWidth),
-                    transparentWhenBlack: _transparentWhenBlack,
                     jelly: _jelly,
                   ),
                   const SizedBox(height: 24),
@@ -141,7 +136,6 @@ class _SliderToggleDemoPageState extends State<SliderToggleDemoPage> {
                     onChanged: (v) => setState(() => _brightness = v),
                     layout: LiquidGlassSliderLayout(width: sliderWidth),
                     activeColor: const Color(0xFFFFC107),
-                    transparentWhenBlack: _transparentWhenBlack,
                     jelly: _jelly,
                   ),
                   const SizedBox(height: 36),
@@ -195,7 +189,6 @@ class _SliderToggleDemoPageState extends State<SliderToggleDemoPage> {
                       LiquidGlassToggle(
                         value: _wifi,
                         onChanged: (v) => setState(() => _wifi = v),
-                        transparentWhenBlack: _transparentWhenBlack,
                       ),
                     ],
                   ),
@@ -208,37 +201,11 @@ class _SliderToggleDemoPageState extends State<SliderToggleDemoPage> {
                         value: _airplane,
                         onChanged: (v) => setState(() => _airplane = v),
                         activeColor: const Color(0xFFFF9500),
-                        transparentWhenBlack: _transparentWhenBlack,
                       ),
                     ],
                   ),
 
                   const SizedBox(height: 48),
-                  const Divider(color: Colors.white24),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'transparentWhenBlack',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Switch(
-                        value: _transparentWhenBlack,
-                        onChanged: (v) =>
-                            setState(() => _transparentWhenBlack = v),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    'Toggle off (on Skia) to see the black overhang.',
-                    style: TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
                 ],
               ),
             ),

@@ -29,10 +29,6 @@ class LiquidGlassPainter extends CustomPainter {
   final ui.FragmentShader shader;
   final ui.FragmentShader? borderShader;
 
-  /// When true, a refracted background sample that is (near) black is
-  /// drawn transparent instead of black. See [LiquidGlass.transparentWhenBlack].
-  final bool transparentWhenBlack;
-
   final ui.Image? image;
 
   /// Paint-time capture fallback. When [image] is null (first frame of a
@@ -76,7 +72,6 @@ class LiquidGlassPainter extends CustomPainter {
     required this.refractionMode,
     required this.image,
     this.imageFallback,
-    this.transparentWhenBlack = false,
     this.imageOffset,
     this.imageSize,
   });
@@ -177,7 +172,6 @@ class LiquidGlassPainter extends CustomPainter {
     shader.setFloat(index++, border!.borderSaturation);
     shader.setFloat(index++, border!.borderSolidity);
     shader.setFloat(index++, selectedBorderMode);
-    shader.setFloat(index++, transparentWhenBlack ? 1.0 : 0.0);
 
     // u_imageOffset / u_imageSize — map the bound texture to a parent-space
     // rect. Full-frame default: offset (0,0), size == resolution (`size`),
@@ -254,7 +248,6 @@ class LiquidGlassPainter extends CustomPainter {
         oldDelegate.refractionMode != refractionMode ||
         oldDelegate.shader != shader ||
         oldDelegate.borderShader != borderShader ||
-        oldDelegate.transparentWhenBlack != transparentWhenBlack ||
         oldDelegate.imageOffset != imageOffset ||
         oldDelegate.imageSize != imageSize;
   }

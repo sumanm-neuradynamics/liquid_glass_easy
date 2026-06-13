@@ -37,8 +37,9 @@ export 'liquid_glass_slider_track.dart';
 /// )
 /// ```
 ///
-/// See [transparentWhenBlack] for how the glass overhang avoids drawing
-/// black over the transparent area around the track.
+/// The glass thumb overhangs the track; the shader honors the captured
+/// texel's alpha (always on), so the overhang renders as transparent
+/// passthrough instead of a black blob.
 class LiquidGlassSlider extends StatefulWidget {
   /// Current value, in `0..1`.
   final double value;
@@ -61,11 +62,6 @@ class LiquidGlassSlider extends StatefulWidget {
   /// Track + thumb geometry. Defaults to a 280-wide track.
   final LiquidGlassSliderLayout layout;
 
-  /// Whether a refracted background sample that comes out (near) black
-  /// is rendered transparent instead of black. Recommended `true` for
-  /// this self-contained component. Defaults to `true`.
-  final bool transparentWhenBlack;
-
   /// Capture resolution for the inner view. `1.0` is a good default; use
   /// less for cheaper captures, `0.0` for the device pixel ratio.
   final double pixelRatio;
@@ -85,7 +81,6 @@ class LiquidGlassSlider extends StatefulWidget {
     this.activeColor = Colors.white,
     this.inactiveColor = const Color(0x3CFFFFFF),
     this.layout = const LiquidGlassSliderLayout(),
-    this.transparentWhenBlack = true,
     this.pixelRatio = 1.0,
     this.jelly = const LiquidGlassSliderJelly(),
   });
@@ -318,7 +313,6 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
             // continuously, flipping softly across a reversal.
             motionSign: _jelly.direction,
             jelly: widget.jelly,
-            transparentWhenBlack: widget.transparentWhenBlack,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onHorizontalDragStart: (d) {

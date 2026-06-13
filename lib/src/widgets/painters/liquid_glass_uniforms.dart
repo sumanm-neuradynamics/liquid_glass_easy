@@ -71,11 +71,6 @@ void packLiquidGlassUniforms(
   required bool includeLensColor,
   Color lensColor = const Color(0x00000000),
 
-  /// Emit `u_transparentWhenBlack` (`1`/`0`). Like `u_lensColor` this
-  /// uniform exists only on the main shader, so it is written only when
-  /// [includeLensColor] is `true`.
-  bool transparentWhenBlack = false,
-
   /// Parent-space rectangle the bound texture covers, in logical px.
   /// Defaults (offset `(0,0)`, size == [resolution]) reproduce the old
   /// full-frame `refrPx / u_resolution` sampling. The Impeller path always
@@ -171,14 +166,9 @@ void packLiquidGlassUniforms(
   shader.setFloat(i++, shape.borderSolidity);
   shader.setFloat(i++, selectedBorderMode);
 
-  // u_transparentWhenBlack — main shader only (same scope as u_lensColor).
-  if (includeLensColor) {
-    shader.setFloat(i++, transparentWhenBlack ? 1.0 : 0.0);
-  }
-
   // u_imageOffset / u_imageSize — present on BOTH shaders, so always
-  // written (after transparentWhenBlack to match the .frag order). Scaled
-  // like the other spatial uniforms.
+  // written. Scaled like the other spatial uniforms. (Alpha-honoring
+  // transparency is always on in the shader now — no uniform.)
   final Size imgSize = imageSize ?? resolution;
   shader.setFloat(i++, imageOffset.dx * scale);
   shader.setFloat(i++, imageOffset.dy * scale);

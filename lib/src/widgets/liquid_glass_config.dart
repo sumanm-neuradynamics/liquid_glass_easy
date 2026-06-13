@@ -131,22 +131,6 @@ class LiquidGlass {
   /// clamped to remain fully within the parent’s bounds.
   final bool outOfBoundaries;
 
-  /// When `true`, any refracted **background** sample that comes out
-  /// (near) black is rendered fully transparent instead of black, so the
-  /// real backdrop behind the view shows through.
-  ///
-  /// This is meant for **small drop-in lenses over a partly-transparent
-  /// captured background** (the slider/toggle glass thumbs): on the Skia
-  /// capture path a transparent texel decodes to black, which would draw
-  /// the lens overhang as a black blob. With this on, that overhang
-  /// becomes transparent passthrough instead. The border (rim light) is
-  /// still drawn on top.
-  ///
-  /// Defaults to `false` — a no-op for full-screen / opaque backgrounds.
-  /// False positives (genuinely dark content turning transparent) are
-  /// accepted by design.
-  final bool transparentWhenBlack;
-
   const LiquidGlass(
       {this.key,
       this.controller,
@@ -167,8 +151,7 @@ class LiquidGlass {
       this.refractionMode = LiquidGlassRefractionMode.shapeRefraction,
       this.visibility = true,
       this.color = Colors.transparent,
-      this.outOfBoundaries = false,
-      this.transparentWhenBlack = false});
+      this.outOfBoundaries = false});
 
   /// Categorized constructor — the same lens, configured through grouped
   /// objects instead of one flat parameter list:
@@ -227,7 +210,6 @@ class LiquidGlass {
         color = appearance.color,
         enableInnerRadiusTransparent =
             appearance.enableInnerRadiusTransparent,
-        transparentWhenBlack = appearance.transparentWhenBlack,
         // ── behavior ──
         draggable = behavior.draggable,
         visibility = behavior.visibility,
@@ -258,7 +240,6 @@ class LiquidGlass {
         blur: blur,
         color: color,
         enableInnerRadiusTransparent: enableInnerRadiusTransparent,
-        transparentWhenBlack: transparentWhenBlack,
       );
 
   /// The behavior group (interaction, lifecycle) for this lens.
@@ -296,7 +277,6 @@ class LiquidGlass {
     bool? visibility,
     Color? color,
     bool? outOfBoundaries,
-    bool? transparentWhenBlack,
   }) {
     return LiquidGlass(
       key: key ?? this.key,
@@ -320,7 +300,6 @@ class LiquidGlass {
       visibility: visibility ?? this.visibility,
       color: color ?? this.color,
       outOfBoundaries: outOfBoundaries ?? this.outOfBoundaries,
-      transparentWhenBlack: transparentWhenBlack ?? this.transparentWhenBlack,
     );
   }
 }
@@ -441,16 +420,11 @@ class LiquidGlassAppearance {
   /// Whether the inner, non-distorted region is transparent.
   final bool enableInnerRadiusTransparent;
 
-  /// Whether a refracted background sample that comes out (near) black is
-  /// rendered transparent instead of black. See [LiquidGlass.transparentWhenBlack].
-  final bool transparentWhenBlack;
-
   const LiquidGlassAppearance({
     this.saturation = 1.0,
     this.blur = const LiquidGlassBlur(),
     this.color = Colors.transparent,
     this.enableInnerRadiusTransparent = false,
-    this.transparentWhenBlack = false,
   });
 
   LiquidGlassAppearance copyWith({
@@ -458,7 +432,6 @@ class LiquidGlassAppearance {
     LiquidGlassBlur? blur,
     Color? color,
     bool? enableInnerRadiusTransparent,
-    bool? transparentWhenBlack,
   }) {
     return LiquidGlassAppearance(
       saturation: saturation ?? this.saturation,
@@ -466,7 +439,6 @@ class LiquidGlassAppearance {
       color: color ?? this.color,
       enableInnerRadiusTransparent:
           enableInnerRadiusTransparent ?? this.enableInnerRadiusTransparent,
-      transparentWhenBlack: transparentWhenBlack ?? this.transparentWhenBlack,
     );
   }
 }

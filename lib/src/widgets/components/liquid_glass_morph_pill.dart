@@ -88,7 +88,6 @@ LiquidGlass buildLiquidGlassMorphPill({
   required double left,
   required double bottom,
   required double extraHeight,
-  bool transparentWhenBlack = false,
 
   /// Optional content rendered INSIDE the lens, on top of the glass
   /// passes (e.g. a solid rest handle drawn over the glass pill). The
@@ -110,7 +109,6 @@ LiquidGlass buildLiquidGlassMorphPill({
     distortionWidth: 18,
     chromaticAberration: 0.003,
     color: Colors.white.withAlpha(28),
-    transparentWhenBlack: transparentWhenBlack,
     blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
     shape: RoundedRectangleShape(
       cornerRadius: h / 2,

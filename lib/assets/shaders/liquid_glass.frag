@@ -50,15 +50,6 @@ uniform float u_borderSaturation;
 uniform float u_borderSolidity;
 uniform float u_borderMode;
 
-// Slider/toggle opt-in: when > 0.5, the refracted BACKGROUND sample's
-// captured alpha is honored — the lens output coverage is multiplied by
-// the texel's alpha so the real backdrop shows through in proportion to
-// its transparency (a fully transparent texel becomes fully transparent,
-// a 50%-alpha colored texel blends 50% with the backdrop). Keyed on the
-// background sample only; the border overlay is applied afterwards and
-// survives. No-op when 0 (every full-screen / opaque-background lens).
-uniform float u_transparentWhenBlack;
-
 // Capture-region mapping. The bound texture (u_texture_input) covers the
 // parent-space rectangle [u_imageOffset, u_imageOffset + u_imageSize] in
 // the SAME pixel space as FlutterFragCoord / u_resolution. For a normal
@@ -126,23 +117,18 @@ vec4 finalSample(
     refrColor = applySaturation(refrColor,u_saturation);
     preTintColor = refrColor; // capture before tint for optical border
 
-    // Alpha-honoring transparency (slider/toggle opt-in). The captured
-    // background is a premultiplied RGBA texture: a fully transparent
-    // texel decodes to black (rgb 0, a 0) and a colored-but-semi-
-    // transparent texel keeps its premultiplied rgb plus a partial
-    // alpha. When the flag is on we sample that alpha and fold it into
-    // the output coverage so the real backdrop shows through in
-    // proportion to the texel's transparency — instead of forcing the
-    // sample opaque (the old binary black-key dropped only near-black
-    // pixels and also clobbered genuinely dark opaque content). Because
-    // the sample is premultiplied, refrColor * shapeMask stays the
-    // correct premultiplied rgb; only the alpha changes. The caller
-    // still lays the border on top afterwards, so the rim survives.
-    float coverage = shapeMask;
-    if (u_transparentWhenBlack > 0.5) {
-        float texAlpha = texture(u_texture_input, sampleUV).a;
-        coverage = shapeMask * texAlpha;
-    }
+    // Alpha-honoring transparency (always on). The captured background
+    // is a premultiplied RGBA texture: a fully transparent texel
+    // decodes to black (rgb 0, a 0) and a colored-but-semi-transparent
+    // texel keeps its premultiplied rgb plus a partial alpha. We sample
+    // that alpha and fold it into the output coverage so the real
+    // backdrop shows through in proportion to the texel's transparency.
+    // For any opaque background (alpha 1) this is a mathematical no-op,
+    // which is why it needs no flag. Because the sample is
+    // premultiplied, refrColor * shapeMask stays the correct
+    // premultiplied rgb; only the alpha changes. The caller still lays
+    // the border on top afterwards, so the rim survives.
+    float coverage = shapeMask * texture(u_texture_input, sampleUV).a;
 
     vec4 base = vec4(refrColor * shapeMask, coverage);
     // Then apply lens tint

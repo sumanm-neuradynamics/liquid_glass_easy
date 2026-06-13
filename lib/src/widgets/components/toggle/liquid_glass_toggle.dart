@@ -33,14 +33,12 @@ export 'liquid_glass_toggle_track.dart';
 /// )
 /// ```
 ///
-/// ## Refraction & the black overhang
+/// ## Refraction & the overhang
 /// The glass thumb grows larger than the track, so its overhang samples
-/// the (transparent) area around the capsule. On the Skia capture path a
-/// transparent texel decodes to black, which would draw the overhang as
-/// a black blob. [transparentWhenBlack] (default `true`) drops those
-/// black samples to transparent so the real backdrop shows through. On
-/// the Impeller backdrop path the overhang refracts the live backdrop
-/// directly.
+/// the (transparent) area around the capsule. The shader honors the
+/// captured texel's alpha (always on), so that overhang renders as
+/// transparent passthrough instead of a black blob. On the Impeller
+/// backdrop path the overhang refracts the live backdrop directly.
 class LiquidGlassToggle extends StatefulWidget {
   /// Whether the switch is on.
   final bool value;
@@ -57,12 +55,6 @@ class LiquidGlassToggle extends StatefulWidget {
   /// Size + thumb geometry of the switch. Defaults to a 64×32 capsule.
   final LiquidGlassToggleLayout layout;
 
-  /// Whether a refracted background sample that comes out (near) black
-  /// is rendered transparent instead of black. Recommended `true` for
-  /// this self-contained component (see the class docs). Defaults to
-  /// `true`.
-  final bool transparentWhenBlack;
-
   /// Capture resolution for the inner view. `1.0` is a good default; use
   /// less for cheaper captures, `0.0` for the device pixel ratio.
   final double pixelRatio;
@@ -74,7 +66,6 @@ class LiquidGlassToggle extends StatefulWidget {
     this.activeColor = const Color(0xFF34C759),
     this.inactiveColor = const Color(0x66808080),
     this.layout = const LiquidGlassToggleLayout(),
-    this.transparentWhenBlack = true,
     this.pixelRatio = 1.0,
   });
 
@@ -212,7 +203,6 @@ class _LiquidGlassToggleState extends State<LiquidGlassToggle>
             trackBottom: padY,
             travelFraction: _fraction.value,
             growFraction: growFraction,
-            transparentWhenBlack: widget.transparentWhenBlack,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _handleTap(!widget.value),

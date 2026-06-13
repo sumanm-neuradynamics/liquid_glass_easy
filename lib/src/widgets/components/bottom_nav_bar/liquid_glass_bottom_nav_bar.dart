@@ -262,7 +262,6 @@ class LiquidGlassBottomNavBar extends LiquidGlass {
           saturation: appearance?.saturation ?? 1.0,
           enableInnerRadiusTransparent:
               appearance?.enableInnerRadiusTransparent ?? false,
-          transparentWhenBlack: appearance?.transparentWhenBlack ?? false,
           distortion: refraction?.distortion ?? distortion,
           distortionWidth: refraction?.distortionWidth ?? distortionWidth,
           chromaticAberration:
