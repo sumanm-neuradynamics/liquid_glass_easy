@@ -18,9 +18,11 @@ class LiquidGlassView extends StatefulWidget {
   /// The list of individual `LiquidGlass` lenses rendered in this view.
   /// Each lens defines its own shape, distortion, and behavior.
   ///
-  /// This is the classic, position-driven API. For layout-driven lenses
-  /// placed anywhere in a normal widget tree, put `LiquidGlassLens`
-  /// widgets inside [child] instead — both can be used together.
+  /// **Internal.** This is the classic, position-driven path; it is only
+  /// populated through the [LiquidGlassView.withPositionedLenses]
+  /// constructor, used by the package's own components. The public
+  /// constructor always leaves it empty. App developers place
+  /// `LiquidGlassLens` widgets inside [child] instead.
   final List<LiquidGlass> children;
 
   /// An arbitrary widget tree rendered **on top of** [backgroundWidget]
@@ -69,12 +71,15 @@ class LiquidGlassView extends StatefulWidget {
   /// Typically a static or animated background (such as an `Image`, `Stack`, or
   /// complex layout) over which the lenses apply refraction and effects.
   ///
-  /// Optional since the lens-anywhere API: on **Impeller** lenses sample
-  /// the live backdrop and need no background at all. On **Skia / Web**
-  /// this is what lenses refract — without it, `LiquidGlassLens`
-  /// children degrade to a frosted (non-refracting) look and the
-  /// classic [children] lenses render nothing.
-  final Widget? backgroundWidget;
+  /// Required: a `LiquidGlassView` exists to provide the captured
+  /// background its lenses refract. On **Skia / Web** this is the
+  /// capture source. On **Impeller** it renders normally behind the
+  /// content and the live backdrop sampling picks it up.
+  ///
+  /// If you don't need a refractable background (Impeller only), don't
+  /// use a `LiquidGlassView` at all — place `LiquidGlassLens` widgets
+  /// directly in your tree; they work standalone there.
+  final Widget backgroundWidget;
 
   /// Controls how frequently the background is re-captured while real-time updates are enabled.
   ///
@@ -118,10 +123,44 @@ class LiquidGlassView extends StatefulWidget {
   /// `useSync: false` (async captures are always full-frame).
   final bool regionCapture;
 
+  /// **Internal.** Whether each `children` lens folds the captured
+  /// backdrop's alpha into its coverage (the shader's
+  /// `u_honorBackdropAlpha`), on the Skia capture path only. Defaults to
+  /// `false` — the capture is treated as opaque (matching Impeller), which
+  /// keeps the optical rim and avoids washing the lens body white. Set
+  /// `true` only when the captured `backgroundWidget` carries *authored*
+  /// transparency that must show through the glass — i.e. the
+  /// slider/toggle track. No effect on the Impeller path or on lens-
+  /// anywhere `child` lenses.
+  final bool honorBackdropAlpha;
+
+  /// Creates a liquid-glass view: a background-capture / refraction
+  /// provider. Place `LiquidGlassLens` widgets anywhere inside [child] —
+  /// they connect to this view automatically. There is no positioned-lens
+  /// slot in the public API.
   const LiquidGlassView(
       {super.key,
       this.controller,
-      this.backgroundWidget,
+      required this.backgroundWidget,
+      this.child,
+      this.pixelRatio = 1.0,
+      this.realTimeCapture = true,
+      this.useSync = true,
+      this.refreshRate = LiquidGlassRefreshRate.deviceRefreshRate,
+      this.useImpellerBackdrop,
+      this.regionCapture = false})
+      : children = const [],
+        honorBackdropAlpha = false;
+
+  /// **Internal.** The classic, position-driven path: renders a list of
+  /// [LiquidGlass] lenses ([children]) over [backgroundWidget]. Retained
+  /// for the package's own components (slider, toggle, nav bars, demos);
+  /// app developers use [LiquidGlassLens] placed in [child] instead.
+  @internal
+  const LiquidGlassView.withPositionedLenses(
+      {super.key,
+      this.controller,
+      required this.backgroundWidget,
       this.children = const [],
       this.child,
       this.pixelRatio = 1.0,
@@ -129,7 +168,8 @@ class LiquidGlassView extends StatefulWidget {
       this.useSync = true,
       this.refreshRate = LiquidGlassRefreshRate.deviceRefreshRate,
       this.useImpellerBackdrop,
-      this.regionCapture = false});
+      this.regionCapture = false,
+      this.honorBackdropAlpha = false});
 
   @override
   State<LiquidGlassView> createState() => _LiquidGlassViewState();
@@ -170,13 +210,15 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
   /// True when the BackdropFilter+ImageFilter.shader path should be
   /// used instead of the classic capture+CustomPaint pipeline.
   ///
-  /// Auto-detected via `ui.ImageFilter.isShaderFilterSupported` —
-  /// `true` on Impeller, `false` on Skia. Pass
-  /// `useImpellerBackdrop: false` explicitly if your device reports
-  /// `true` here despite running on Skia (some Flutter SDKs do
-  /// this), and the lenses end up not rendering.
+  /// Both `true` and `null` mean "prefer Impeller, fall back to Skia":
+  /// the shader path is only taken when the engine actually supports it
+  /// (`ui.ImageFilter.isShaderFilterSupported`). Only an explicit
+  /// `false` forces the Skia capture path. Forcing the shader path on a
+  /// backend that does not support it asserts, so we never do — `true`
+  /// is a preference, not an override.
   late final bool _useImpeller =
-      widget.useImpellerBackdrop ?? ui.ImageFilter.isShaderFilterSupported;
+      (widget.useImpellerBackdrop ?? true) &&
+          ui.ImageFilter.isShaderFilterSupported;
 
   /// Whether per-lens shader instances are required. Both Impeller
   /// (BackdropFilter compositing is deferred, so uniforms can't be
@@ -412,9 +454,11 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
                 final regions = <Rect?>[];
                 bool any = false;
                 for (final child in widget.children) {
-                  final Offset tl = child.position
-                      .resolve(boundary.size, Size(child.width, child.height));
-                  final Rect r = (tl & Size(child.width, child.height))
+                  final Offset tl = child.geometry.position.resolve(
+                      boundary.size,
+                      Size(child.geometry.width, child.geometry.height));
+                  final Rect r = (tl &
+                          Size(child.geometry.width, child.geometry.height))
                       .inflate(_kRegionCaptureMargin)
                       .intersect(Offset.zero & boundary.size);
                   if (r.isEmpty) {
@@ -595,9 +639,7 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
       children: [
         RepaintBoundary(
           key: _repaintKey,
-          // Kept even when no background is given so the capture
-          // pipeline and coordinate space stay well-defined.
-          child: widget.backgroundWidget ?? const SizedBox.expand(),
+          child: widget.backgroundWidget,
         ),
         // Lens-anywhere subtree: any widget tree with `LiquidGlassLens`
         // widgets inside it, connected to this view through the scope.
@@ -605,7 +647,6 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
         if (widget.child != null)
           LiquidGlassLensScope(
             useImpellerBackdrop: _useImpeller,
-            hasBackground: widget.backgroundWidget != null,
             captureRevision: _captureRevision,
             currentImage: _currentImageForLens,
             captureFallback: _capturePaintTimeSync,
@@ -682,8 +723,7 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
             // index-based key. This prevents Flutter from reusing
             // a lens `State` across the wrong slot when `children`
             // change (insert/remove/reorder).
-            return LiquidGlassWidget(
-              key: child.key ?? ValueKey('lg_index_$index'),
+            final Widget lens = LiquidGlassWidget(
               config: child,
               parentSize: resolvedParentSize,
               sharedShader: _usePerLensShaders
@@ -697,6 +737,18 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
                   hasOwn ? _regionsPerLens![index] : _imageRegion,
               captureFallback: _useImpeller ? null : _capturePaintTimeSync,
               useImpellerBackdrop: _useImpeller,
+              honorBackdropAlpha: widget.honorBackdropAlpha,
+            );
+            // Always wrap in Opacity so the whole lens (refraction + rim +
+            // tint) can fade together. The key lives on the wrapper so the
+            // element type at this Stack slot stays stable as opacity
+            // crosses 1.0 (otherwise the lens would remount mid-fade) and
+            // so a lens keeps its State across children insert/remove.
+            // Opacity short-circuits at 1.0/0.0, so the opaque case is free.
+            return Opacity(
+              key: child.key ?? ValueKey('lg_index_$index'),
+              opacity: child.opacity.clamp(0.0, 1.0),
+              child: lens,
             );
           } else {
             return const SizedBox.shrink();

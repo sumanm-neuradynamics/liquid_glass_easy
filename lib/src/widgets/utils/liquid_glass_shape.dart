@@ -1,13 +1,53 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'liquid_glass_border_mode.dart';
 import 'liquid_glass_light_mode.dart';
 
-/// Abstract base border configuration for liquid glass shapes.
+/// The corner curve of a [LiquidGlassShape].
 ///
-/// Contains shared border parameters that apply to both classic and optical
-/// border modes. Mode-specific parameters are encapsulated in [borderType].
-abstract class LiquidGlassShape {
+/// Selects which corner SDF the shader draws and which exact clip path the
+/// renderers use. The single axis of variation between the old
+/// `RoundedRectangleShape` / `SquircleShape` / `ContinuousRoundedRectangleShape`
+/// classes, now an explicit value.
+enum LiquidGlassCornerStyle {
+  /// Plain **circular** rounded rectangle — corners are circular arcs of
+  /// `cornerRadius`. The cheapest style.
+  roundedRectangle,
+
+  /// **L^n squircle** — the corners use the superellipse (`L^n`-norm)
+  /// continuous-curvature profile, full iOS-style smoothing. The shader draws
+  /// the matching `squircle*` SDF.
+  squircle,
+
+  /// **Apple capsule-style** continuous rounded rectangle — each corner is an
+  /// exact circle "belly" plus a tuned G2 shoulder onto each flat edge. The
+  /// shader draws the matching `continuousRoundedRect*` SDF; at full radius it
+  /// degrades to a clean capsule. **The default corner style.**
+  continuousRoundedRectangle,
+}
+
+/// The geometry, border and lighting of a liquid-glass lens.
+///
+/// One concrete class: the corner curve is chosen by [cornerStyle] (or one of
+/// the [LiquidGlassShape.rounded] / [LiquidGlassShape.squircle] /
+/// [LiquidGlassShape.continuous] convenience constructors). Border styling is
+/// shared across both classic and optical border modes; mode-specific
+/// parameters are encapsulated in [borderType].
+class LiquidGlassShape {
+  /// The corner curve. See [LiquidGlassCornerStyle].
+  final LiquidGlassCornerStyle cornerStyle;
+
+  /// The corner radius in logical pixels.
+  final double cornerRadius;
+
+  /// Whether the lens is clipped with the cheap circular rounded rectangle
+  /// (`ClipRRect`) or an exact `ClipPath` matching this shape's shader corner.
+  /// See [LiquidGlassClipQuality]. Defaults to
+  /// [LiquidGlassClipQuality.roundedRectangle].
+  final LiquidGlassClipQuality clipQuality;
+
   /// The thickness of the lens border in logical pixels.
   ///
   /// Increasing this value makes the border appear thicker
@@ -63,6 +103,9 @@ abstract class LiquidGlassShape {
   final LiquidGlassBorderType borderType;
 
   const LiquidGlassShape({
+    this.cornerStyle = LiquidGlassCornerStyle.continuousRoundedRectangle,
+    this.cornerRadius = 50.0,
+    this.clipQuality = LiquidGlassClipQuality.roundedRectangle,
     this.borderWidth = 1.0,
     this.borderColor,
     this.lightIntensity = 1.0,
@@ -71,6 +114,81 @@ abstract class LiquidGlassShape {
     this.lightMode = LiquidGlassLightMode.edge,
     this.borderType = const OpticalBorder(),
   });
+
+  /// A plain **circular** rounded rectangle
+  /// ([LiquidGlassCornerStyle.roundedRectangle]). The cheapest style.
+  const LiquidGlassShape.roundedRectangle({
+    double cornerRadius = 50.0,
+    LiquidGlassClipQuality clipQuality = LiquidGlassClipQuality.roundedRectangle,
+    double borderWidth = 1.0,
+    Color? borderColor,
+    double lightIntensity = 1.0,
+    Color lightColor = const Color(0xB2FFFFFF),
+    double lightDirection = 0.0,
+    LiquidGlassLightMode lightMode = LiquidGlassLightMode.edge,
+    LiquidGlassBorderType borderType = const OpticalBorder(),
+  }) : this(
+          cornerStyle: LiquidGlassCornerStyle.roundedRectangle,
+          cornerRadius: cornerRadius,
+          clipQuality: clipQuality,
+          borderWidth: borderWidth,
+          borderColor: borderColor,
+          lightIntensity: lightIntensity,
+          lightColor: lightColor,
+          lightDirection: lightDirection,
+          lightMode: lightMode,
+          borderType: borderType,
+        );
+
+  /// An **L^n squircle** rounded rectangle ([LiquidGlassCornerStyle.squircle]) —
+  /// iOS-style continuous-curvature corners.
+  const LiquidGlassShape.squircle({
+    double cornerRadius = 50.0,
+    LiquidGlassClipQuality clipQuality = LiquidGlassClipQuality.roundedRectangle,
+    double borderWidth = 1.0,
+    Color? borderColor,
+    double lightIntensity = 1.0,
+    Color lightColor = const Color(0xB2FFFFFF),
+    double lightDirection = 0.0,
+    LiquidGlassLightMode lightMode = LiquidGlassLightMode.edge,
+    LiquidGlassBorderType borderType = const OpticalBorder(),
+  }) : this(
+          cornerStyle: LiquidGlassCornerStyle.squircle,
+          cornerRadius: cornerRadius,
+          clipQuality: clipQuality,
+          borderWidth: borderWidth,
+          borderColor: borderColor,
+          lightIntensity: lightIntensity,
+          lightColor: lightColor,
+          lightDirection: lightDirection,
+          lightMode: lightMode,
+          borderType: borderType,
+        );
+
+  /// An **Apple capsule-style** continuous rounded rectangle
+  /// ([LiquidGlassCornerStyle.continuousRoundedRectangle]).
+  const LiquidGlassShape.continuousRoundedRectangle({
+    double cornerRadius = 50.0,
+    LiquidGlassClipQuality clipQuality = LiquidGlassClipQuality.roundedRectangle,
+    double borderWidth = 1.0,
+    Color? borderColor,
+    double lightIntensity = 1.0,
+    Color lightColor = const Color(0xB2FFFFFF),
+    double lightDirection = 0.0,
+    LiquidGlassLightMode lightMode = LiquidGlassLightMode.edge,
+    LiquidGlassBorderType borderType = const OpticalBorder(),
+  }) : this(
+          cornerStyle: LiquidGlassCornerStyle.continuousRoundedRectangle,
+          cornerRadius: cornerRadius,
+          clipQuality: clipQuality,
+          borderWidth: borderWidth,
+          borderColor: borderColor,
+          lightIntensity: lightIntensity,
+          lightColor: lightColor,
+          lightDirection: lightDirection,
+          lightMode: lightMode,
+          borderType: borderType,
+        );
 
   // ── Convenience getters for the painter to extract values ──
 
@@ -142,42 +260,208 @@ abstract class LiquidGlassShape {
 /// by the shader dispatch logic.
 enum LiquidGlassBorderMode { classic, optical }
 
-class RoundedRectangleShape extends LiquidGlassShape {
-  final double cornerRadius;
+/// How a lens is **clipped** to its outline. Every [LiquidGlassShape] carries
+/// its own [LiquidGlassShape.clipQuality].
+enum LiquidGlassClipQuality {
+  /// Cheapest: a plain circular rounded-rectangle clip (`ClipRRect`). The
+  /// historic default. Its silhouette is a circular corner even when the shader
+  /// draws a squircle/continuous corner, so for those shapes the clipped
+  /// child/blur edge may not perfectly hug the refraction.
+  roundedRectangle,
 
-  /// Apple-style continuous-corner smoothing, `0.0`–`1.0`.
-  ///
-  /// At `0.0` (the default) corners are plain circular arcs of
-  /// [cornerRadius]. At `1.0` the curvature region extends ~1.528 ×
-  /// [cornerRadius] along each edge — the same proportion as iOS
-  /// continuous corners — while the perceived corner radius stays
-  /// [cornerRadius] (the curve passes through the same apex point).
-  ///
-  /// The smoothing automatically fades out as [cornerRadius]
-  /// approaches half the lens's shorter side, degrading to a plain
-  /// circular cap at full radius (a capsule), exactly like iOS.
-  final double cornerSmoothing;
-
-  const RoundedRectangleShape({
-    this.cornerRadius = 50.0,
-    this.cornerSmoothing = 0.0,
-    super.borderWidth,
-    super.borderColor,
-    super.lightIntensity,
-    super.lightColor,
-    super.lightDirection,
-    super.lightMode,
-    super.borderType,
-  });
+  /// An exact `ClipPath` that matches this shape's shader corner: the squircle
+  /// L^n curve for [LiquidGlassCornerStyle.squircle], the Apple capsule-style
+  /// curve for [LiquidGlassCornerStyle.continuous], and a circular rounded rect
+  /// for [LiquidGlassCornerStyle.circular]. Slightly pricier (adds a save
+  /// layer) but the clipped silhouette lines up exactly with the refraction.
+  exact,
 }
 
-/// The corner radius used to **clip** a lens to its outline. The rounded-rect
-/// clips to a circular `RRect` of this radius; other shapes return `0`
-/// (rectangle clip, shader mask defines the shape).
-double liquidGlassClipCornerRadius(LiquidGlassShape shape) =>
-    shape is RoundedRectangleShape ? shape.cornerRadius : 0.0;
+/// The shader corner-style selector (`u_cornerStyle`), derived from
+/// [LiquidGlassShape.cornerStyle]:
+///   * `2.0` — Apple capsule-style ([LiquidGlassCornerStyle.continuous]).
+///   * `1.0` — L^n squircle ([LiquidGlassCornerStyle.squircle], full smoothing).
+///   * `0.0` — plain circular ([LiquidGlassCornerStyle.circular]).
+double liquidGlassCornerStyle(LiquidGlassShape shape) =>
+    switch (shape.cornerStyle) {
+      LiquidGlassCornerStyle.continuousRoundedRectangle => 2.0,
+      LiquidGlassCornerStyle.squircle => 1.0,
+      LiquidGlassCornerStyle.roundedRectangle => 0.0,
+    };
 
-/// Whether the shape uses a rounded clip (rounded-rect) for its blur-backdrop
-/// and child clips.
-bool liquidGlassUsesRoundedClip(LiquidGlassShape shape) =>
-    shape is RoundedRectangleShape;
+/// The corner radius used to **clip** a lens to its outline.
+double liquidGlassClipCornerRadius(LiquidGlassShape shape) => shape.cornerRadius;
+
+/// Whether the shape uses a rounded clip for its blur-backdrop and child clips.
+/// Every [LiquidGlassShape] is a rounded-rectangle family shape, so this is
+/// always `true` — kept as a named predicate for the renderers' call sites.
+bool liquidGlassUsesRoundedClip(LiquidGlassShape shape) => true;
+
+/// Wraps [child] in the clip that matches [shape]'s outline, honoring its
+/// [LiquidGlassShape.clipQuality]: a circular `ClipRRect`, a shader-matched
+/// squircle `ClipPath`, or an Apple capsule-style continuous `ClipPath`. Used
+/// by the renderers so the clipped blur/child silhouette agrees with the SDF
+/// the shader draws.
+Widget liquidGlassClip({
+  required LiquidGlassShape shape,
+  required Widget child,
+}) {
+  final double radius = liquidGlassClipCornerRadius(shape);
+  if (radius > 0.5 && shape.clipQuality == LiquidGlassClipQuality.exact) {
+    switch (shape.cornerStyle) {
+      case LiquidGlassCornerStyle.continuousRoundedRectangle:
+        return ClipPath(
+          clipper: _LiquidGlassContinuousClipper(radius: radius),
+          child: child,
+        );
+      case LiquidGlassCornerStyle.squircle:
+        return ClipPath(
+          // Full, fixed smoothing — matches the shader's squircle branch.
+          clipper: _LiquidGlassSquircleClipper(radius: radius, smoothing: 1.0),
+          child: child,
+        );
+      case LiquidGlassCornerStyle.roundedRectangle:
+        // The exact clip is just the circular RRect below.
+        break;
+    }
+  }
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(radius),
+    child: child,
+  );
+}
+
+class _LiquidGlassSquircleClipper extends CustomClipper<Path> {
+  final double radius;
+  final double smoothing;
+  const _LiquidGlassSquircleClipper({
+    required this.radius,
+    required this.smoothing,
+  });
+
+  @override
+  Path getClip(Size size) =>
+      liquidGlassSquirclePath(size, radius, smoothing);
+
+  @override
+  bool shouldReclip(_LiquidGlassSquircleClipper old) =>
+      old.radius != radius || old.smoothing != smoothing;
+}
+
+class _LiquidGlassContinuousClipper extends CustomClipper<Path> {
+  final double radius;
+  const _LiquidGlassContinuousClipper({required this.radius});
+
+  @override
+  Path getClip(Size size) => liquidGlassContinuousRoundedRectPath(size, radius);
+
+  @override
+  bool shouldReclip(_LiquidGlassContinuousClipper old) => old.radius != radius;
+}
+
+/// The continuous-curvature (squircle) outline — the SAME L^n superellipse the
+/// shader draws. `zone` and `n` are derived exactly like `continuousCornerParams`
+/// in `liquid_glass_common.glsl`, so the clip lines up with the refraction.
+Path liquidGlassSquirclePath(
+  Size size,
+  double r,
+  double smoothing, {
+  int seg = 40,
+}) {
+  final double w = size.width, h = size.height;
+  final double maxCorner = math.min(w, h) / 2;
+  final double rr = math.min(r, maxCorner);
+  if (rr < 0.5) return Path()..addRect(Offset.zero & size);
+
+  final double sm = smoothing.clamp(0.0, 1.0);
+  final double zone = math.min(rr * (1 + 0.528 * sm), maxCorner);
+  final double base = (1 - 0.29289322 * (rr / zone)).clamp(0.5, 0.999999);
+  final double n = -1.0 / (math.log(base) / math.ln2);
+
+  List<Offset> corner(double cx, double cy, double sx, double sy) => [
+        for (int i = 0; i <= seg; i++)
+          () {
+            final double t = (math.pi / 2) * i / seg;
+            final double ox = zone * math.pow(math.cos(t), 2 / n).toDouble();
+            final double oy = zone * math.pow(math.sin(t), 2 / n).toDouble();
+            return Offset(cx + sx * ox, cy + sy * oy);
+          }()
+      ];
+
+  final tl = corner(zone, zone, -1, -1);
+  final tr = corner(w - zone, zone, 1, -1).reversed.toList();
+  final br = corner(w - zone, h - zone, 1, 1);
+  final bl = corner(zone, h - zone, -1, 1).reversed.toList();
+
+  final all = [...tl, ...tr, ...br, ...bl];
+  final path = Path()..moveTo(all.first.dx, all.first.dy);
+  for (final p in all.skip(1)) {
+    path.lineTo(p.dx, p.dy);
+  }
+  return path..close();
+}
+
+/// The Apple capsule-style continuous rounded-rectangle outline: each corner
+/// is an EXACT circle of radius `r` for its 45° "belly", plus a tuned G2
+/// shoulder that eases the contact onto each flat edge. This is the Dart twin
+/// of the shader's `continuousRoundedRect*` SDF (and the `_capsulePath`
+/// experiment), so the [LiquidGlassClipQuality.continuous] clip lines up with
+/// the refraction. The per-edge shoulder reach is clamped to the room
+/// available on each edge, so a square at full radius collapses to a clean
+/// circle (capsule), exactly like iOS. Constants are numerically tuned to
+/// Apple's capsule.
+Path liquidGlassContinuousRoundedRectPath(
+  Size size,
+  double r, {
+  int seg = 40,
+}) {
+  const double extFrac = 0.4425, t0 = 0.728, aTail = 4.836, nTail = 3.869;
+  final double w = size.width, h = size.height;
+  final double maxCorner = math.min(w, h) / 2;
+  final double rr = math.min(r, maxCorner);
+  if (rr < 0.5) return Path()..addRect(Offset.zero & size);
+
+  // Per-edge shoulder reach, clamped to the room available on each edge.
+  final double eH = math.min(extFrac * rr, w / 2 - rr); // onto top/bottom edges
+  final double eV = math.min(extFrac * rr, h / 2 - rr); // onto left/right edges
+  final double belly = rr / math.sqrt2;
+
+  double shoulderA(double tt) {
+    if (tt <= t0) return 1.0;
+    final double u = ((tt - t0) / (1 - t0)).clamp(0.0, 1.0);
+    return math
+        .pow(math.max(1 - math.pow(u, aTail).toDouble(), 0.0), 1 / nTail)
+        .toDouble();
+  }
+
+  List<Offset> corner(double cx, double cy, double sx, double sy) {
+    final out = <Offset>[];
+    // Lower half: vertical-edge shoulder (param by u, contact -> belly).
+    for (int i = 0; i <= seg; i++) {
+      final double u = rr - (rr - belly) * i / seg;
+      final double v = math.sqrt(math.max(rr * rr - u * u, 0.0)) +
+          eV * (shoulderA(u / rr) - 1);
+      out.add(Offset(cx + sx * u, cy + sy * v));
+    }
+    // Upper half: horizontal-edge shoulder (param by v, belly -> contact).
+    for (int i = 1; i <= seg; i++) {
+      final double v = belly + (rr - belly) * i / seg;
+      final double u = math.sqrt(math.max(rr * rr - v * v, 0.0)) +
+          eH * (shoulderA(v / rr) - 1);
+      out.add(Offset(cx + sx * u, cy + sy * v));
+    }
+    return out;
+  }
+
+  final tl = corner(rr, rr, -1, -1);
+  final tr = corner(w - rr, rr, 1, -1).reversed.toList();
+  final br = corner(w - rr, h - rr, 1, 1);
+  final bl = corner(rr, h - rr, -1, 1).reversed.toList();
+
+  final all = [...tl, ...tr, ...br, ...bl];
+  final path = Path()..moveTo(all.first.dx, all.first.dy);
+  for (final p in all.skip(1)) {
+    path.lineTo(p.dx, p.dy);
+  }
+  return path..close();
+}

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../liquid_glass.dart';
@@ -63,6 +65,24 @@ LiquidGlass buildLiquidGlassBottomNavPill({
   /// When `true`, the pill's inner (non-distorted) area is transparent,
   /// revealing the background directly through the center.
   bool enableInnerRadiusTransparent = false,
+
+  /// Overrides the pill's glass shape. When `null` the default
+  /// **Apple capsule-style** [LiquidGlassShape] is used,
+  /// with its corner radius tracking the pill's current height so it
+  /// stays a clean capsule as the pill grows/squashes. Pass a custom
+  /// [LiquidGlassShape] (e.g. a rounded or a
+  /// continuous variant with a smaller radius) to give the
+  /// pill visible continuous corners or a different rim.
+  LiquidGlassShape? shape,
+
+  /// Fill tint of the pill's glass. When `null`, the historic default
+  /// (white at ~11% opacity) is used.
+  Color? color,
+
+  /// Overall opacity of the pill (`1` = opaque). Drives a true fade of the
+  /// WHOLE pill (refraction + rim + tint) — used by the bar to fade the
+  /// glass pill out before the static rest pill fades in.
+  double opacity = 1.0,
 }) {
   final extra = extraHeight ?? layout.pillExtraHeight;
   final cellW = layout.cellWidth;
@@ -86,18 +106,24 @@ LiquidGlass buildLiquidGlassBottomNavPill({
       ),
       width: pillW,
       height: pillH,
-      shape: RoundedRectangleShape(
-        cornerRadius: pillH / 2,
-        borderWidth: 1.0,
-        lightIntensity: 1.3,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.4,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.5,
-        ),
-      ),
+      // The grown pill is centered on its cell and so naturally overhangs
+      // the bar/parent at the end tabs. Allow that overhang instead of
+      // letting the lens get clamped back inside — clamping shifts the
+      // pill off its cell (most visible on a bar with no side margin).
+      outOfBoundaries: true,
     ),
+    shape: shape ??
+        LiquidGlassShape.continuousRoundedRectangle(
+          cornerRadius: pillH / 2,
+          borderWidth: 1.0,
+          lightIntensity: 1.3,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.4,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.5,
+          ),
+        ),
     refraction: LiquidGlassRefraction(
       magnification: magnification,
       distortion: distortion,
@@ -105,10 +131,11 @@ LiquidGlass buildLiquidGlassBottomNavPill({
       chromaticAberration: 0.002,
     ),
     appearance: LiquidGlassAppearance(
-      color: Colors.white.withAlpha(28),
+      color: color ?? Colors.white.withAlpha(28),
       blur: blur,
       enableInnerRadiusTransparent: enableInnerRadiusTransparent,
     ),
+    opacity: opacity,
   );
 }
 
@@ -125,6 +152,19 @@ LiquidGlass buildLiquidGlassBottomNavCapsule({
   /// capsule lens uses this position directly (so the whole animated
   /// bar can honor a caller-supplied position).
   LiquidGlassPosition? position,
+
+  /// Overrides the bar-capsule glass shape (e.g. a
+  /// [LiquidGlassShape] or a custom radius/clip). When null,
+  /// the default 40-radius optical capsule is used.
+  LiquidGlassShape? shape,
+
+  /// Refraction of the capsule glass. When `null`, the default optical
+  /// capsule refraction is used.
+  LiquidGlassRefraction? refraction,
+
+  /// Appearance (tint + blur) of the capsule glass. When `null`, the
+  /// default ~9% white frost is used.
+  LiquidGlassAppearance? appearance,
 }) {
   return LiquidGlass(
     geometry: LiquidGlassGeometry(
@@ -135,64 +175,123 @@ LiquidGlass buildLiquidGlassBottomNavCapsule({
           ),
       width: layout.width,
       height: layout.height,
-      shape: RoundedRectangleShape(
-        cornerRadius: 40,
-        borderWidth: 1.2,
-        lightIntensity: 1.1,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.2,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.35,
+    ),
+    shape: shape ??
+        LiquidGlassShape.roundedRectangle(
+          cornerRadius: 40,
+          borderWidth: 1.2,
+          lightIntensity: 1.1,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.2,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.35,
+          ),
         ),
-      ),
-    ),
-    refraction: const LiquidGlassRefraction(
-      distortion: 0.07,
-      distortionWidth: 28,
-      chromaticAberration: 0.002,
-    ),
-    appearance: LiquidGlassAppearance(
-      color: Colors.white.withAlpha(22),
-      blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-    ),
+    refraction: refraction ??
+        const LiquidGlassRefraction(
+          distortion: 0.07,
+          distortionWidth: 28,
+          chromaticAberration: 0.002,
+        ),
+    appearance: appearance ??
+        LiquidGlassAppearance(
+          color: Colors.white.withAlpha(22),
+          blur: const LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
+        ),
   );
 }
 
 /// Plain (non-shader) version of the selection pill, used while the
-/// pill is at rest. Visually mimics the optical-rim look of the
-/// liquid-glass pill so swapping between the two is unnoticeable.
+/// pill is at rest. Mirrors the moving glass pill's silhouette (corner
+/// [shape]) and fill ([color]) so swapping between the two is
+/// unnoticeable. A rim is drawn **only when** [shape] sets a
+/// `borderColor` (default: a borderless soft highlight) — there is no
+/// drop shadow, so the rest and moving pills read identically.
 class LiquidGlassBottomNavPillStatic extends StatelessWidget {
   final double width;
   final double height;
+
+  /// Fill of the rest highlight.
+  final Color color;
+
+  /// Corner shape (and optional border) of the rest highlight. When
+  /// `null` a plain capsule is used. Only the corner family + radius and
+  /// the `borderColor`/`borderWidth` are honored — the optical/refractive
+  /// fields don't apply to this non-shader pill.
+  final LiquidGlassShape? shape;
 
   const LiquidGlassBottomNavPillStatic({
     super.key,
     required this.width,
     required this.height,
+    this.color = const Color(0x26FFFFFF),
+    this.shape,
   });
 
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: Colors.white.withAlpha(38),
-          borderRadius: BorderRadius.circular(height / 2),
-          // No border — only the moving liquid-glass pill carries
-          // the optical rim. The static rest pill is meant to look
-          // like a soft highlight, not a framed shape.
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(40),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+      child: CustomPaint(
+        size: Size(width, height),
+        painter: LiquidGlassNavPillSurfacePainter(
+          color: color,
+          shape: shape,
         ),
       ),
     );
   }
+}
+
+/// The outline of a non-shader nav selection pill of [size], following
+/// [shape]'s corner family — circular, L^n squircle, or the Apple
+/// capsule-style continuous curve — so a CPU-painted pill or a clip
+/// lines up with the glass pill the shader draws. A `null` shape yields
+/// a plain capsule (radius = half the short side).
+Path liquidGlassNavPillOutline(Size size, LiquidGlassShape? shape) {
+  final s = shape;
+  final double maxR = math.min(size.width, size.height) / 2;
+  final double radius = s != null ? math.min(s.cornerRadius, maxR) : maxR;
+  switch (s?.cornerStyle) {
+    case LiquidGlassCornerStyle.continuousRoundedRectangle:
+      return liquidGlassContinuousRoundedRectPath(size, radius);
+    case LiquidGlassCornerStyle.squircle:
+      // Full, fixed smoothing to match the shader's squircle branch
+      // (u_cornerStyle == 1).
+      return liquidGlassSquirclePath(size, radius, 1.0);
+    case LiquidGlassCornerStyle.roundedRectangle:
+    case null:
+      return Path()
+        ..addRRect(RRect.fromRectAndRadius(
+          Offset.zero & size,
+          Radius.circular(radius),
+        ));
+  }
+}
+
+/// Paints a non-shader nav selection pill: just the [color] fill,
+/// following [liquidGlassNavPillOutline] so the corners match the glass
+/// pill. Shared by the static rest pill and the non-glass nav tiers.
+///
+/// There is deliberately **no drop shadow and no rim** — the pill reads
+/// from its fill alone. The edge/rim treatment is intentionally left out
+/// for now (revisit later).
+class LiquidGlassNavPillSurfacePainter extends CustomPainter {
+  final Color color;
+  final LiquidGlassShape? shape;
+
+  const LiquidGlassNavPillSurfacePainter({
+    required this.color,
+    this.shape,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Path path = liquidGlassNavPillOutline(size, shape);
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(LiquidGlassNavPillSurfacePainter old) =>
+      old.color != color || old.shape != shape;
 }

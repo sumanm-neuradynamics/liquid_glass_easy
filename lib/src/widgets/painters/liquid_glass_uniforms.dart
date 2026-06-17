@@ -71,6 +71,14 @@ void packLiquidGlassUniforms(
   required bool includeLensColor,
   Color lensColor = const Color(0x00000000),
 
+  /// Whether the shader should fold the sampled backdrop's alpha into the
+  /// lens coverage. `true` on the Skia capture path (the bound snapshot
+  /// has meaningful authored transparency); `false` on the Impeller path
+  /// (the live backdrop's alpha is not a transparency signal and reads 0
+  /// over dark regions). Only emitted for the main shader — the border
+  /// shader has no coverage step and no such uniform.
+  bool honorBackdropAlpha = true,
+
   /// Parent-space rectangle the bound texture covers, in logical px.
   /// Defaults (offset `(0,0)`, size == [resolution]) reproduce the old
   /// full-frame `refrPx / u_resolution` sampling. The Impeller path always
@@ -85,10 +93,10 @@ void packLiquidGlassUniforms(
   final double selectedBorderMode =
       (shape.borderMode == LiquidGlassBorderMode.classic) ? 0 : 1;
 
-  final double cornerRadius =
-      shape is RoundedRectangleShape ? shape.cornerRadius : 0;
-  final double cornerSmoothing =
-      shape is RoundedRectangleShape ? shape.cornerSmoothing : 0;
+  final double cornerRadius = shape.cornerRadius;
+  // The shape type alone selects the corner SDF in the shader:
+  // 2 = continuous (capsule), 1 = squircle (full smoothing), 0 = circular.
+  final double cornerStyle = liquidGlassCornerStyle(shape);
 
   int i = 0;
   // u_resolution
@@ -103,8 +111,8 @@ void packLiquidGlassUniforms(
   shader.setFloat(i++, lensHeight * scale);
   // u_cornerRadius
   shader.setFloat(i++, cornerRadius * scale);
-  // u_cornerSmoothing (0..1 — unitless, never scaled)
-  shader.setFloat(i++, cornerSmoothing);
+  // u_cornerStyle (0 = circular, 1 = squircle, 2 = continuous — never scaled)
+  shader.setFloat(i++, cornerStyle);
 
   shader.setFloat(i++, magnification);
   shader.setFloat(i++, distortion);
@@ -167,11 +175,22 @@ void packLiquidGlassUniforms(
   shader.setFloat(i++, selectedBorderMode);
 
   // u_imageOffset / u_imageSize — present on BOTH shaders, so always
-  // written. Scaled like the other spatial uniforms. (Alpha-honoring
-  // transparency is always on in the shader now — no uniform.)
+  // written. Scaled like the other spatial uniforms.
   final Size imgSize = imageSize ?? resolution;
   shader.setFloat(i++, imageOffset.dx * scale);
   shader.setFloat(i++, imageOffset.dy * scale);
   shader.setFloat(i++, imgSize.width * scale);
   shader.setFloat(i++, imgSize.height * scale);
+
+  // u_honorBackdropAlpha + u_shapeAaPx — main shader only (the last two
+  // uniforms in liquid_glass.frag; the border shader declares neither, so
+  // writing them there would overflow its uniform array).
+  if (includeLensColor) {
+    shader.setFloat(i++, honorBackdropAlpha ? 1.0 : 0.0);
+    // u_shapeAaPx — edge-AA band width in fragment px = one logical pixel.
+    // `scale` is 1.0 on Skia (logical-px shader) and dpr on Impeller
+    // (physical-px shader), so the coverage ramp is the same physical width
+    // on both backends.
+    shader.setFloat(i++, scale);
+  }
 }

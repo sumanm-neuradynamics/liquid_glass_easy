@@ -1,105 +1,152 @@
 import 'package:flutter/material.dart';
 
-import '../liquid_glass.dart';
+import '../lens/liquid_glass_lens.dart';
+import '../liquid_glass_config.dart';
+import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
-import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// A pill-shaped action button rendered as liquid glass.
 ///
-/// Pass a [label] and optional [icon]; for tinted call-to-action
-/// buttons (e.g. blue "Continue") set [tint]. The button forwards
-/// taps to [onPressed].
+/// This is a plain widget: drop it anywhere in your layout (a `Row`, a
+/// `Column`, a `Stack`) and it renders a single [LiquidGlassLens] around
+/// its label/icon. It needs no position and no `LiquidGlassView` on
+/// Impeller; on Skia / Web place it inside a `LiquidGlassView` so it has
+/// a background to refract.
 ///
-/// Almost everything is customizable — size, glass tint/blur/
-/// distortion, border profile, corner radius, and the label/icon
-/// styling. Sensible iOS-style defaults are provided so the simplest
-/// call is just `label` + `onPressed`.
-class LiquidGlassButton extends LiquidGlass {
-  LiquidGlassButton({
-    required LiquidGlassPosition position,
-    required String label,
-    IconData? icon,
-    VoidCallback? onPressed,
+/// Styling uses one [LiquidGlassStyle] ([style] — shape + appearance +
+/// refraction), defaulted to a tuned iOS-style glass, so the simplest call
+/// is just `label` + `onPressed`. For a solid call-to-action (e.g. a blue
+/// "Continue"), pass a [style] with a colored tint — compose from
+/// [defaultStyle] to keep the rest of the tuned look:
+///
+/// ```dart
+/// LiquidGlassButton(
+///   label: 'Continue',
+///   style: LiquidGlassButton.defaultStyle.copyWith(
+///     appearance: LiquidGlassAppearance(color: Colors.blue.withAlpha(160)),
+///   ),
+///   onPressed: () {},
+/// )
+/// ```
+class LiquidGlassButton extends StatelessWidget {
+  const LiquidGlassButton({
+    super.key,
+    required this.label,
+    this.icon,
+    this.onPressed,
+    this.width,
+    this.height = 48,
+    this.padding = const EdgeInsets.symmetric(horizontal: 20),
+    this.style,
+    this.visibility = true,
+    this.foregroundColor = Colors.white,
+    this.fontSize = 16,
+    this.fontWeight = FontWeight.w600,
+    this.iconSize = 20,
+  });
 
-    /// Solid fill tint for a call-to-action button. When `null` the
-    /// button uses the translucent [glassColor] instead.
-    Color? tint,
-    double width = 200,
-    double height = 48,
-    LiquidGlassController? controller,
+  /// Button label text.
+  final String label;
 
-    /// Corner radius of the capsule. Defaults to a full pill
-    /// (`height / 2`).
-    double? cornerRadius,
+  /// Optional leading icon.
+  final IconData? icon;
 
-    /// Translucent glass tint used when [tint] is `null`.
-    Color glassColor = const Color(0x1CFFFFFF), // white, alpha 28
-    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
-    double distortion = 0.07,
-    double distortionWidth = 24,
-    double chromaticAberration = 0.002,
-    double magnification = 1,
+  /// Tap callback.
+  final VoidCallback? onPressed;
 
-    // ── Border ─────────────────────────────────────────────
-    double borderWidth = 1.1,
-    double lightIntensity = 1.2,
-    double lightDirection = 80,
-    OpticalBorder borderType = const OpticalBorder(
-      borderSaturation: 1.2,
-      ambientIntensity: 1.0,
-      borderSolidity: 0.35,
-    ),
+  /// Explicit width. When null the button hugs its content.
+  final double? width;
 
-    // ── Content ────────────────────────────────────────────
-    /// Color of the label text and icon.
-    Color foregroundColor = Colors.white,
+  /// Capsule height; also drives the default pill radius (`height / 2`).
+  final double height;
 
-    /// Font size of the label.
-    double fontSize = 16,
+  /// Inner padding around the label/icon.
+  final EdgeInsetsGeometry padding;
 
-    /// Font weight of the label.
-    FontWeight fontWeight = FontWeight.w600,
+  /// The button's glass look as one [LiquidGlassStyle] (shape +
+  /// appearance + refraction), taken as the complete look. When null the
+  /// tuned [defaultStyle] is used. Its `shape` may be null, in which case
+  /// a full pill ([LiquidGlassShape] with radius `height / 2`) and a tuned
+  /// optical border are used. To tweak one facet while keeping the rest of
+  /// the tuned look, compose with `copyWith`, e.g.
+  /// `style: LiquidGlassButton.defaultStyle.copyWith(...)`.
+  final LiquidGlassStyle? style;
 
-    /// Size of the leading icon (when [icon] is provided).
-    double iconSize = 20,
-    bool draggable = false,
-    bool outOfBoundaries = false,
-  }) : super(
-          geometry: LiquidGlassGeometry(
-            position: position,
-            width: width,
-            height: height,
-            shape: RoundedRectangleShape(
-              cornerRadius: cornerRadius ?? height / 2,
-              borderWidth: borderWidth,
-              lightIntensity: lightIntensity,
-              lightDirection: lightDirection,
-              borderType: borderType,
+  /// Whether the button is shown; toggling animates the glass in/out.
+  final bool visibility;
+
+  /// Color of the label text and icon.
+  final Color foregroundColor;
+
+  /// Font size of the label.
+  final double fontSize;
+
+  /// Font weight of the label.
+  final FontWeight fontWeight;
+
+  /// Size of the leading [icon].
+  final double iconSize;
+
+  static const LiquidGlassAppearance _defaultAppearance =
+      LiquidGlassAppearance(
+    color: Color(0x1CFFFFFF), // white, alpha 28
+    blur: LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
+  );
+
+  static const LiquidGlassRefraction _defaultRefraction =
+      LiquidGlassRefraction(
+    distortion: 0.07,
+    distortionWidth: 24,
+    chromaticAberration: 0.002,
+  );
+
+  /// The tuned default look — a faint white frost over a soft optical
+  /// refraction. Its `shape` is `null`: the button derives a height-tracking
+  /// full pill with an optical border when [style] supplies no shape.
+  /// Compose with `copyWith` to tweak one facet, e.g.
+  /// `style: LiquidGlassButton.defaultStyle.copyWith(...)`.
+  static const LiquidGlassStyle defaultStyle = LiquidGlassStyle(
+    appearance: _defaultAppearance,
+    refraction: _defaultRefraction,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final LiquidGlassStyle resolved = defaultStyle.merge(style);
+    final LiquidGlassShape effectiveShape = resolved.shape ??
+        LiquidGlassShape.roundedRectangle(
+          cornerRadius: height / 2,
+          borderWidth: 1.1,
+          lightIntensity: 1.2,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.2,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.35,
+          ),
+        );
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: LiquidGlassLens(
+        style: LiquidGlassStyle(
+          shape: effectiveShape,
+          appearance: resolved.appearance,
+          refraction: resolved.refraction,
+        ),
+        visibility: visibility,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(
+              liquidGlassClipCornerRadius(effectiveShape),
             ),
-            outOfBoundaries: outOfBoundaries,
-          ),
-          refraction: LiquidGlassRefraction(
-            distortion: distortion,
-            distortionWidth: distortionWidth,
-            chromaticAberration: chromaticAberration,
-            magnification: magnification,
-          ),
-          appearance: LiquidGlassAppearance(
-            color: tint == null ? glassColor : tint.withAlpha(160),
-            blur: blur,
-          ),
-          behavior: LiquidGlassBehavior(
-            draggable: draggable,
-            controller: controller,
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius:
-                  BorderRadius.circular(cornerRadius ?? height / 2),
-              onTap: onPressed,
+            onTap: onPressed,
+            child: Padding(
+              padding: padding,
               child: Center(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -122,5 +169,8 @@ class LiquidGlassButton extends LiquidGlass {
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
+  }
 }

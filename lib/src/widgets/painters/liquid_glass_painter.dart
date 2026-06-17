@@ -49,6 +49,15 @@ class LiquidGlassPainter extends CustomPainter {
   /// captured [image] covers. `null` → full-frame capture (== resolution).
   final Size? imageSize;
 
+  /// Whether to fold the captured backdrop's alpha into the lens coverage
+  /// (the shader's `u_honorBackdropAlpha`). Only meaningful when the
+  /// captured background carries *authored* transparency — i.e. the
+  /// slider/toggle, whose track is a mostly-transparent capture that must
+  /// show the real screen through the glass. `false` (the default) treats
+  /// the capture as opaque, matching Impeller; honoring a non-transparent
+  /// capture's alpha would otherwise wash the body white and drop the rim.
+  final bool honorBackdropAlpha;
+
   LiquidGlassPainter({
     required this.position,
     required this.dragOffset,
@@ -74,6 +83,7 @@ class LiquidGlassPainter extends CustomPainter {
     this.imageFallback,
     this.imageOffset,
     this.imageSize,
+    this.honorBackdropAlpha = false,
   });
 
   @override
@@ -100,17 +110,9 @@ class LiquidGlassPainter extends CustomPainter {
     shader.setFloat(index++, lensWidth);
     shader.setFloat(index++, lensHeight);
     // u_cornerRadius
-    shader.setFloat(
-        index++,
-        border is RoundedRectangleShape
-            ? (border as RoundedRectangleShape).cornerRadius
-            : 0);
-    // u_cornerSmoothing: continuous-corner smoothing (0..1)
-    shader.setFloat(
-        index++,
-        border is RoundedRectangleShape
-            ? (border as RoundedRectangleShape).cornerSmoothing
-            : 0);
+    shader.setFloat(index++, border?.cornerRadius ?? 0);
+    // u_cornerStyle: 2 = continuous (capsule), 1 = squircle, 0 = circular
+    shader.setFloat(index++, border != null ? liquidGlassCornerStyle(border!) : 0);
 
     shader.setFloat(index++, magnification);
     shader.setFloat(index++, distortion);
@@ -183,6 +185,17 @@ class LiquidGlassPainter extends CustomPainter {
     shader.setFloat(index++, imgSize.width);
     shader.setFloat(index++, imgSize.height);
 
+    // u_honorBackdropAlpha — only fold the captured backdrop's alpha into
+    // coverage when the capture carries authored transparency (slider /
+    // toggle track). Otherwise treat it as opaque (matching Impeller),
+    // else a non-transparent capture's alpha washes the body white and
+    // drops the rim. Set per-view via [LiquidGlassView.honorBackdropAlpha].
+    shader.setFloat(index++, honorBackdropAlpha ? 1.0 : 0.0);
+    // u_shapeAaPx — the Skia CustomPaint path runs in logical px, so the
+    // edge-AA band is one logical pixel: pass 1.0 (Impeller passes dpr via
+    // packLiquidGlassUniforms). Last uniform in liquid_glass.frag.
+    shader.setFloat(index++, 1.0);
+
     shader.setImageSampler(0, sampledImage);
 
     // final borderExpand = border!.borderWidth / 2;
@@ -249,7 +262,8 @@ class LiquidGlassPainter extends CustomPainter {
         oldDelegate.shader != shader ||
         oldDelegate.borderShader != borderShader ||
         oldDelegate.imageOffset != imageOffset ||
-        oldDelegate.imageSize != imageSize;
+        oldDelegate.imageSize != imageSize ||
+        oldDelegate.honorBackdropAlpha != honorBackdropAlpha;
   }
 
   bool _shapeEquals(LiquidGlassShape? a, LiquidGlassShape? b) {
@@ -272,11 +286,9 @@ class LiquidGlassPainter extends CustomPainter {
     if (a.borderSaturation != b.borderSaturation) return false;
     if (a.borderSolidity != b.borderSolidity) return false;
     if (a.borderMode != b.borderMode) return false;
-    if (a is RoundedRectangleShape && b is RoundedRectangleShape) {
-      return a.cornerRadius == b.cornerRadius &&
-          a.cornerSmoothing == b.cornerSmoothing;
-    }
-    return true;
+    return a.cornerStyle == b.cornerStyle &&
+        a.cornerRadius == b.cornerRadius &&
+        a.clipQuality == b.clipQuality;
   }
 }
 
@@ -361,17 +373,9 @@ class LiquidGlassBorderPainter extends CustomPainter {
       ..setFloat(index++, lensWidth)
       ..setFloat(index++, lensHeight)
       // u_cornerRadius
-      ..setFloat(
-          index++,
-          border is RoundedRectangleShape
-              ? (border as RoundedRectangleShape).cornerRadius
-              : 0)
-      // u_cornerSmoothing: continuous-corner smoothing (0..1)
-      ..setFloat(
-          index++,
-          border is RoundedRectangleShape
-              ? (border as RoundedRectangleShape).cornerSmoothing
-              : 0)
+      ..setFloat(index++, border.cornerRadius)
+      // u_cornerStyle: 2 = continuous (capsule), 1 = squircle, 0 = circular
+      ..setFloat(index++, liquidGlassCornerStyle(border))
       ..setFloat(index++, magnification)
       ..setFloat(index++, distortion)
       ..setFloat(index++, distortionWidth)
@@ -475,10 +479,8 @@ class LiquidGlassBorderPainter extends CustomPainter {
     if (a.borderSaturation != b.borderSaturation) return false;
     if (a.borderSolidity != b.borderSolidity) return false;
     if (a.borderMode != b.borderMode) return false;
-    if (a is RoundedRectangleShape && b is RoundedRectangleShape) {
-      return a.cornerRadius == b.cornerRadius &&
-          a.cornerSmoothing == b.cornerSmoothing;
-    }
-    return true;
+    return a.cornerStyle == b.cornerStyle &&
+        a.cornerRadius == b.cornerRadius &&
+        a.clipQuality == b.clipQuality;
   }
 }

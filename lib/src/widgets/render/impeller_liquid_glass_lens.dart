@@ -98,16 +98,16 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
     required double devicePixelRatio,
   }) {
     final cfg = widget.config;
-    final shape = cfg.shape;
+    final shape = cfg.effectiveShape;
 
     final double effectiveDistortionWidth =
-        cfg.distortionWidth - animValue * cfg.distortionWidth;
+        cfg.effectiveRefraction.distortionWidth - animValue * cfg.effectiveRefraction.distortionWidth;
     final double effectiveMagnification =
-        animValue + (cfg.magnification * (1 - animValue));
+        animValue + (cfg.effectiveRefraction.magnification * (1 - animValue));
     final double effectiveSaturation =
-        animValue + (cfg.saturation * (1 - animValue));
+        animValue + (cfg.effectiveAppearance.saturation * (1 - animValue));
     final double effectiveChromaticAberration =
-        cfg.chromaticAberration * (1 - animValue);
+        cfg.effectiveRefraction.chromaticAberration * (1 - animValue);
     final double effectiveBorderAlpha = 1 - animValue;
 
     // The main shader always draws the border itself. On the Impeller
@@ -122,13 +122,13 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
       scale: devicePixelRatio,
       resolution: resolution,
       lensPosition: lensPosition,
-      lensWidth: cfg.width,
-      lensHeight: cfg.height,
+      lensWidth: cfg.geometry.width,
+      lensHeight: cfg.geometry.height,
       magnification: effectiveMagnification,
-      distortion: cfg.distortion,
+      distortion: cfg.effectiveRefraction.distortion,
       distortionWidth: effectiveDistortionWidth,
-      enableInnerRadiusTransparent: cfg.enableInnerRadiusTransparent,
-      diagonalFlip: cfg.diagonalFlip,
+      enableInnerRadiusTransparent: cfg.effectiveAppearance.enableInnerRadiusTransparent,
+      diagonalFlip: cfg.effectiveRefraction.diagonalFlip,
       // Full border-band width in logical px: doubled (the outer half is
       // clipped by the lens shape), plus the optical-mode extra. Passing
       // it here — rather than adding a constant inside the shader — lets
@@ -138,9 +138,12 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
       borderAlpha: effectiveBorderAlpha,
       chromaticAberration: effectiveChromaticAberration,
       saturation: effectiveSaturation,
-      refractionMode: cfg.refractionMode,
+      refractionMode: cfg.effectiveRefraction.refractionMode,
       includeLensColor: true,
-      lensColor: cfg.color,
+      lensColor: cfg.effectiveAppearance.color,
+      // Impeller's live backdrop alpha is not a transparency signal
+      // (reads 0 over dark regions); ignore it so the rim/body survive.
+      honorBackdropAlpha: false,
     );
   }
 
@@ -150,7 +153,7 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
   Widget _buildImpellerLens(
       BuildContext context, Offset lensPosition, double animValue) {
     final config = widget.config;
-    final useBlur = config.blur.sigmaX > 0 || config.blur.sigmaY > 0;
+    final useBlur = config.effectiveAppearance.blur.sigmaX > 0 || config.effectiveAppearance.blur.sigmaY > 0;
     final shader = widget.shader;
     final dpr = MediaQuery.devicePixelRatioOf(context);
 
@@ -173,8 +176,6 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
       devicePixelRatio: dpr,
     );
 
-    final cornerRadius = liquidGlassClipCornerRadius(config.shape);
-
     // Order matters: blur FIRST (below), shader SECOND (on top).
     //
     // Stacked BackdropFilters chain — each samples everything painted
@@ -187,20 +188,20 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
       children: [
         // Blur the backdrop under the lens first, clipped to the lens
         // shape. This is the input the shader will refract.
-        if (useBlur && liquidGlassUsesRoundedClip(config.shape))
+        if (useBlur && liquidGlassUsesRoundedClip(config.effectiveShape))
           Positioned(
             left: lensPosition.dx,
             top: lensPosition.dy,
-            width: config.width,
-            height: config.height,
+            width: config.geometry.width,
+            height: config.geometry.height,
             child: IgnorePointer(
               ignoring: true,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(cornerRadius),
+              child: liquidGlassClip(
+                shape: config.effectiveShape,
                 child: BackdropFilter(
                   filter: ui.ImageFilter.blur(
-                    sigmaX: config.blur.sigmaX,
-                    sigmaY: config.blur.sigmaY,
+                    sigmaX: config.effectiveAppearance.blur.sigmaX,
+                    sigmaY: config.effectiveAppearance.blur.sigmaY,
                   ),
                   child: const SizedBox.expand(),
                 ),
@@ -215,12 +216,12 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
         Positioned(
           left: lensPosition.dx,
           top: lensPosition.dy,
-          width: config.width,
-          height: config.height,
+          width: config.geometry.width,
+          height: config.geometry.height,
           child: IgnorePointer(
             ignoring: true,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(cornerRadius),
+            child: liquidGlassClip(
+              shape: config.effectiveShape,
               child: BackdropFilter(
                 filter: ui.ImageFilter.shader(shader),
                 child: const SizedBox.expand(),
@@ -233,17 +234,17 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
         Positioned(
           left: lensPosition.dx,
           top: lensPosition.dy,
-          width: config.width - config.shape.borderWidth / 2,
-          height: config.height - config.shape.borderWidth / 2,
+          width: config.geometry.width - config.effectiveShape.borderWidth / 2,
+          height: config.geometry.height - config.effectiveShape.borderWidth / 2,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onPanUpdate: config.draggable
+            onPanUpdate: config.behavior.draggable
                 ? (details) {
                     widget.touch.value += details.delta;
                   }
                 : null,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(cornerRadius),
+            child: liquidGlassClip(
+              shape: config.effectiveShape,
               child: config.child ?? Container(color: Colors.transparent),
             ),
           ),

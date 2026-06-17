@@ -4,6 +4,7 @@ import '../liquid_glass_tab_bar.dart' show LiquidGlassTabBarItem;
 import 'liquid_glass_nav_bar_icon_row.dart';
 import 'liquid_glass_nav_bar_layout.dart';
 import 'liquid_glass_nav_bar_pill_clippers.dart';
+import 'liquid_glass_nav_bar_style.dart';
 
 /// Animated bottom nav shell — renders the iOS-26 "icon highlights
 /// through the moving glass pill" effect.
@@ -37,8 +38,10 @@ import 'liquid_glass_nav_bar_pill_clippers.dart';
 class LiquidGlassAnimatedBottomNavBarShell extends StatelessWidget {
   final List<LiquidGlassTabBarItem> items;
   final int selectedIndex;
-  final ValueChanged<int> onChanged;
   final LiquidGlassBottomNavBarLayout layout;
+
+  /// Icon + label styling for every cell.
+  final LiquidGlassNavItemStyle itemStyle;
 
   /// Fractional index (`0..itemCount-1`) of the moving glass pill's
   /// center. Pass the same value you use for
@@ -70,8 +73,8 @@ class LiquidGlassAnimatedBottomNavBarShell extends StatelessWidget {
     super.key,
     required this.items,
     required this.selectedIndex,
-    required this.onChanged,
     required this.layout,
+    this.itemStyle = const LiquidGlassNavItemStyle(),
     this.highlightFrac,
     this.highlightWidth,
     this.highlightHeight,
@@ -107,6 +110,7 @@ class LiquidGlassAnimatedBottomNavBarShell extends StatelessWidget {
                   child: NavBarIconRow(
                     items: items,
                     layout: layout,
+                    itemStyle: itemStyle,
                     forceUnselected: true,
                   ),
                 ),
@@ -118,6 +122,7 @@ class LiquidGlassAnimatedBottomNavBarShell extends StatelessWidget {
                 child: NavBarIconRow(
                   items: items,
                   layout: layout,
+                  itemStyle: itemStyle,
                   selectedIndex: selectedIndex,
                 ),
               ),
@@ -137,34 +142,15 @@ class LiquidGlassAnimatedBottomNavBarShell extends StatelessWidget {
                   child: NavBarIconRow(
                     items: items,
                     layout: layout,
+                    itemStyle: itemStyle,
                     forceSelected: true,
                   ),
                 ),
               ),
             ),
-          // ── Tap handling ──────────────────────────────────
-          // Sits on top of the icon layers but receives all
-          // pointer events; the icon layers are wrapped in
-          // IgnorePointer so they never compete.
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.all(layout.padding),
-              child: Row(
-                children: [
-                  for (int i = 0; i < items.length; i++)
-                    Expanded(
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(28),
-                          onTap: () => onChanged(i),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
+          // Note: this shell carries no tap layer. The glass tier
+          // (LiquidGlassAnimatedNavBar) wraps it in an IgnorePointer and
+          // owns all gestures through its own RawGestureDetector overlay.
         ],
       ),
     );

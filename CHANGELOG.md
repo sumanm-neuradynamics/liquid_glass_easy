@@ -1,4 +1,9 @@
 ## 3.0.0
+- **New — lens anywhere:** `LiquidGlassLens` is a layout-driven lens you can drop anywhere in the widget tree (no position/size params; size comes from layout). On Impeller it refracts the **live backdrop** with no `LiquidGlassView` and no background widget at all; on Skia it refracts an ancestor `LiquidGlassView`'s captured background, and gracefully degrades to a frosted look when neither is available.
+- **New:** `LiquidGlassStyle` — one shared descriptor (**shape + appearance + refraction**) for every glass surface (lens, components, nav pill), with `copyWith(...)` and `merge(...)`.
+- **Migration:** the old position-driven lens API (`LiquidGlass`) is superseded by `LiquidGlassLens` and the drop-in components; write new code against `LiquidGlassLens`.
+- **Breaking:** removed the `LiquidGlassMusicPlayer`, `LiquidGlassNotificationCard`, and `LiquidGlassSearchBar` components.
+- Rewrote the README around the lens-anywhere API and consolidated the example into a single `main.dart` gallery whose home menu opens each demo as its own route.
 - **Breaking:** removed `SuperellipseShape`. Use `RoundedRectangleShape(cornerRadius: ..., cornerSmoothing: 1.0)` instead — `cornerSmoothing` (`0.0`–`1.0`) produces Apple-style continuous corners with the same squircle look. The superellipse had no exact Flutter clip path, which forced a rectangle clip and capped its blur; the rounded rectangle clips and blurs correctly at any sigma.
 - Simplified the shaders: removed the superellipse SDF branch and the `u_shapeType` uniform, so every lens now uses the analytic rounded-rect path.
 - Added `LiquidGlassView.regionCapture` (off by default): per-lens region capture on the Skia sync path — each capture grabs only every lens's own rect (+ margin) instead of the whole background. A performance win when lenses cover a small part of a large background; no effect on Impeller.

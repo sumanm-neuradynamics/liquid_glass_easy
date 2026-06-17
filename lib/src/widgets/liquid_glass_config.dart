@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:meta/meta.dart';
 import 'package:liquid_glass_easy/src/controllers/liquid_glass_controller.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_blur.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_position.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_shape.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_mode.dart';
+import 'package:liquid_glass_easy/src/widgets/liquid_glass_style.dart';
 
 /// Represents a single lens in the LiquidGlass system, configured
 /// through four grouped objects:
@@ -19,7 +21,7 @@ import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_mode
 ///   geometry: LiquidGlassGeometry(
 ///     position: const LiquidGlassAlignPosition(alignment: Alignment.center),
 ///     width: 240, height: 160,
-///     shape: const RoundedRectangleShape(cornerRadius: 36),
+///     shape: const LiquidGlassShape.roundedRectangle(cornerRadius: 36),
 ///   ),
 ///   refraction: const LiquidGlassRefraction(
 ///     distortion: 0.12, distortionWidth: 28,
@@ -31,6 +33,14 @@ import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_mode
 ///   child: const Center(child: Text('drag me')),
 /// );
 /// ```
+///
+/// {@template liquid_glass_internal}
+/// **Internal.** This is the classic, position-driven lens engine. App
+/// developers should use [LiquidGlassLens] (the layout-driven
+/// "lens-anywhere" widget) instead; this type is retained only for the
+/// package's own components and is not part of the public API.
+/// {@endtemplate}
+@internal
 class LiquidGlass {
   /// Optional widget key, propagated to the underlying `LiquidGlassWidget`
   /// inside `LiquidGlassView`. Use it to bind a lens `State` to a logical
@@ -44,8 +54,14 @@ class LiquidGlass {
   /// Can be used to show overlays, icons, or custom visual elements.
   final Widget? child;
 
-  /// Size, shape and placement of the lens.
+  /// Size and placement of the lens (position, width, height).
   final LiquidGlassGeometry geometry;
+
+  /// The geometric shape of the lens and its border styling. Lives here
+  /// (not in [geometry]) so [geometry] is purely size + placement — and
+  /// so it parallels [LiquidGlassLens.shape]. Superseded by [style] when
+  /// the style sets a shape.
+  final LiquidGlassShape shape;
 
   /// How the glass bends light.
   final LiquidGlassRefraction refraction;
@@ -56,75 +72,45 @@ class LiquidGlass {
   /// Interaction & lifecycle: dragging, visibility, controller.
   final LiquidGlassBehavior behavior;
 
+  /// Overall opacity of the rendered lens (`1` = fully opaque). The view
+  /// wraps the lens in an `Opacity` when this is below `1`, so the whole
+  /// lens — refraction, rim and tint — fades together. Used to cross-fade
+  /// a lens out (e.g. the bottom-nav glass pill dissolving into its
+  /// static rest pill).
+  final double opacity;
+
+  /// The lens's look bundled as one [LiquidGlassStyle] (shape +
+  /// appearance + refraction) — the preferred, library-wide styling
+  /// vocabulary. When non-null it supersedes the [shape] / [appearance] /
+  /// [refraction] groups; a `null` shape inside the style falls back to
+  /// [shape]. Consumers read the resolved values via [effectiveShape] /
+  /// [effectiveAppearance] / [effectiveRefraction].
+  final LiquidGlassStyle? style;
+
   const LiquidGlass({
     this.key,
     this.child,
     required this.geometry,
+    this.shape = const LiquidGlassShape.continuousRoundedRectangle(),
     this.refraction = const LiquidGlassRefraction(),
     this.appearance = const LiquidGlassAppearance(),
     this.behavior = const LiquidGlassBehavior(),
+    this.style,
+    this.opacity = 1.0,
   });
 
-  // ── Flat read accessors ──────────────────────────────────────────
-  // Plumbing for the renderers (and subclass components), which read
-  // individual values. Configuration happens through the groups above.
+  /// Shape after applying [style]: `style.shape` when set, else [shape].
+  LiquidGlassShape get effectiveShape => style?.shape ?? shape;
 
-  /// Programmatic controller. See [LiquidGlassBehavior.controller].
-  LiquidGlassController? get controller => behavior.controller;
+  /// Appearance after applying [style]: `style.appearance` when a [style]
+  /// is set, else the [appearance] group.
+  LiquidGlassAppearance get effectiveAppearance =>
+      style?.appearance ?? appearance;
 
-  /// Lens width in logical pixels. See [LiquidGlassGeometry.width].
-  double get width => geometry.width;
-
-  /// Lens height in logical pixels. See [LiquidGlassGeometry.height].
-  double get height => geometry.height;
-
-  /// Lens placement. See [LiquidGlassGeometry.position].
-  LiquidGlassPosition get position => geometry.position;
-
-  /// Lens shape + border styling. See [LiquidGlassGeometry.shape].
-  LiquidGlassShape get shape => geometry.shape;
-
-  /// Whether the lens may leave the parent's bounds.
-  /// See [LiquidGlassGeometry.outOfBoundaries].
-  bool get outOfBoundaries => geometry.outOfBoundaries;
-
-  /// Content magnification. See [LiquidGlassRefraction.magnification].
-  double get magnification => refraction.magnification;
-
-  /// Refraction pattern. See [LiquidGlassRefraction.refractionMode].
-  LiquidGlassRefractionMode get refractionMode => refraction.refractionMode;
-
-  /// Bending strength. See [LiquidGlassRefraction.distortion].
-  double get distortion => refraction.distortion;
-
-  /// Distortion band thickness. See [LiquidGlassRefraction.distortionWidth].
-  double get distortionWidth => refraction.distortionWidth;
-
-  /// Diagonal refraction flip. See [LiquidGlassRefraction.diagonalFlip].
-  double get diagonalFlip => refraction.diagonalFlip;
-
-  /// Color-channel separation. See [LiquidGlassRefraction.chromaticAberration].
-  double get chromaticAberration => refraction.chromaticAberration;
-
-  /// Output saturation. See [LiquidGlassAppearance.saturation].
-  double get saturation => appearance.saturation;
-
-  /// Background blur under the glass. See [LiquidGlassAppearance.blur].
-  LiquidGlassBlur get blur => appearance.blur;
-
-  /// Lens tint. See [LiquidGlassAppearance.color].
-  Color get color => appearance.color;
-
-  /// Transparent non-distorted center.
-  /// See [LiquidGlassAppearance.enableInnerRadiusTransparent].
-  bool get enableInnerRadiusTransparent =>
-      appearance.enableInnerRadiusTransparent;
-
-  /// Whether the lens is user-draggable. See [LiquidGlassBehavior.draggable].
-  bool get draggable => behavior.draggable;
-
-  /// Whether the lens is shown. See [LiquidGlassBehavior.visibility].
-  bool get visibility => behavior.visibility;
+  /// Refraction after applying [style]: `style.refraction` when a [style]
+  /// is set, else the [refraction] group.
+  LiquidGlassRefraction get effectiveRefraction =>
+      style?.refraction ?? refraction;
 
   /// Returns a copy of this lens config with the given groups replaced.
   ///
@@ -139,24 +125,35 @@ class LiquidGlass {
     Key? key,
     Widget? child,
     LiquidGlassGeometry? geometry,
+    LiquidGlassShape? shape,
     LiquidGlassRefraction? refraction,
     LiquidGlassAppearance? appearance,
     LiquidGlassBehavior? behavior,
+    LiquidGlassStyle? style,
+    double? opacity,
   }) {
     return LiquidGlass(
       key: key ?? this.key,
       child: child ?? this.child,
       geometry: geometry ?? this.geometry,
+      shape: shape ?? this.shape,
       refraction: refraction ?? this.refraction,
       appearance: appearance ?? this.appearance,
       behavior: behavior ?? this.behavior,
+      style: style ?? this.style,
+      opacity: opacity ?? this.opacity,
     );
   }
 }
 
-/// **Geometry** group: where the lens is and what shape/size it has.
+/// **Geometry** group: where the lens is and how big — size + placement.
+/// The lens's outline lives in [LiquidGlass.shape] / [LiquidGlassStyle],
+/// not here, so geometry is purely position + size.
 ///
-/// One of the four configuration groups accepted by [LiquidGlass].
+/// One of the configuration groups accepted by [LiquidGlass].
+///
+/// {@macro liquid_glass_internal}
+@internal
 class LiquidGlassGeometry {
   /// The placement of the lens (absolute offset or relative alignment).
   final LiquidGlassPosition position;
@@ -167,9 +164,6 @@ class LiquidGlassGeometry {
   /// The height of the lens in logical pixels.
   final double height;
 
-  /// The geometric shape of the lens and its optional border.
-  final LiquidGlassShape shape;
-
   /// Whether the lens may extend outside the parent's bounds (vs. being
   /// clamped inside it).
   final bool outOfBoundaries;
@@ -178,7 +172,6 @@ class LiquidGlassGeometry {
     required this.position,
     this.width = 200,
     this.height = 100,
-    this.shape = const RoundedRectangleShape(),
     this.outOfBoundaries = false,
   });
 
@@ -186,14 +179,12 @@ class LiquidGlassGeometry {
     LiquidGlassPosition? position,
     double? width,
     double? height,
-    LiquidGlassShape? shape,
     bool? outOfBoundaries,
   }) {
     return LiquidGlassGeometry(
       position: position ?? this.position,
       width: width ?? this.width,
       height: height ?? this.height,
-      shape: shape ?? this.shape,
       outOfBoundaries: outOfBoundaries ?? this.outOfBoundaries,
     );
   }
@@ -293,6 +284,9 @@ class LiquidGlassAppearance {
 /// **Behavior** group: interaction and lifecycle.
 ///
 /// One of the four configuration groups accepted by [LiquidGlass].
+///
+/// {@macro liquid_glass_internal}
+@internal
 class LiquidGlassBehavior {
   /// Whether the lens can be dragged by the user.
   final bool draggable;

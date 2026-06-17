@@ -50,6 +50,12 @@ class SkiaLiquidGlassLens extends StatelessWidget {
   /// captured sub-rect and the shader samples it via that offset/size.
   final Rect? imageRegion;
 
+  /// Whether the captured backdrop's alpha is folded into coverage (the
+  /// shader's `u_honorBackdropAlpha`). Only the slider/toggle — whose
+  /// captured track is authored-transparent — want this `true`; everything
+  /// else treats the capture as opaque. See [LiquidGlassPainter].
+  final bool honorBackdropAlpha;
+
   const SkiaLiquidGlassLens({
     super.key,
     required this.config,
@@ -61,11 +67,12 @@ class SkiaLiquidGlassLens extends StatelessWidget {
     required this.touch,
     required this.animValue,
     this.imageRegion,
+    this.honorBackdropAlpha = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bool useBlur = config.blur.sigmaX > 0 || config.blur.sigmaY > 0;
+    final bool useBlur = config.effectiveAppearance.blur.sigmaX > 0 || config.effectiveAppearance.blur.sigmaY > 0;
 
     return Stack(
       children: [
@@ -80,34 +87,35 @@ class SkiaLiquidGlassLens extends StatelessWidget {
                       (image != null || imageFallback != null))
                   ? LiquidGlassPainter(
                       dragOffset: touch.value,
-                      position: config.position,
-                      lensWidth: config.width,
-                      lensHeight: config.height,
+                      position: config.geometry.position,
+                      lensWidth: config.geometry.width,
+                      lensHeight: config.geometry.height,
                       magnification: (animValue) +
-                          (config.magnification * (1 - animValue)),
-                      distortion: config.distortion,
-                      distortionWidth: (config.distortionWidth -
-                          animValue * config.distortionWidth),
-                      diagonalFlip: config.diagonalFlip,
+                          (config.effectiveRefraction.magnification * (1 - animValue)),
+                      distortion: config.effectiveRefraction.distortion,
+                      distortionWidth: (config.effectiveRefraction.distortionWidth -
+                          animValue * config.effectiveRefraction.distortionWidth),
+                      diagonalFlip: config.effectiveRefraction.diagonalFlip,
                       enableInnerRadiusTransparent:
-                          config.enableInnerRadiusTransparent,
-                      draggable: config.draggable,
+                          config.effectiveAppearance.enableInnerRadiusTransparent,
+                      draggable: config.behavior.draggable,
                       parentSize: parentSize,
-                      border: config.shape,
+                      border: config.effectiveShape,
                       borderAlpha: (1 - animValue),
-                      blur: config.blur,
-                      color: config.color,
+                      blur: config.effectiveAppearance.blur,
+                      color: config.effectiveAppearance.color,
                       shader: shader!,
                       image: image,
                       imageFallback: imageFallback,
                       borderShader: borderShader,
                       chromaticAberration:
-                          config.chromaticAberration * (1 - animValue),
+                          config.effectiveRefraction.chromaticAberration * (1 - animValue),
                       saturation:
-                          (animValue) + (config.saturation * (1 - animValue)),
-                      refractionMode: config.refractionMode,
+                          (animValue) + (config.effectiveAppearance.saturation * (1 - animValue)),
+                      refractionMode: config.effectiveRefraction.refractionMode,
                       imageOffset: imageRegion?.topLeft,
                       imageSize: imageRegion?.size,
+                      honorBackdropAlpha: honorBackdropAlpha,
                     )
                   : null,
               child: const SizedBox.expand(),
@@ -118,20 +126,18 @@ class SkiaLiquidGlassLens extends StatelessWidget {
         // BackdropFilter blur for rounded-clip shapes (rounded-rect / squircle)
         if (borderShader != null &&
             useBlur &&
-            liquidGlassUsesRoundedClip(config.shape))
+            liquidGlassUsesRoundedClip(config.effectiveShape))
           Positioned(
             left: touch.value.dx,
             top: touch.value.dy,
-            width: config.width,
-            height: config.height,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(
-                liquidGlassClipCornerRadius(config.shape),
-              ),
+            width: config.geometry.width,
+            height: config.geometry.height,
+            child: liquidGlassClip(
+              shape: config.effectiveShape,
               child: BackdropFilter(
                 filter: ui.ImageFilter.blur(
-                  sigmaX: config.blur.sigmaX * (1 - animValue),
-                  sigmaY: config.blur.sigmaY * (1 - animValue),
+                  sigmaX: config.effectiveAppearance.blur.sigmaX * (1 - animValue),
+                  sigmaY: config.effectiveAppearance.blur.sigmaY * (1 - animValue),
                 ),
                 child: Container(),
               ),
@@ -148,21 +154,21 @@ class SkiaLiquidGlassLens extends StatelessWidget {
               painter: LiquidGlassBorderPainter(
                 borderShader: borderShader!,
                 lensPosition: touch.value,
-                lensWidth: config.width,
-                lensHeight: config.height,
+                lensWidth: config.geometry.width,
+                lensHeight: config.geometry.height,
                 magnification:
-                    (animValue) + (config.magnification * (1 - animValue)),
-                distortion: config.distortion,
-                distortionWidth: (config.distortionWidth -
-                    animValue * config.distortionWidth),
-                diagonalFlip: config.diagonalFlip,
+                    (animValue) + (config.effectiveRefraction.magnification * (1 - animValue)),
+                distortion: config.effectiveRefraction.distortion,
+                distortionWidth: (config.effectiveRefraction.distortionWidth -
+                    animValue * config.effectiveRefraction.distortionWidth),
+                diagonalFlip: config.effectiveRefraction.diagonalFlip,
                 enableInnerRadiusTransparent:
-                    config.enableInnerRadiusTransparent,
+                    config.effectiveAppearance.enableInnerRadiusTransparent,
                 chromaticAberration:
-                    config.chromaticAberration * (1 - animValue),
-                saturation: (animValue) + (config.saturation * (1 - animValue)),
-                refractionMode: config.refractionMode,
-                border: config.shape,
+                    config.effectiveRefraction.chromaticAberration * (1 - animValue),
+                saturation: (animValue) + (config.effectiveAppearance.saturation * (1 - animValue)),
+                refractionMode: config.effectiveRefraction.refractionMode,
+                border: config.effectiveShape,
                 borderAlpha: (1 - animValue),
                 image: image,
                 imageFallback: imageFallback,
@@ -180,20 +186,18 @@ class SkiaLiquidGlassLens extends StatelessWidget {
             return Positioned(
               left: offset.dx,
               top: offset.dy,
-              width: config.width - config.shape.borderWidth / 2,
-              height: config.height - config.shape.borderWidth / 2,
+              width: config.geometry.width - config.effectiveShape.borderWidth / 2,
+              height: config.geometry.height - config.effectiveShape.borderWidth / 2,
               child: GestureDetector(
                 behavior: HitTestBehavior
                     .opaque, // ensures full area receives gestures
-                onPanUpdate: config.draggable
+                onPanUpdate: config.behavior.draggable
                     ? (details) {
                         touch.value += details.delta;
                       }
                     : null,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    liquidGlassClipCornerRadius(config.shape),
-                  ),
+                child: liquidGlassClip(
+                  shape: config.effectiveShape,
                   child: config.child ??
                       Container(
                         color: Colors.transparent,

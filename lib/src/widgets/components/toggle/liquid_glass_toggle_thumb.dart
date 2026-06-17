@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../liquid_glass.dart';
+import '../../liquid_glass_style.dart';
 import '../liquid_glass_morph_pill.dart';
 import 'liquid_glass_toggle_layout.dart';
 
@@ -23,6 +24,10 @@ LiquidGlass buildLiquidGlassToggleThumb({
   required double trackBottom,
   required double travelFraction,
   required double growFraction,
+
+  /// Glass look of the thumb pill. When null the tuned default capsule
+  /// glass is used; see [buildLiquidGlassMorphPill].
+  LiquidGlassStyle? style,
 
   /// Optional content rendered inside the lens, above the glass (e.g.
   /// the white rest handle + its gesture surface).
@@ -62,6 +67,7 @@ LiquidGlass buildLiquidGlassToggleThumb({
     left: left,
     bottom: bottom,
     extraHeight: 0,
+    style: style,
     child: child,
   );
 }

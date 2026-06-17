@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../liquid_glass.dart';
+import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
@@ -89,6 +90,26 @@ LiquidGlass buildLiquidGlassMorphPill({
   required double bottom,
   required double extraHeight,
 
+  /// Full glass look as one [LiquidGlassStyle] (shape + appearance +
+  /// refraction). When non-null, its [LiquidGlassStyle.appearance] and
+  /// [LiquidGlassStyle.refraction] replace the tuned morph defaults, and
+  /// its [LiquidGlassStyle.shape] is used as-is. When the style is null —
+  /// or its shape is null — the pill keeps a height-tracking capsule
+  /// (radius = current height / 2) so it stays a clean pill as it morphs.
+  LiquidGlassStyle? style,
+
+  /// Corner curve used for the height-tracking default capsule when no
+  /// explicit [style] shape is supplied. Defaults to the cheap circular
+  /// rounded rectangle; the slider opts into
+  /// [LiquidGlassCornerStyle.continuousRoundedRectangle].
+  LiquidGlassCornerStyle defaultCornerStyle =
+      LiquidGlassCornerStyle.roundedRectangle,
+
+  /// Border width of the height-tracking default capsule when no explicit
+  /// [style] shape is supplied. Lets a caller thin (or thicken) the rim
+  /// without taking over the whole tuned default shape.
+  double defaultBorderWidth = 1.0,
+
   /// Optional content rendered INSIDE the lens, on top of the glass
   /// passes (e.g. a solid rest handle drawn over the glass pill). The
   /// child also receives touches, so it can carry the control's
@@ -96,6 +117,31 @@ LiquidGlass buildLiquidGlassMorphPill({
   Widget? child,
 }) {
   final h = spec.restHeight + extraHeight;
+  // The pill morphs as it grows, so without an explicit shape it stays a
+  // height-tracking capsule. A caller-supplied style.shape is honored.
+  final LiquidGlassShape shape = style?.shape ??
+      LiquidGlassShape(
+        cornerStyle: defaultCornerStyle,
+        cornerRadius: h / 2,
+        borderWidth: defaultBorderWidth,
+        lightIntensity: 1.3,
+        lightDirection: 80,
+        borderType: const OpticalBorder(
+          borderSaturation: 1.4,
+          ambientIntensity: 1.0,
+          borderSolidity: 0.5,
+        ),
+      );
+  final LiquidGlassRefraction refraction = style?.refraction ??
+      const LiquidGlassRefraction(
+        distortion: 0.12,
+        distortionWidth: 18,
+      );
+  final LiquidGlassAppearance appearance = style?.appearance ??
+      LiquidGlassAppearance(
+        color: Colors.white.withAlpha(28),
+        blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
+      );
   return LiquidGlass(
     child: child,
     geometry: LiquidGlassGeometry(
@@ -105,26 +151,10 @@ LiquidGlass buildLiquidGlassMorphPill({
       ),
       width: spec.width,
       height: h,
-      shape: RoundedRectangleShape(
-        cornerRadius: h / 2,
-        borderWidth: 1.0,
-        lightIntensity: 1.3,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.4,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.5,
-        ),
-      ),
     ),
-    refraction: const LiquidGlassRefraction(
-      distortion: 0.12,
-      distortionWidth: 18,
-    ),
-    appearance: LiquidGlassAppearance(
-      color: Colors.white.withAlpha(28),
-      blur: const LiquidGlassBlur(sigmaX: 1.5, sigmaY: 1.5),
-    ),
+    shape: shape,
+    refraction: refraction,
+    appearance: appearance,
   );
 }
 

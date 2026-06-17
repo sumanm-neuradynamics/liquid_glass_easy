@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../../controllers/liquid_glass_view_controller.dart';
+import '../../liquid_glass_style.dart';
 import '../../liquid_glass_view.dart';
+import '../../utils/liquid_glass_jelly_config.dart';
 import '../../utils/liquid_glass_jelly_spring.dart';
-import 'liquid_glass_slider_jelly.dart';
 import 'liquid_glass_slider_layout.dart';
 import 'liquid_glass_slider_thumb.dart';
 import 'liquid_glass_slider_track.dart';
 
-export 'liquid_glass_slider_jelly.dart';
 export 'liquid_glass_slider_layout.dart';
 export 'liquid_glass_slider_thumb.dart';
 export 'liquid_glass_slider_track.dart';
@@ -62,15 +62,25 @@ class LiquidGlassSlider extends StatefulWidget {
   /// Track + thumb geometry. Defaults to a 280-wide track.
   final LiquidGlassSliderLayout layout;
 
+  /// Glass look of the moving thumb (shape + appearance + refraction),
+  /// the same [LiquidGlassStyle] vocabulary used across the library. When
+  /// null, the tuned default capsule glass is used. A null
+  /// [LiquidGlassStyle.shape] keeps the height-tracking capsule so the
+  /// thumb stays a clean pill as it grows/jellies during a drag.
+  final LiquidGlassStyle? style;
+
   /// Capture resolution for the inner view. `1.0` is a good default; use
   /// less for cheaper captures, `0.0` for the device pixel ratio.
   final double pixelRatio;
 
-  /// Jelly deformation model + tuning. Defaults to the original
-  /// "pinch & extrude" feel; pass a
-  /// [LiquidGlassSliderJellyStyle.stretch] config for the iOS-like
-  /// elongate-along-motion variant.
-  final LiquidGlassSliderJelly jelly;
+  /// Jelly deformation tuning for the moving thumb. The slider is
+  /// **locked to the iOS [LiquidGlassJellyStyle.squashStretch]** squash &
+  /// stretch model (on-device-tuned) — any [LiquidGlassJellyConfig.style]
+  /// you pass is ignored and normalized to `squashStretch`. The original
+  /// `pinchExtrude` model is kept internally (it still drives
+  /// [LiquidGlassJelly]) but is no longer selectable here. All the other
+  /// fields — springs, stretch/squash amounts, anchors — are honored.
+  final LiquidGlassJellyConfig jelly;
 
   const LiquidGlassSlider({
     super.key,
@@ -81,8 +91,20 @@ class LiquidGlassSlider extends StatefulWidget {
     this.activeColor = Colors.white,
     this.inactiveColor = const Color(0x3CFFFFFF),
     this.layout = const LiquidGlassSliderLayout(),
+    this.style,
     this.pixelRatio = 1.0,
-    this.jelly = const LiquidGlassSliderJelly(),
+    this.jelly = const LiquidGlassJellyConfig(
+      style: LiquidGlassJellyStyle.squashStretch,
+      stiffness: 230,
+      damping: 12,
+      maxVelocity: 2.9,
+      stretchWidth: 8.8,
+      squashHeight: 8.0,
+      anchorBias: -1.0,
+      recoilScale: 3.0,
+      recoilAnchor: 1.0,
+      directionTau: 0.42,
+    ),
   });
 
   @override
@@ -103,6 +125,16 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
   /// direction memory). The slider feeds it drag values and maps its
   /// outputs onto the thumb geometry in [buildLiquidGlassSliderThumb].
   final LiquidGlassJellySpring _jelly = LiquidGlassJellySpring();
+
+  /// The slider is locked to the iOS jelly (squash & stretch) model.
+  /// Whatever [LiquidGlassJellyConfig.style] the caller supplies is
+  /// normalized to [LiquidGlassJellyStyle.squashStretch]; the internal
+  /// `pinchExtrude` path is kept for [LiquidGlassJelly] but is not
+  /// reachable through the slider.
+  LiquidGlassJellyConfig get _effectiveJelly =>
+      widget.jelly.style == LiquidGlassJellyStyle.squashStretch
+          ? widget.jelly
+          : widget.jelly.copyWith(style: LiquidGlassJellyStyle.squashStretch);
 
   /// Last ticker `elapsed`, used as the spring integrator's `dt`.
   Duration? _jellyTickerLast;
@@ -158,6 +190,7 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
       ..stiffness = widget.jelly.stiffness
       ..damping = widget.jelly.damping
       ..maxVelocity = widget.jelly.maxVelocity
+      ..velocityClamp = widget.jelly.velocityClamp
       ..directionTau = widget.jelly.directionTau;
   }
 
@@ -209,21 +242,19 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
     // +/-1.5 inside the thumb builder, so use that as the peak.
     const jellyPeak = 1.5;
     // Horizontal: exactly half the (grown) pill width — the pill sits
-    // centered on the track end and overhangs it by half its width.
-    // The stretch style additionally elongates the pill along the drag
-    // axis and shifts its center by the anchor bias, so reserve the
-    // worst-case reach of (added width + bias shift) on each side.
-    final jelly = widget.jelly;
-    final stretchReach = jelly.style == LiquidGlassSliderJellyStyle.stretch
-        ? jelly.stretchWidth * jellyPeak * (1 + jelly.anchorBias.abs()) / 2
-        : 0.0;
+    // centered on the track end and overhangs it by half its width. This is
+    // intentionally **independent of `stretchWidth`**: raising the jelly's
+    // stretch must not shrink the visible track. The stretch elongation
+    // then lives inside this overhang room (and, at the extreme ends with a
+    // very large stretch, may briefly reach the view edge).
+    final jelly = _effectiveJelly;
     final maxPillW = layout.thumbWidth + layout.thumbExtraWidth;
-    final padX = maxPillW / 2 + stretchReach;
+    final padX = maxPillW / 2;
     // Vertical: half of the (grown + stretched) pill beyond the track.
     // The stretch style gains height during the stop-recoil
     // (squashHeight × recoilScale at peak spring overshoot) instead of
     // the pinch style's thumbStretchHeight.
-    final jellyHeightGain = jelly.style == LiquidGlassSliderJellyStyle.stretch
+    final jellyHeightGain = jelly.style == LiquidGlassJellyStyle.squashStretch
         ? jelly.squashHeight * jelly.recoilScale * jellyPeak
         : layout.thumbStretchHeight * jellyPeak;
     final maxPillH =
@@ -255,8 +286,11 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
     return SizedBox(
       width: viewWidth,
       height: viewHeight,
-      child: LiquidGlassView(
+      child: LiquidGlassView.withPositionedLenses(
         controller: _viewController,
+        // The track is captured with authored transparency; honor it on
+        // Skia so the glass thumb shows the real screen through the track.
+        honorBackdropAlpha: true,
         pixelRatio: widget.pixelRatio,
         realTimeCapture: true,
         useSync: true,
@@ -305,14 +339,14 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
             // The stretch style is driven by the speed-based
             // deform spring (sign = stretch vs recoil); the pinch
             // style keeps the direction-signed spring.
-            stretchFraction:
-                widget.jelly.style == LiquidGlassSliderJellyStyle.stretch
-                    ? _jelly.deform
-                    : _jelly.stretch,
+            stretchFraction: jelly.style == LiquidGlassJellyStyle.squashStretch
+                ? _jelly.deform
+                : _jelly.stretch,
             // Smoothed direction memory: the lean follows it
             // continuously, flipping softly across a reversal.
             motionSign: _jelly.direction,
-            jelly: widget.jelly,
+            jelly: jelly,
+            style: widget.style,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onHorizontalDragStart: (d) {

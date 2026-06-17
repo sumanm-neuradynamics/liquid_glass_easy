@@ -21,7 +21,10 @@ uniform sampler2D u_texture_input;
 uniform float u_lensWidth;
 uniform float u_lensHeight;
 uniform float u_cornerRadius;
-uniform float u_cornerSmoothing;
+// Corner shape selector — mirrors liquid_glass.frag:
+//   0 = circular rounded rect, 1 = squircle (full smoothing),
+//   2 = continuous (Apple capsule-style).
+uniform float u_cornerStyle;
 uniform float u_magnification;
 uniform float u_distortion;
 uniform float u_distortionThicknessPx;
@@ -107,17 +110,21 @@ void main() {
     // Shape distance (only this part changes per shape)
     // =====================================================
     ShapeData shapeData;
-    // Rounded rectangle. u_cornerSmoothing carries the CONTINUOUS-CORNER
-    // smoothing (0 = plain circular corners, 1 = full Apple-style
-    // continuous corners). Must mirror the main shader's branch exactly
-    // so the rim hugs the same outline as the fill.
+    // Rounded rectangle. u_cornerStyle selects the corner SDF
+    //   (2 = continuous, 1 = squircle, 0 = circular). Must mirror the main
+    //   shader's branch exactly so the rim hugs the same outline as the fill.
     float maxCorner      = min(u_lensWidth, u_lensHeight) * 0.5;
     float cornerRadiusPx = min(u_cornerRadius, maxCorner);
-    float smoothing      = clamp(u_cornerSmoothing, 0.0, 1.0);
 
-    if (smoothing > 0.001 && cornerRadiusPx > 0.5) {
-        vec2 zn = continuousCornerParams(cornerRadiusPx, smoothing, maxCorner);
-        shapeData = evaluateContinuousRRect(
+    if (u_cornerStyle > 1.5 && cornerRadiusPx > 0.5) {
+        // Continuous (Apple capsule-style) corners.
+        vec2 reach = continuousRoundedRectReach(cornerRadiusPx, lensHalfSizePx);
+        shapeData = evaluateContinuousRoundedRect(
+            fragPosPx, lensCenterPx, lensHalfSizePx, cornerRadiusPx, reach);
+    } else if (u_cornerStyle > 0.5 && cornerRadiusPx > 0.5) {
+        // Squircle (Ln-norm) corners — smoothing fixed at full (1.0).
+        vec2 zn = squircleCornerParams(cornerRadiusPx, 1.0, maxCorner);
+        shapeData = evaluateSquircleRRect(
             fragPosPx, lensCenterPx, lensHalfSizePx, zn.x, zn.y);
     } else {
         shapeData = evaluateShape(

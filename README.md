@@ -1,13 +1,21 @@
 # Liquid Glass Easy
 
 [![pub package](https://img.shields.io/pub/v/liquid_glass_easy.svg)](https://pub.dev/packages/liquid_glass_easy)
-
-<p>
-  🤝 <strong>Contributions are welcome!</strong>
-</p>
+[![pub likes](https://img.shields.io/pub/likes/liquid_glass_easy)](https://pub.dev/packages/liquid_glass_easy/score)
+[![pub points](https://img.shields.io/pub/points/liquid_glass_easy)](https://pub.dev/packages/liquid_glass_easy/score)
+[![license](https://img.shields.io/github/license/AhmeedGamil/liquid_glass_easy)](https://github.com/AhmeedGamil/liquid_glass_easy/blob/main/LICENSE)
 
 **A Flutter package that adds real-time, interactive liquid glass lenses.**
-These dynamic lenses can **magnify**, **distort**, **blur**, **tint**, and **refract** underlying content — creating stunning, glass-like effects that respond fluidly to **movement** and **touch**.
+These dynamic lenses **magnify**, **distort**, **blur**, **tint**, and **refract** the content behind them — creating stunning, glass-like effects that respond fluidly to **movement** and **touch**.
+
+<p>
+  <img src="showcases/liquid_glass_bottom_nav_bar.gif" width="98%" alt="Liquid Glass Bottom Nav Bar"/>
+</p>
+
+<p>
+  <img src="showcases/liquid_glass_slider.gif" width="49%" alt="Liquid Glass Slider"/>
+  <img src="showcases/liquid_glass_toggle.gif" width="49%" alt="Liquid Glass Toggle"/>
+</p>
 
 <p>
   <img src="showcases/liquid_glass_control_center.jpg" width="49%" alt="Liquid Glass Control Center"/>
@@ -20,48 +28,136 @@ These dynamic lenses can **magnify**, **distort**, **blur**, **tint**, and **ref
 
 ---
 
-## What's New
+## What's New in 3.0
 
-- 🪟 **Optical border mode** — borders now ship with a new **`OpticalBorder`** style alongside the original `ClassicBorder`. It renders an Apple-style, SDF-based rim light that automatically picks up the background color through ambient tinting, with dual-sided specular highlights and a lens height profile. See [Border Modes](#border-modes) for details.
-- 🧩 **New ready-made components** — drop-in glass UI widgets so you can compose interfaces faster:
-  - `LiquidGlassButton`
-  - `LiquidGlassSearchBar`
-  - `LiquidGlassAppIcon`
-  - `LiquidGlassDock`
-  - `LiquidGlassTabBar`
-  - `LiquidGlassBottomNavBar`
+Version 3.0 is a major step toward a simpler, more flexible API.
+
+### `LiquidGlassLens` — a lens you can place *anywhere*
+
+The headline change. The previous lens API was **position-driven**: you declared
+a `LiquidGlassView`, gave it a `backgroundWidget`, and listed lenses with
+explicit `width` / `height` / `position` values.
+
+`LiquidGlassLens` is **layout-driven** instead. Drop it anywhere in your widget
+tree — inside a `Row`, a `ListView`, a `Stack`, a `Card` — and it is exactly
+where layout puts it and exactly as big as its constraints/child make it. No
+position, no width/height parameters.
+
+```dart
+SizedBox(
+  width: 220,
+  height: 120,
+  child: LiquidGlassLens(
+    style: const LiquidGlassStyle(
+      shape: LiquidGlassShape.squircle(cornerRadius: 36),
+    ),
+    child: const Center(child: Text('glass')),
+  ),
+)
+```
+
+### Works on **both Impeller and Skia**
+
+`LiquidGlassLens` automatically resolves the best render path for the engine
+your app is running on — the widget tree you write is **identical** in every
+case:
+
+| Engine / setup | Behavior |
+|----------------|----------|
+| **Impeller** (Flutter's default on modern iOS/Android) | The lens refracts the **live backdrop** — whatever your app painted behind it. **No `LiquidGlassView` and no background widget needed at all.** Just drop the lens over any UI. |
+| **Skia** with an ancestor `LiquidGlassView` (+ `backgroundWidget`) | The lens refracts the view's **captured background**, wherever it sits inside the view's `child`. |
+| **Skia** without a view | Refraction isn't possible, so the lens gracefully degrades to a **frosted** look (backdrop blur + tint + border) and logs a one-time debug notice. |
+
+> In short: **on Impeller it just works anywhere**; on Skia you wrap your
+> content in a `LiquidGlassView` to give the lens a background to refract.
+
+### `LiquidGlassStyle` — one styling vocabulary
+
+Every glass surface — the lens, the components, the nav pill — is described
+with a single reusable descriptor: **shape + appearance + refraction**.
+
+```dart
+const LiquidGlassStyle(
+  shape: LiquidGlassShape.continuousRoundedRectangle(cornerRadius: 24),
+  appearance: LiquidGlassAppearance(color: Color(0x22FFFFFF)),
+  refraction: LiquidGlassRefraction(distortion: 0.08, distortionWidth: 28),
+);
+```
+
+### Drop-in glass components
+
+Ready-made widgets, each built on `LiquidGlassLens` with tuned defaults. On
+**Impeller** they all refract the live backdrop and work **anywhere** with no
+setup. The difference shows on **Skia**: some components refract the *app*
+content behind them (so they need an ancestor `LiquidGlassView`), while others
+supply their own background and work anywhere on both engines.
+
+- `LiquidGlassButton` — refracts the content behind it. Anywhere on Impeller; on Skia place it inside a `LiquidGlassView` (frosted fallback without one).
+- `LiquidGlassSlider` — jelly thumb that refracts the track as it moves. Self-contained: it owns its background, so it works **anywhere** on both Impeller and Skia — no `LiquidGlassView` needed.
+- `LiquidGlassToggle` — refracts its own track. Self-contained, so it works **anywhere** on both Impeller and Skia — no `LiquidGlassView` needed.
+- `LiquidGlassAppBar` — refracts the content behind it. Anywhere on Impeller; needs a `LiquidGlassView` on Skia.
+- `LiquidGlassBottomNavBar` — refracts the content behind it. On Skia, use it inside a `LiquidGlassScaffold` (which provides the `LiquidGlassView`). To place it **anywhere** on Impeller, use the `LiquidGlassBottomNavBar.withImpeller(...)` constructor.
+- `LiquidGlassTabBar` — refracts the content behind it. Anywhere on Impeller; needs a `LiquidGlassView` on Skia.
+- `LiquidGlassScaffold` — a Scaffold-style layout that owns the glass pipeline (its own `LiquidGlassView`), so its child lenses refract the body **anywhere** on both engines.
+- `LiquidGlassDraggable` — a drag wrapper for any lens; inherits whatever the lens it wraps requires.
+- `LiquidGlassJelly` — the squash/stretch physics as a reusable widget; inherits whatever the content it wraps requires.
+
+### Why the change?
+
+The old API made you describe a lens as a fixed element, pinned by explicit
+`width` / `height` / `position`, inside a `LiquidGlassView` with a
+`backgroundWidget`. That fought Flutter's layout model — it wasn't
+flexible or scalable for Impeller and Skia, and you always had to supply a
+background for Impeller, even though the engine can already render the live
+backdrop on its own.
+
+`LiquidGlassLens` flips this around. It is a normal layout widget: it sizes and
+positions itself like anything else in the tree, and it's compatible with both
+Impeller and Skia. On Impeller it works anywhere — it refracts the live backdrop
+with no `LiquidGlassView` and no background widget at all, though you can still
+place it inside a `LiquidGlassView` if you want to support Impeller and Skia
+together: on Impeller it uses the backdrop filter and on Skia it captures the
+background, and the lens handles both automatically. On Skia, wrap it in a
+`LiquidGlassView` with a `backgroundWidget` and it refracts that captured
+background.
+
+> **Migration note:** the old position-driven lens API (`LiquidGlass`) is
+> **no longer used** — it has been replaced by `LiquidGlassLens`. Write new code
+> against `LiquidGlassLens` and the drop-in components.
 
 ---
 
 ## Why Liquid Glass Easy?
 
-Unlike traditional glassmorphism or static blur effects, **Liquid Glass Easy** simulates *real glass physics* — complete with **refraction, distortion, and fluid responsiveness**.
-It captures and refracts live background content in real time, producing **immersive, motion-reactive visuals** that bring depth and realism to your UI.
+Unlike traditional glassmorphism or static blur, **Liquid Glass Easy** simulates
+*real glass physics* — complete with **refraction, distortion, and fluid
+responsiveness**. It bends live content behind the glass in real time,
+producing **immersive, motion-reactive visuals** that bring depth and realism
+to your UI.
 
 ---
 
 ## Features
 
-- 💠 **True liquid glass visuals** — replicate the look and physics of real glass with fluid transparency, soft highlights, and refraction that bends light naturally through your UI.
-- 🌀 **Real-time lens rendering** — see distortion, blur, tint, and refraction react instantly as elements move behind the glass.
-- 🎨 **Custom shapes** — design lenses as rounded rectangles, capsules, or Apple-style continuous-corner squircles that perfectly match your interface style.
-- 🌈 **Fully customizable effects** — control tint color, intensity, softness, refraction depth, and light direction for precise glass behavior.
-- 🧠 **Controller-driven animations** — show, hide, or animate lenses in real time through the `LiquidGlassController`.
-- ⚙️ **Shader-driven, GPU-accelerated pipeline** — ensures smooth, high-FPS performance even with multiple dynamic lenses.
-- 📱 **Cross-platform compatibility** — works seamlessly on Android, iOS, Web, macOS, and Windows.
+- **True liquid glass visuals** — real-glass look and physics with fluid transparency, soft highlights, and light-bending refraction.
+- **Lens-anywhere** — `LiquidGlassLens` is layout-driven; place it anywhere in the tree with no position/size params.
+- **Impeller *and* Skia** — auto-resolved render paths: live backdrop on Impeller, captured background on Skia, frosted fallback otherwise.
+- **Real-time lens rendering** — distortion, blur, tint, and refraction react instantly as content moves behind the glass.
+- **Custom shapes** — circular rounded rectangles, iOS-style squircles, or Apple-style continuous-corner capsules.
+- **Two border modes** — stylized `ClassicBorder` or background-tinted `OpticalBorder`.
+- **Drop-in components** — buttons, sliders, toggles, app/tab/nav bars, scaffold.
+- **Shader-driven, GPU-accelerated** — smooth, high-FPS performance.
+- **Cross-platform** — Android, iOS, Web, macOS, and Windows.
 
 ---
 
 ## Installation
 
-Add the dependency:
-
 ```yaml
 dependencies:
-  liquid_glass_easy: ^2.0.1
+  liquid_glass_easy: ^3.0.0
 ```
 
-Then run:
 ```bash
 flutter pub get
 ```
@@ -70,42 +166,40 @@ flutter pub get
 
 ## Getting Started
 
-Check the `example/` directory for a complete, self-contained demo (Control Center, Notifications, and a draggable lens playground) you can run with `flutter run` or copy into your own project.
-You can also try:
-- `LiquidGlassShowcase` — a comprehensive demo widget that lets you explore all Liquid Glass Easy capabilities interactively. Adjust parameters such as distortion, blur, magnification, lighting, and border style in real time using intuitive sliders and toggles.
-- `LiquidGlassPlayground` — an experimental environment where you can test your own widgets beneath a live liquid glass lens. Fine-tune visual parameters with built-in controls to instantly see how the effect adapts to different content and layouts.
+### 1. The simplest case — a lens, anywhere (Impeller)
 
-<p>
-  <img src="showcases/liquid_glass_example_4.gif" width="40%" alt="LiquidGlass Example"/>
-</p>
-
-> ⚠️ **Important Note:**  
-> The `LiquidGlassShowcase` and `LiquidGlassPlayground` widgets are designed only for **previewing and copying slider values**.
->
-> They are **not intended for performance benchmarking**, because the `backgroundWidget` is rendered at **half the screen height**, while the other half is used for sliders.
->
-> For **accurate performance testing**, use the `LiquidGlassView` directly without these preview widgets.
-
-**Basic setup with one lens:**
+On Impeller you don't need a `LiquidGlassView` or a background. Just drop a
+`LiquidGlassLens` over your UI:
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 class DemoGlass extends StatelessWidget {
+  const DemoGlass({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: LiquidGlassView(
-        backgroundWidget: Image.asset('assets/bg.jpg', fit: BoxFit.cover),
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          LiquidGlass(
-            width: 200,
-            height: 100,
-            magnification: 1,
-            distortion: 0.1,
-            distortionWidth: 50,
-            position: LiquidGlassAlignPosition(alignment: Alignment.center),
+          Image.asset('assets/bg.jpg', fit: BoxFit.cover),
+          Center(
+            child: SizedBox(
+              width: 260,
+              height: 150,
+              child: LiquidGlassLens(
+                style: const LiquidGlassStyle(
+                  shape: LiquidGlassShape.squircle(cornerRadius: 44),
+                  refraction: LiquidGlassRefraction(
+                    distortion: 0.13,
+                    distortionWidth: 34,
+                  ),
+                ),
+                child: const Center(child: Text('Liquid Glass')),
+              ),
+            ),
           ),
         ],
       ),
@@ -114,56 +208,149 @@ class DemoGlass extends StatelessWidget {
 }
 ```
 
+### 2. The Skia path — wrap in a `LiquidGlassView`
+
+To make refraction work on Skia, give the lens a background to
+refract by placing it inside a `LiquidGlassView.child`:
+
+```dart
+LiquidGlassView(
+  backgroundWidget: const MyBackground(), // required on Skia
+  child: Center(
+    child: SizedBox(
+      width: 300,
+      height: 160,
+      child: LiquidGlassLens(
+        style: const LiquidGlassStyle(
+          shape: LiquidGlassShape.squircle(cornerRadius: 40),
+          refraction: LiquidGlassRefraction(distortion: 0.12, distortionWidth: 30),
+        ),
+        child: const Center(child: Text('refracts the captured background')),
+      ),
+    ),
+  ),
+)
+```
+
+The exact same `LiquidGlassLens` code refracts the live backdrop on Impeller and
+the captured `backgroundWidget` on Skia — no changes required.
+
+### Explore interactively
+
+- See the [`example/`](example/) directory — **`main.dart`** is an on-device gallery whose home menu opens each demo as its own route, exercising every render path:
+
+```bash
+flutter run -t lib/main.dart
+```
+
+---
+
+## Core API
+
+### `LiquidGlassLens`
+
+```dart
+LiquidGlassLens({
+  LiquidGlassStyle style = const LiquidGlassStyle(),
+  bool visibility = true,        // instant show/hide; hidden = no backdrop cost
+  bool? useImpellerBackdrop,     // override engine auto-detection
+  Widget? child,                 // clipped to the lens shape
+})
+```
+
+Size comes from layout — wrap it in a `SizedBox` (or let its child/constraints
+size it). The `child` is always clipped to the full lens shape; add your own
+`Padding` to inset it.
+
+### `LiquidGlassStyle`
+
+```dart
+LiquidGlassStyle({
+  LiquidGlassShape? shape,                // null → default continuous rounded rect
+  LiquidGlassAppearance appearance = const LiquidGlassAppearance(),
+  LiquidGlassRefraction refraction = const LiquidGlassRefraction(),
+})
+```
+
+`copyWith(...)` and `merge(other)` are provided for theme/override patterns.
+
+#### `LiquidGlassRefraction`
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `distortion` | `0.1` | Bending strength of the distortion (`0.0`–`1.0`). |
+| `distortionWidth` | `30` | Thickness of the distortion band around the perimeter, in px. |
+| `magnification` | `1.0` | Magnification of content seen through the lens (`1.0` = none). |
+| `chromaticAberration` | `0.003` | Color-channel separation; `0.0` disables it. |
+| `refractionMode` | `shapeRefraction` | `shapeRefraction` (follows shape contours) or `radialRefraction` (circular pattern). |
+
+#### `LiquidGlassAppearance`
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `color` | `transparent` | Base tint of the lens (often semi-transparent). |
+| `blur` | `LiquidGlassBlur()` | Blur applied to content beneath the glass. |
+| `saturation` | `1.0` | `1.0` = unchanged, `0.0` = grayscale. |
+| `enableInnerRadiusTransparent` | `false` | Whether the inner, non-distorted region is transparent. |
+
+#### `LiquidGlassShape`
+
+Pick a corner curve via a convenience constructor:
+
+| Constructor | Corner style |
+|-------------|--------------|
+| `LiquidGlassShape.roundedRectangle(...)` | Plain **circular** corners (cheapest). |
+| `LiquidGlassShape.squircle(...)` | **L^n squircle** — iOS-style continuous curvature. |
+| `LiquidGlassShape.continuousRoundedRectangle(...)` | **Apple capsule-style** continuous corners (**default**; collapses to a clean capsule at full radius). |
+
+Common parameters: `cornerRadius`, `borderWidth`, `borderColor`, `lightColor`,
+`lightIntensity`, `lightDirection`, `borderType`, and `clipQuality`
+(`roundedRectangle` = cheap circular clip, `exact` = shape-matched `ClipPath`).
+
+> **Tip:** On `continuousRoundedRectangle`, leave `clipQuality` at its default
+> (`roundedRectangle`) — don't reach for `LiquidGlassClipQuality.exact` until you
+> actually need it. `exact` adds an extra save layer (more expensive) just to make
+> the clipped child/blur silhouette hug the continuous corner perfectly. At typical
+> corner radii that difference is usually imperceptible, so only switch to `exact`
+> if you can *see* the clipped edge not lining up with the refraction.
+
+### `LiquidGlassView` (Skia background provider)
+
+```dart
+LiquidGlassView({
+  required Widget backgroundWidget,  // refracted by lenses on Skia
+  Widget? child,                     // your UI, containing LiquidGlassLens widgets
+  double pixelRatio = 1.0,
+  bool realTimeCapture = true,
+  bool useSync = true,
+  bool? useImpellerBackdrop,
+  LiquidGlassRefreshRate refreshRate = LiquidGlassRefreshRate.deviceRefreshRate,
+})
+```
+
 ---
 
 ## Border Modes
 
-Every shape can render its border in one of two styles through the `borderType` parameter. Use **`ClassicBorder`** for a stylized sweep gradient with direct light/shadow color control, or **`OpticalBorder`** for an Apple-style, SDF-based rim light that picks up the background color through ambient tinting.
-
-<p>
-  <img src="showcases/liquid_glass_classic_border.jpg" width="49%" alt="Classic Border"/>
-  <img src="showcases/liquid_glass_optical_border.jpg" width="49%" alt="Optical Border"/>
-</p>
+Every shape renders its border in one of two styles through `borderType`.
 
 | Mode | Description |
-|--------|-------------|
-| `ClassicBorder` | Light and shadow colors sweep around the shape based on the angle between the surface normal and the light direction. Produces a clean, stylized border with direct control over light/shadow colors. |
-| `OpticalBorder` | The border emerges as an optical consequence of the glass shape, using SDF-based rim lighting with background-tinted highlights, dual-sided specular reflections, and a lens height profile. Automatically picks up the background color through ambient tinting. |
-
-### Classic Border
-
-```dart
-LiquidGlass(
-  width: 200,
-  height: 120,
-  position: LiquidGlassAlignPosition(alignment: Alignment.center),
-  shape: RoundedRectangleShape(
-    lightColor: Color(0xB2FFFFFF),
-    borderType: ClassicBorder(
-      borderSoftness: 2.5,
-      shadowColor: Color(0x1A000000),
-    ),
-  ),
-)
-```
-
-| Property | Description |
-|----------|-------------|
-| `borderSoftness` | Controls the feathered edge transition. Higher values produce a softer border; lower values keep it crisp. Defaults to `1.0`. |
-| `shadowColor` | The shadow color used on the opposite side of the lens border to enhance depth and contrast. Defaults to `Color(0x1A000000)`. |
+|------|-------------|
+| `ClassicBorder` | Light/shadow colors sweep around the shape based on the angle between the surface normal and the light direction. Clean, stylized, direct color control. |
+| `OpticalBorder` | **(default)** An Apple-style, SDF-based rim light that emerges as an optical consequence of the glass shape — background-tinted highlights, dual-sided specular reflections, and a lens height profile. The rim color adapts to whatever sits behind the lens. |
 
 ### Optical Border
 
 ```dart
-LiquidGlass(
-  width: 200,
-  height: 120,
-  position: LiquidGlassAlignPosition(alignment: Alignment.center),
-  shape: RoundedRectangleShape(
-    borderType: OpticalBorder(
-      borderSaturation: 1.5,
-      ambientIntensity: 1.0,
-      borderSolidity: 0.0,
+LiquidGlassLens(
+  style: const LiquidGlassStyle(
+    shape: LiquidGlassShape.squircle(
+      cornerRadius: 36,
+      borderType: OpticalBorder(
+        borderSaturation: 1.5,
+        ambientIntensity: 1.0,
+        borderSolidity: 0.0,
+      ),
     ),
   ),
 )
@@ -171,230 +358,199 @@ LiquidGlass(
 
 | Property | Description |
 |----------|-------------|
-| `borderSaturation` | Saturation boost applied to the final border color. `0.0` is grayscale, `1.0` is unchanged (default), `>1.0` is more vivid. Recommended range: `0.0`–`3.0`. |
-| `ambientIntensity` | Ambient lighting contribution to the rim, keeping it visible even on the shadow side. `0.0` is none, `1.0` is the default gain, `>1.0` washes around the entire rim. Recommended range: `0.0`–`5.0`. |
-| `borderSolidity` | How much `lightIntensity` can push the rim toward a fully opaque look. `0.0` keeps it translucent (default), `1.0` allows a light-driven solid rim. Recommended range: `0.0`–`1.0`. |
+| `borderSaturation` | Saturation of the border color. `0.0` grayscale, `1.0` unchanged (default), `>1.0` more vivid. Range `0.0`–`3.0`. |
+| `ambientIntensity` | Ambient rim contribution, keeping it visible on the shadow side. `1.0` default. Range `0.0`–`5.0`. |
+| `borderSolidity` | How far `lightIntensity` can push the rim toward opaque. `0.0` translucent (default) → `1.0` solid. |
 
-> **Tip:**  
-> `borderType` defaults to `OpticalBorder()`. The optical mode always applies ambient tinting from the background, so the rim color adapts to whatever sits behind the lens.
+### Classic Border
 
----
-
-### Refraction Modes
-
-  <p>
-  <img src="showcases/liquid_glass_shape_refraction.jpg" width="49%" alt="Shape Refraction"/>
-  <img src="showcases/liquid_glass_radial_refraction.jpg" width="49%" alt="Radial Refraction"/>
-</p>
-
-| Mode | Description |
-|--------|-------------|
-| `shapeRefraction` | Refracts light based on the underlying shape geometry, following the contours of the glass for more physically accurate distortion. |
-| `radialRefraction` | Refracts light radially from a central point, creating a circular distortion pattern. |
-
----
-
-## Common Use Cases
-
-### Multiple Lenses
 ```dart
-LiquidGlassView(
-  backgroundWidget: YourBackground(),
-  children: [
-    LiquidGlass(
-      width: 160,
-      height: 160,
-      distortion: 0.15,
-      distortionWidth: 50,
-      position: LiquidGlassOffsetPosition(left: 40, top: 100),
+LiquidGlassLens(
+  style: const LiquidGlassStyle(
+    shape: LiquidGlassShape.roundedRectangle(
+      lightColor: Color(0xB2FFFFFF),
+      borderType: ClassicBorder(
+        borderSoftness: 2.5,
+        shadowColor: Color(0x1A000000),
+      ),
     ),
-    LiquidGlass(
-      width: 220,
-      height: 120,
-      distortion: 0.075,
-      magnification: 1,
-      distortionWidth: 40,
-      position: LiquidGlassAlignPosition(alignment: Alignment.bottomRight),
-      blur: LiquidGlassBlur(sigmaX: 1, sigmaY: 1),
-      color: Colors.white30,
+  ),
+)
+```
+
+| Property | Description |
+|----------|-------------|
+| `borderSoftness` | Feathered edge transition. Higher = softer. Defaults to `1.0`. |
+| `shadowColor` | Shadow color on the opposite side of the border for depth. Defaults to `Color(0x1A000000)`. |
+
+---
+
+## Common Patterns
+
+### Multiple lenses
+
+Just place several `LiquidGlassLens` widgets in your layout:
+
+```dart
+Column(
+  children: [
+    SizedBox(width: 160, height: 160, child: LiquidGlassLens(/* ... */)),
+    const SizedBox(height: 24),
+    SizedBox(width: 220, height: 120, child: LiquidGlassLens(/* ... */)),
+  ],
+)
+```
+
+### Draggable lens
+
+```dart
+LiquidGlassDraggable(
+  child: SizedBox(
+    width: 200,
+    height: 200,
+    child: LiquidGlassLens(
+      style: const LiquidGlassStyle(
+        shape: LiquidGlassShape.roundedRectangle(cornerRadius: 100),
+        refraction: LiquidGlassRefraction(distortion: 0.2, magnification: 1.1),
+      ),
+      child: const Center(child: Text('drag me')),
+    ),
+  ),
+)
+```
+
+### Show / hide
+
+`visibility: false` disables the glass instantly (no backdrop cost) and removes
+the child, leaving nothing behind. Wrap the lens yourself to animate the
+transition:
+
+```dart
+LiquidGlassLens(visibility: _visible, style: myStyle, child: content)
+```
+
+### Lenses inside scrollables
+
+> **Not recommended.** Liquid glass is designed to **float above** your content
+> — a fixed lens (a bottom bar, a floating panel, a control overlay) that
+> refracts the scrolling content passing *behind* it. Putting the lens *inside*
+> the scrollable, so it scrolls with the list, fights that concept and runs into
+> the overscroll issue below. Prefer a floating lens layered over the list (e.g.
+> in a `Stack`) instead of a lens placed as a list item.
+>
+> If you do need a lens inside a scrollable in Impeller, you **must** disable the
+> overscroll indicator — see below.
+
+### Using Lenses inside scrollables (Impeller)
+
+Android's stretch overscroll isolates the scrollable into its own layer, which
+can make backdrop lenses render **black** at the scroll edges. Disable the
+overscroll indicator for scrollables that contain lenses:
+
+```dart
+ScrollConfiguration(
+  behavior: const MaterialScrollBehavior().copyWith(overscroll: false),
+  child: ListView(children: [ /* ...LiquidGlassLens... */ ]),
+)
+```
+
+---
+
+## Drop-in Components
+
+```dart
+// A glass slider with a jelly thumb that refracts the track.
+LiquidGlassSlider(
+  value: volume,
+  onChanged: (v) => setState(() => volume = v),
+);
+
+// A glass toggle.
+LiquidGlassToggle(
+  value: wifi,
+  activeColor: const Color(0xFF0A84FF),
+  onChanged: (v) => setState(() => wifi = v),
+);
+```
+
+Each component is self-contained and styled through the same
+`LiquidGlassStyle` vocabulary. Other components: `LiquidGlassButton`,
+`LiquidGlassAppBar`, `LiquidGlassBottomNavBar`, `LiquidGlassTabBar`,
+`LiquidGlassScaffold`, `LiquidGlassJelly`.
+
+### Bottom nav bar — standalone with `.withImpeller`
+
+`LiquidGlassBottomNavBar` shows its animated, glass-refracting **morph
+selection pill** when it's driven by a `LiquidGlassScaffold`, which owns the
+capture pipeline and hands the bar the page as its background.
+
+To use the bar **on its own** — no `LiquidGlassScaffold` and no `body` to pass
+— use the **`.withImpeller`** constructor. On Impeller the bar and its morph
+pill sample the live backdrop, so just drop it as the last child of a `Stack`
+over your page:
+
+```dart
+Stack(
+  children: [
+    MyPage(),
+    LiquidGlassBottomNavBar.withImpeller(
+      items: items,
+      selectedIndex: index,
+      onChanged: (i) => setState(() => index = i),
     ),
   ],
 );
 ```
 
-### Draggable Lens
-
-<p>
-  <img src="showcases/liquid_glass_example_2.gif" width="60%" alt="LiquidGlass Example"/>
-</p>
-
-```dart
-LiquidGlass(
-  draggable: true,
-  width: 200,
-  height: 120,
-  position: LiquidGlassAlignPosition(alignment: Alignment.center),
-)
-```
-
-### Lens with Overlay Content
-```dart
-LiquidGlass(
-  width: 200,
-  height: 120,
-  position: LiquidGlassAlignPosition(alignment: Alignment.center),
-  child: Center(child: Icon(Icons.search, color: Colors.white)),
-)
-```
-
-### ⚠️ Important Note
-
-The child widget inside `LiquidGlass` always takes the **full size of the lens**.
-
-If you want to reduce the child’s visible area, wrap it with your own `Padding`:
-
-```dart
-LiquidGlass(
-  child: Padding(
-           padding: EdgeInsets.all(12),
-           child: YourWidget(),
-  ),
-)
-```
+> `.withImpeller` is **Impeller-first**: on Skia / Web (no live-backdrop
+> shader) it falls back to a plain frosted bar that still shows the content
+> behind it. For the refracting morph pill on Skia, use a
+> `LiquidGlassScaffold` with a real `body`.
 
 ---
 
-## Positions & Shapes
+## Snapshot vs Realtime (Skia capture)
 
-<p>
-  <img src="showcases/liquid_glass_example_3.gif" width="60%" alt="LiquidGlass Example"/>
-</p>
-
-### Position Types
-| Class | Description |
-|--------|-------------|
-| `LiquidGlassOffsetPosition` | Uses pixel offsets: `left`, `top`, `right`, `bottom`. |
-| `LiquidGlassAlignPosition` | Uses `alignment` with optional `margin`. |
-
-### Shape Types
-| Class | Description |
-|--------|-------------|
-| `RoundedRectangleShape` | Use `cornerRadius`, plus optional `cornerSmoothing` (`0.0`–`1.0`) for Apple-style continuous corners. |
-
----
-
-### Chromatic Aberration
-
-  <img src="showcases/liquid_glass_chromatic_aberration.jpg" width="60%" alt="Radial Refraction"/>
-
-| Property | Description |
-|----------|-------------|
-| `chromaticAberration` | Controls the intensity of the chromatic aberration effect applied to the lens. Higher values increase the separation of color channels, producing a stronger rainbow-like distortion. |
-
-> **Tip:**  
-> The default value is `0.003`.  
-> Setting it to `0.0` disables the chromatic aberration effect entirely.  
-> Use this property to add subtle or exaggerated color distortion for a more realistic or stylistic glass effect.
----
-
-## Show/Hide Lens with Controller (Animated)
-
-```dart
-final lensController = LiquidGlassController();
-
-LiquidGlass(
-  controller: lensController,
-  position: LiquidGlassAlignPosition(alignment: Alignment.center),
-);
-
-// Later
-lensController.hideLiquidGlass(animationTimeMillisecond: 300);
-lensController.showLiquidGlass(animationTimeMillisecond: 300);
-```
-
-Toggle real-time capturing:
-```dart
-if (isVisible = (!isVisible)) {
-  viewController.startRealtimeCapture();
-  lensController.showLiquidGlass!();
-} 
-else {
-  lensController.hideLiquidGlass!(
-  onComplete: viewController.stopRealtimeCapture,
-  );
-}
-```
-
----
-
-## Snapshot vs Realtime
+When you use a `LiquidGlassView` on Skia, choose how its background is
+captured:
 
 | Mode | When to Use | Config |
-|-------|--------------|--------|
-| **Realtime** | For moving backgrounds (scrolling, videos) | `realTimeCapture: true` |
-| **Snapshot** | For static backgrounds | `realTimeCapture: false` + `captureOnce()` |
+|------|-------------|--------|
+| **Realtime** | Moving backgrounds (scrolling, video) | `realTimeCapture: true` |
+| **Snapshot** | Static backgrounds | `realTimeCapture: false` + `viewController.captureOnce()` |
 
-**Example:**
 ```dart
 final viewController = LiquidGlassViewController();
 
 LiquidGlassView(
   controller: viewController,
-  backgroundWidget: ...,
+  backgroundWidget: const MyBackground(),
   realTimeCapture: false,
-  children: [...],
+  child: const MyGlassUI(),
 );
 
-// Refresh manually
+// Refresh manually after the background changes:
 await viewController.captureOnce();
 ```
 
----
-
-## Recommended Settings
-
-- **General use:**
-  `useSync: true`, `pixelRatio: 0.8–1.0`
-- **Performance-focused:**
-  `useSync: false`, `pixelRatio: 0.5–0.7`
-
-> If your background is full-screen, a pixel ratio of 0.5–1.0 gives the best trade-off between performance and detail.
-> For smaller regions, higher pixel ratios yield sharper glass.
-> This is a general guideline — the final choice depends on the device’s performance.
+> On **Impeller** the lens reads the live backdrop directly, so capture settings
+> don't apply — these are a Skia concern.
 
 ---
 
-## Key API (Quick Reference)
+## Recommended Settings (Skia capture)
 
-### `LiquidGlassView`
-```dart
-LiquidGlassView({
-  required Widget backgroundWidget,
-  required List<LiquidGlass> children,
-  double pixelRatio = 1.0,
-  bool realTimeCapture = true,
-  bool useSync = true,
-  LiquidGlassRefreshRate refreshRate = LiquidGlassRefreshRate.deviceRefreshRate,
-})
-```
+- **General use:** `useSync: true`, `pixelRatio: 0.8–1.0`
+- **Performance-focused:** `useSync: false`, `pixelRatio: 0.5–0.7`
 
-### `LiquidGlass`
-```dart
-LiquidGlass({
-  double width = 200,
-  double height = 100,
-  double magnification = 1.0,
-  double distortion = 0.125,
-  bool draggable = false,
-  required LiquidGlassPosition position,
-  Widget? child,
-  Color color = Colors.transparent,
-})
-```
+> For full-screen backgrounds, `pixelRatio` of 0.5–1.0 balances performance and
+> detail. Smaller regions can afford higher ratios for sharper glass. The final
+> choice depends on the device.
 
 ---
 
 ## License
+
 **MIT License**
 
 ---

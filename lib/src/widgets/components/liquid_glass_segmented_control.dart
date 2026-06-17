@@ -1,154 +1,184 @@
 import 'package:flutter/material.dart';
 
-import '../liquid_glass.dart';
+import '../lens/liquid_glass_lens.dart';
+import '../liquid_glass_config.dart';
+import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
-import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// A segmented control rendered on top of liquid glass.
 ///
-/// The capsule itself is a single [LiquidGlass] surface; the selected
+/// The capsule itself is a single [LiquidGlassLens]; the selected
 /// segment is highlighted with a brighter inner pill that animates
 /// across. Tapping a segment reports its index via [onChanged]. The
 /// widget is stateless on purpose — the parent owns [selectedIndex].
 ///
-/// Customizable across size, glass look, border, corner radius, the
-/// selection-pill color/border, and the segment label styling.
-class LiquidGlassSegmentedControl extends LiquidGlass {
-  LiquidGlassSegmentedControl({
-    required LiquidGlassPosition position,
-    required List<String> segments,
-    required int selectedIndex,
-    required ValueChanged<int> onChanged,
-    double width = 320,
-    double height = 36,
-    LiquidGlassController? controller,
-
-    /// Corner radius of the capsule. Defaults to a full pill
-    /// (`height / 2`).
-    double? cornerRadius,
-
-    /// Translucent glass tint of the capsule.
-    Color glassColor = const Color(0x14FFFFFF), // white, alpha 20
-    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
-    double distortion = 0.06,
-    double distortionWidth = 22,
-    double chromaticAberration = 0.002,
-    double magnification = 1,
-
-    // ── Border ─────────────────────────────────────────────
-    double borderWidth = 1.0,
-    double lightIntensity = 1.0,
-    double lightDirection = 80,
-    OpticalBorder borderType = const OpticalBorder(
-      borderSaturation: 1.1,
-      ambientIntensity: 1.0,
-      borderSolidity: 0.25,
-    ),
-
-    // ── Selection pill ─────────────────────────────────────
-    /// Fill color of the moving selection pill.
-    Color selectionColor = const Color(0x3CFFFFFF), // white, alpha 60
-
-    /// Border color of the moving selection pill.
-    Color selectionBorderColor = const Color(0x50FFFFFF), // alpha 80
-
-    /// Slide duration of the selection pill between segments.
-    Duration selectionDuration = const Duration(milliseconds: 220),
-
-    // ── Labels ─────────────────────────────────────────────
-    /// Color of segment labels.
-    Color labelColor = Colors.white,
-
-    /// Font size of segment labels.
-    double fontSize = 13,
-    bool draggable = false,
-    bool outOfBoundaries = false,
+/// Drop it anywhere in your layout. Styling uses the [LiquidGlassLens]
+/// vocabulary — [shape], [appearance], [refraction].
+class LiquidGlassSegmentedControl extends StatelessWidget {
+  const LiquidGlassSegmentedControl({
+    super.key,
+    required this.segments,
+    required this.selectedIndex,
+    required this.onChanged,
+    this.width = 320,
+    this.height = 36,
+    this.shape,
+    this.appearance = _defaultAppearance,
+    this.refraction = _defaultRefraction,
+    this.style,
+    this.visibility = true,
+    this.selectionColor = const Color(0x3CFFFFFF), // white, alpha 60
+    this.selectionBorderColor = const Color(0x50FFFFFF), // alpha 80
+    this.selectionDuration = const Duration(milliseconds: 220),
+    this.foregroundColor = Colors.white,
+    this.fontSize = 13,
   })  : assert(segments.length >= 2, 'Need at least two segments'),
-        assert(selectedIndex >= 0 && selectedIndex < segments.length),
-        super(
-          geometry: LiquidGlassGeometry(
-            position: position,
-            width: width,
-            height: height,
-            shape: RoundedRectangleShape(
-              cornerRadius: cornerRadius ?? height / 2,
-              borderWidth: borderWidth,
-              lightIntensity: lightIntensity,
-              lightDirection: lightDirection,
-              borderType: borderType,
-            ),
-            outOfBoundaries: outOfBoundaries,
+        assert(selectedIndex >= 0 && selectedIndex < segments.length);
+
+  /// The segment labels, left to right.
+  final List<String> segments;
+
+  /// Currently selected segment index.
+  final int selectedIndex;
+
+  /// Called with the tapped segment index.
+  final ValueChanged<int> onChanged;
+
+  /// Explicit width. When null the control hugs its content.
+  final double? width;
+
+  /// Capsule height; also drives the default pill radius (`height / 2`).
+  final double height;
+
+  /// Glass shape + border. When null, a full pill with a tuned optical
+  /// border is used.
+  final LiquidGlassShape? shape;
+
+  /// The glass material: tint, blur, saturation.
+  final LiquidGlassAppearance appearance;
+
+  /// How the glass bends light.
+  final LiquidGlassRefraction refraction;
+
+  /// Full glass look as one [LiquidGlassStyle] (shape + appearance +
+  /// refraction). When non-null it supersedes the individual [shape] /
+  /// [appearance] / [refraction] params — the preferred, library-wide
+  /// way to style this component.
+  final LiquidGlassStyle? style;
+
+  /// Whether the control is shown; toggling animates the glass in/out.
+  final bool visibility;
+
+  /// Fill color of the moving selection pill.
+  final Color selectionColor;
+
+  /// Border color of the moving selection pill.
+  final Color selectionBorderColor;
+
+  /// Slide duration of the selection pill between segments.
+  final Duration selectionDuration;
+
+  /// Color of segment labels.
+  final Color foregroundColor;
+
+  /// Font size of segment labels.
+  final double fontSize;
+
+  static const LiquidGlassAppearance _defaultAppearance =
+      LiquidGlassAppearance(
+    color: Color(0x14FFFFFF), // white, alpha 20
+    blur: LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
+  );
+
+  static const LiquidGlassRefraction _defaultRefraction =
+      LiquidGlassRefraction(
+    distortion: 0.06,
+    distortionWidth: 22,
+    chromaticAberration: 0.002,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final LiquidGlassShape effectiveShape = shape ??
+        LiquidGlassShape.roundedRectangle(
+          cornerRadius: height / 2,
+          borderWidth: 1.0,
+          lightIntensity: 1.0,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.1,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.25,
           ),
-          refraction: LiquidGlassRefraction(
-            distortion: distortion,
-            distortionWidth: distortionWidth,
-            chromaticAberration: chromaticAberration,
-            magnification: magnification,
-          ),
-          appearance: LiquidGlassAppearance(
-            color: glassColor,
-            blur: blur,
-          ),
-          behavior: LiquidGlassBehavior(
-            draggable: draggable,
-            controller: controller,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: LayoutBuilder(builder: (context, constraints) {
-              final segWidth = constraints.maxWidth / segments.length;
-              return Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: selectionDuration,
-                    curve: Curves.easeOut,
-                    left: selectedIndex * segWidth,
-                    top: 0,
-                    bottom: 0,
-                    width: segWidth,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: selectionColor,
-                        borderRadius: BorderRadius.circular(height / 2),
-                        border: Border.all(
-                          color: selectionBorderColor,
-                          width: 0.6,
-                        ),
+        );
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: LiquidGlassLens(
+        style: LiquidGlassStyle(
+          shape: effectiveShape,
+          appearance: appearance,
+          refraction: refraction,
+        ).merge(style),
+        visibility: visibility,
+        child: Padding(
+          padding: const EdgeInsets.all(3),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final segWidth = constraints.maxWidth / segments.length;
+            return Stack(
+              children: [
+                AnimatedPositioned(
+                  duration: selectionDuration,
+                  curve: Curves.easeOut,
+                  left: selectedIndex * segWidth,
+                  top: 0,
+                  bottom: 0,
+                  width: segWidth,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: selectionColor,
+                      borderRadius: BorderRadius.circular(height / 2),
+                      border: Border.all(
+                        color: selectionBorderColor,
+                        width: 0.6,
                       ),
                     ),
                   ),
-                  Row(
-                    children: [
-                      for (int i = 0; i < segments.length; i++)
-                        Expanded(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius:
-                                  BorderRadius.circular(height / 2),
-                              onTap: () => onChanged(i),
-                              child: Center(
-                                child: Text(
-                                  segments[i],
-                                  style: TextStyle(
-                                    color: labelColor,
-                                    fontSize: fontSize,
-                                    fontWeight: i == selectedIndex
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                  ),
+                ),
+                Row(
+                  children: [
+                    for (int i = 0; i < segments.length; i++)
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(height / 2),
+                            onTap: () => onChanged(i),
+                            child: Center(
+                              child: Text(
+                                segments[i],
+                                style: TextStyle(
+                                  color: foregroundColor,
+                                  fontSize: fontSize,
+                                  fontWeight: i == selectedIndex
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                ],
-              );
-            }),
-          ),
-        );
+                      ),
+                  ],
+                ),
+              ],
+            );
+          }),
+        ),
+      ),
+    );
+  }
 }

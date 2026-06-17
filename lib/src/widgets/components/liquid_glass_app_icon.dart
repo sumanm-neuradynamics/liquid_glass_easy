@@ -17,7 +17,7 @@ class LiquidGlassAppIcon extends StatelessWidget {
   final List<Color> gradient;
 
   /// Color of the glyph.
-  final Color iconColor;
+  final Color foregroundColor;
 
   /// Size of the rounded square in logical pixels.
   final double size;
@@ -30,7 +30,7 @@ class LiquidGlassAppIcon extends StatelessWidget {
     required this.icon,
     this.label,
     this.gradient = const [Color(0xFF4FB3FF), Color(0xFF1E69DE)],
-    this.iconColor = Colors.white,
+    this.foregroundColor = Colors.white,
     this.size = 56,
     this.onTap,
   });
@@ -57,7 +57,7 @@ class LiquidGlassAppIcon extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(icon, color: iconColor, size: size * 0.55),
+      child: Icon(icon, color: foregroundColor, size: size * 0.55),
     );
 
     final tapped = Material(

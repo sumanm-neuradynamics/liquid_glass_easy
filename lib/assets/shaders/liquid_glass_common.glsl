@@ -41,7 +41,7 @@ float roundedRectangleShape(vec2 p, vec2 c, vec2 h, float r){
 }
 
 /* ===========================
-   CONTINUOUS ROUNDED RECTANGLE (Apple-style corners)
+   SQUIRCLE ROUNDED RECTANGLE (Ln-norm continuous corners)
    ---------------------------------------------------
    Same construction as the rounded rect, but the corner occupies a
    WIDER zone than the visual radius (Apple's continuous corners run
@@ -51,8 +51,13 @@ float roundedRectangleShape(vec2 p, vec2 c, vec2 h, float r){
    smoothing) by the caller — see the .frag shape branches. When
    zone == r and n == 2 this reduces exactly to the circular rounded
    rect, which is also the automatic full-radius (capsule) limit.
+
+   NOTE: this is the "squircle" smoothing. The caller (the .frag shape
+   branch) now passes a fixed smoothing of 1.0 for the squircle style.
+   It is distinct from the `continuousRoundedRect*` family below, which
+   is the Apple capsule-style (circular belly + tuned G2 shoulder) curve.
    =========================== */
-float continuousRoundedRectShape(vec2 p, vec2 c, vec2 h, float zone, float n){
+float squircleShape(vec2 p, vec2 c, vec2 h, float zone, float n){
     vec2 q = abs(p - c) - h + zone;
     vec2 m = max(q, vec2(EPS));
     float corner = fastPow(fastPow(m.x, n) + fastPow(m.y, n), 1.0 / n) - zone;
@@ -100,7 +105,7 @@ ShapeData evaluateShape(
    a smooth degradation to a circular cap, exactly like iOS/Figma.
    Returns vec2(zone, n).
    =========================== */
-vec2 continuousCornerParams(float r, float smoothing, float maxCorner){
+vec2 squircleCornerParams(float r, float smoothing, float maxCorner){
     // Corner zone, clamped by the shorter half-side. As the radius
     // approaches the maximum the zone collapses back to r and the
     // exponent below lands exactly on n = 2 — the smoothing fades out
@@ -115,11 +120,11 @@ vec2 continuousCornerParams(float r, float smoothing, float maxCorner){
 }
 
 /* ===========================
-   Evaluate SDF + gradient for the CONTINUOUS ROUNDED RECT.
+   Evaluate SDF + gradient for the SQUIRCLE ROUNDED RECT.
    Same 5-tap central-difference scheme as evaluateShape; kept
    separate because it needs both the zone size AND the exponent.
    =========================== */
-ShapeData evaluateContinuousRRect(
+ShapeData evaluateSquircleRRect(
     vec2 fragPx,
     vec2 centerPx,
     vec2 halfSizePx,
@@ -127,11 +132,96 @@ ShapeData evaluateContinuousRRect(
     float n
 ){
     float h = 1.0;
-    float fC  = continuousRoundedRectShape(fragPx,               centerPx, halfSizePx, zone, n);
-    float fXp = continuousRoundedRectShape(fragPx + vec2(h,0.0), centerPx, halfSizePx, zone, n);
-    float fXm = continuousRoundedRectShape(fragPx - vec2(h,0.0), centerPx, halfSizePx, zone, n);
-    float fYp = continuousRoundedRectShape(fragPx + vec2(0.0,h), centerPx, halfSizePx, zone, n);
-    float fYm = continuousRoundedRectShape(fragPx - vec2(0.0,h), centerPx, halfSizePx, zone, n);
+    float fC  = squircleShape(fragPx,               centerPx, halfSizePx, zone, n);
+    float fXp = squircleShape(fragPx + vec2(h,0.0), centerPx, halfSizePx, zone, n);
+    float fXm = squircleShape(fragPx - vec2(h,0.0), centerPx, halfSizePx, zone, n);
+    float fYp = squircleShape(fragPx + vec2(0.0,h), centerPx, halfSizePx, zone, n);
+    float fYm = squircleShape(fragPx - vec2(0.0,h), centerPx, halfSizePx, zone, n);
+
+    vec2 grad = 0.5 * vec2(fXp - fXm, fYp - fYm);
+    float gL  = max(length(grad), EPS);
+
+    ShapeData d;
+    d.sdf       = fC;
+    d.grad      = grad;
+    d.normal    = grad / gL;
+    d.orthoDist = fC / gL;
+    return d;
+}
+
+/* ===========================
+   CONTINUOUS ROUNDED RECTANGLE (Apple capsule-style corners)
+   ---------------------------------------------------
+   A distinct continuous-corner model from the squircle above. Each
+   corner is an EXACT circle of radius `rr` for its 45° "belly", plus a
+   tuned G2 "shoulder" that eases the contact onto each flat edge (the
+   curve peels off the edge ~0.44·rr earlier, with zero tangent AND
+   curvature at the edge). This is a faithful SDF port of the
+   `_capsulePath` experiment / the `liquidGlassContinuousRoundedRectPath`
+   Dart clipper, so the refraction follows the same outline the clip cuts.
+
+   The shoulder reach on each edge is clamped to the room available on
+   that edge, so a square at full radius collapses to a clean circle
+   (capsule) — exactly like iOS. Constants were numerically tuned to
+   Apple's capsule.
+   =========================== */
+const float CRR_T0      = 0.728;
+const float CRR_ATAIL   = 4.836;
+const float CRR_NTAIL   = 3.869;
+const float CRR_EXTFRAC = 0.4425;
+
+// Shoulder easing: 1.0 across the belly (tt <= CRR_T0, exact circle),
+// ramping to 0.0 at the edge contact (tt = 1) with G2 continuity.
+float crrShoulder(float tt){
+    if (tt <= CRR_T0) return 1.0;
+    float u = clamp((tt - CRR_T0) / (1.0 - CRR_T0), 0.0, 1.0);
+    float inner = max(1.0 - pow(u, CRR_ATAIL), 0.0);
+    return pow(inner, 1.0 / CRR_NTAIL);
+}
+
+// Per-edge shoulder reach (px), clamped to the room on each edge.
+// reach.x = onto the horizontal (top/bottom) edges; reach.y = onto the
+// vertical (left/right) edges. halfSize = the lens half-extents.
+vec2 continuousRoundedRectReach(float rr, vec2 halfSize){
+    float eH = min(CRR_EXTFRAC * rr, halfSize.x - rr);
+    float eV = min(CRR_EXTFRAC * rr, halfSize.y - rr);
+    return max(vec2(eH, eV), vec2(0.0));
+}
+
+// SDF of the capsule-style continuous rounded rectangle. `reach` comes
+// from continuousRoundedRectReach(). The shoulder displaces the circle
+// along one axis as a function of the other; the per-axis max(.,0) keeps
+// the straight edges flat outside the shoulder zone.
+float continuousRoundedRectShape(vec2 p, vec2 c, vec2 hsz, float rr, vec2 reach){
+    vec2 q = abs(p - c) - hsz + rr;
+    float gV = reach.y * (crrShoulder(clamp(q.x / rr, 0.0, 1.0)) - 1.0);
+    float gH = reach.x * (crrShoulder(clamp(q.y / rr, 0.0, 1.0)) - 1.0);
+    // Lower half (closer to a vertical edge, q.x >= q.y): shoulder on q.y.
+    float fLower = length(vec2(max(q.x, 0.0), max(q.y - gV, 0.0))) - rr;
+    // Upper half (closer to a horizontal edge, q.y > q.x): shoulder on q.x.
+    float fUpper = length(vec2(max(q.x - gH, 0.0), max(q.y, 0.0))) - rr;
+    float corner = (q.x >= q.y) ? fLower : fUpper;
+    return min(max(q.x, q.y), 0.0) + corner;
+}
+
+/* ===========================
+   Evaluate SDF + gradient for the CONTINUOUS (capsule) ROUNDED RECT.
+   Same 5-tap central-difference scheme; needs the radius and the
+   per-edge shoulder reach.
+   =========================== */
+ShapeData evaluateContinuousRoundedRect(
+    vec2 fragPx,
+    vec2 centerPx,
+    vec2 halfSizePx,
+    float rr,
+    vec2 reach
+){
+    float h = 1.0;
+    float fC  = continuousRoundedRectShape(fragPx,               centerPx, halfSizePx, rr, reach);
+    float fXp = continuousRoundedRectShape(fragPx + vec2(h,0.0), centerPx, halfSizePx, rr, reach);
+    float fXm = continuousRoundedRectShape(fragPx - vec2(h,0.0), centerPx, halfSizePx, rr, reach);
+    float fYp = continuousRoundedRectShape(fragPx + vec2(0.0,h), centerPx, halfSizePx, rr, reach);
+    float fYm = continuousRoundedRectShape(fragPx - vec2(0.0,h), centerPx, halfSizePx, rr, reach);
 
     vec2 grad = 0.5 * vec2(fXp - fXm, fYp - fYm);
     float gL  = max(length(grad), EPS);

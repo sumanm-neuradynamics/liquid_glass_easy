@@ -452,7 +452,7 @@ class _LiquidGlassStyledNavBarState extends State<LiquidGlassStyledNavBar>
       return Stack(
         fit: StackFit.expand,
         children: [
-          LiquidGlassView(
+          LiquidGlassView.withPositionedLenses(
             controller: _outerViewController,
             pixelRatio: widget.render.pixelRatio,
             useSync: widget.render.useSync,
@@ -547,7 +547,7 @@ class _LiquidGlassStyledNavBarState extends State<LiquidGlassStyledNavBar>
     return Stack(
       fit: StackFit.expand,
       children: [
-        LiquidGlassView(
+        LiquidGlassView.withPositionedLenses(
           controller: _innerViewController,
           pixelRatio: widget.render.pixelRatio,
           useSync: widget.render.useSync,
@@ -609,19 +609,19 @@ LiquidGlass _buildStyledNavCapsule({
           ),
       width: layout.width,
       height: layout.height,
-      shape: shape ??
-          RoundedRectangleShape(
-            cornerRadius: layout.height / 2,
-            borderWidth: 1.2,
-            lightIntensity: 1.1,
-            lightDirection: 80,
-            borderType: const OpticalBorder(
-              borderSaturation: 1.2,
-              ambientIntensity: 1.0,
-              borderSolidity: 0.35,
-            ),
-          ),
     ),
+    shape: shape ??
+        LiquidGlassShape.roundedRectangle(
+          cornerRadius: layout.height / 2,
+          borderWidth: 1.2,
+          lightIntensity: 1.1,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.2,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.35,
+          ),
+        ),
     refraction: refraction ??
         const LiquidGlassRefraction(
           distortion: 0.07,
@@ -669,16 +669,16 @@ LiquidGlass _buildStyledNavPill({
           LiquidGlassOffsetPosition(left: adjustedLeft, bottom: pillBottom),
       width: pillW,
       height: pillH,
-      shape: RoundedRectangleShape(
-        cornerRadius: pillH / 2,
-        borderWidth: 1.0,
-        lightIntensity: 1.3,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.4,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.5,
-        ),
+    ),
+    shape: LiquidGlassShape.roundedRectangle(
+      cornerRadius: pillH / 2,
+      borderWidth: 1.0,
+      lightIntensity: 1.3,
+      lightDirection: 80,
+      borderType: const OpticalBorder(
+        borderSaturation: 1.4,
+        ambientIntensity: 1.0,
+        borderSolidity: 0.5,
       ),
     ),
     refraction: LiquidGlassRefraction(

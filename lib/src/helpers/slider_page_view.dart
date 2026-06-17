@@ -4,6 +4,7 @@ import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_light_mode.dart
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refresh_rate.dart';
 
 import '../widgets/utils/liquid_glass_refraction_mode.dart';
+import '../widgets/utils/liquid_glass_shape.dart';
 
 class SlidersPageView extends StatelessWidget {
   final PageController controller;
@@ -34,7 +35,7 @@ class SlidersPageView extends StatelessWidget {
   final Color shadowColorValue;
   final double chromaticAberration;
   final double saturation;
-  final double cornerSmoothing;
+  final LiquidGlassCornerStyle cornerStyle;
   final double pixelRatio;
   final double blur;
   final double refreshRate;
@@ -70,7 +71,7 @@ class SlidersPageView extends StatelessWidget {
   final ValueChanged<double> onChromaticAberrationChanged;
   final ValueChanged<double> onSaturationChanged;
 
-  final ValueChanged<double> onCornerSmoothingChanged;
+  final ValueChanged<LiquidGlassCornerStyle> onCornerStyleChanged;
   final ValueChanged<double> onBlurChanged;
   final ValueChanged<double> onRefreshRateChanged;
   final ValueChanged<double> onPixelRatioChanged;
@@ -106,7 +107,7 @@ class SlidersPageView extends StatelessWidget {
     required this.shadowColorValue,
     required this.chromaticAberration,
     required this.saturation,
-    required this.cornerSmoothing,
+    required this.cornerStyle,
     required this.pixelRatio,
     required this.blur,
     required this.refreshRate,
@@ -139,7 +140,7 @@ class SlidersPageView extends StatelessWidget {
     required this.onShadowColorChanged,
     required this.onChromaticAberrationChanged,
     required this.onSaturationChanged,
-    required this.onCornerSmoothingChanged,
+    required this.onCornerStyleChanged,
     required this.onBlurChanged,
     required this.onRefreshRateChanged,
     required this.onPixelRatioChanged,
@@ -254,13 +255,41 @@ class SlidersPageView extends StatelessWidget {
                       devision: 100,
                       onChanged: onCornerRadiusChanged,
                     ),
-                    SliderWidget(
-                      label: "Corner Smoothing (Continuous Corners)",
-                      value: cornerSmoothing,
-                      min: 0.0,
-                      max: 1.0,
-                      devision: 100,
-                      onChanged: onCornerSmoothingChanged,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("Corner Style"),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child:
+                                SegmentedButton<LiquidGlassCornerStyle>(
+                              segments: const [
+                                ButtonSegment(
+                                  value:
+                                      LiquidGlassCornerStyle.roundedRectangle,
+                                  label: Text('Round'),
+                                ),
+                                ButtonSegment(
+                                  value: LiquidGlassCornerStyle.squircle,
+                                  label: Text('Squircle'),
+                                ),
+                                ButtonSegment(
+                                  value: LiquidGlassCornerStyle
+                                      .continuousRoundedRectangle,
+                                  label: Text('Continuous'),
+                                ),
+                              ],
+                              selected: {cornerStyle},
+                              showSelectedIcon: false,
+                              onSelectionChanged: (s) =>
+                                  onCornerStyleChanged(s.first),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -588,10 +617,15 @@ class SlidersPageView extends StatelessWidget {
     doubleSideLightIntensity: $doubleSideLightIntensity,
   )''';
 
+    final cornerStyleName = switch (cornerStyle) {
+      LiquidGlassCornerStyle.roundedRectangle => 'roundedRectangle',
+      LiquidGlassCornerStyle.squircle => 'squircle',
+      LiquidGlassCornerStyle.continuousRoundedRectangle =>
+        'continuousRoundedRectangle',
+    };
     final shapeCode = '''
-RoundedRectangleShape(
+LiquidGlassShape.$cornerStyleName(
   cornerRadius: $cornerRadius,
-  cornerSmoothing: $cornerSmoothing,
   borderWidth: $borderWidth,
   lightIntensity: $lightIntensity,
   lightDirection: $lightDirection,
@@ -617,8 +651,8 @@ LiquidGlassView(
         ),
         width: $lensWidth,
         height: $lensHeight,
-        shape: $shapeCode,
       ),
+      shape: $shapeCode,
       refraction: LiquidGlassRefraction(
         magnification: $magnification,
         refractionMode:$refractionModeCode,

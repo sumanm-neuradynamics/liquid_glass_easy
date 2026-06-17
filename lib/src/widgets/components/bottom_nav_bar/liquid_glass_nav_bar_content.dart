@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/liquid_glass_shape.dart';
 import '../liquid_glass_tab_bar.dart' show LiquidGlassTabBarItem;
+import 'liquid_glass_nav_bar_icon_row.dart';
+import 'liquid_glass_nav_bar_pill.dart';
+import 'liquid_glass_nav_bar_style.dart';
 
 /// Crisp content layer (selection pill + icons + labels + taps)
 /// drawn on top of the [LiquidGlassBottomNavBar] capsule, inside the
@@ -12,10 +16,13 @@ class BottomNavBarContent extends StatelessWidget {
   final double itemPadding;
   final bool showSelectionPill;
   final Color selectionColor;
-  final Color selectedItemColor;
-  final Color unselectedItemColor;
-  final double iconSize;
-  final double labelFontSize;
+
+  /// Icon + label styling for every cell.
+  final LiquidGlassNavItemStyle itemStyle;
+
+  /// Corner shape (and optional border) of the selection pill. When
+  /// `null`, a plain capsule is used.
+  final LiquidGlassShape? pillShape;
 
   const BottomNavBarContent({
     super.key,
@@ -25,10 +32,8 @@ class BottomNavBarContent extends StatelessWidget {
     required this.itemPadding,
     required this.showSelectionPill,
     required this.selectionColor,
-    required this.selectedItemColor,
-    required this.unselectedItemColor,
-    required this.iconSize,
-    required this.labelFontSize,
+    required this.itemStyle,
+    this.pillShape,
   });
 
   @override
@@ -49,13 +54,11 @@ class BottomNavBarContent extends StatelessWidget {
                 bottom: 0,
                 width: cellWidth,
                 child: Center(
-                  child: Container(
-                    width: cellWidth,
-                    height: cellHeight,
-                    decoration: BoxDecoration(
+                  child: CustomPaint(
+                    size: Size(cellWidth, cellHeight),
+                    painter: LiquidGlassNavPillSurfacePainter(
                       color: selectionColor,
-                      borderRadius:
-                          BorderRadius.circular(cellHeight / 2),
+                      shape: pillShape,
                     ),
                   ),
                 ),
@@ -65,14 +68,17 @@ class BottomNavBarContent extends StatelessWidget {
               children: [
                 for (int i = 0; i < items.length; i++)
                   Expanded(
-                    child: BottomNavBarItem(
-                      item: items[i],
-                      selected: i == selectedIndex,
-                      selectedColor: selectedItemColor,
-                      unselectedColor: unselectedItemColor,
-                      iconSize: iconSize,
-                      labelFontSize: labelFontSize,
-                      onTap: () => onChanged(i),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(cellHeight / 2),
+                        onTap: () => onChanged(i),
+                        child: LiquidGlassNavTabCell(
+                          item: items[i],
+                          selected: i == selectedIndex,
+                          style: itemStyle,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -80,63 +86,6 @@ class BottomNavBarContent extends StatelessWidget {
           ],
         );
       }),
-    );
-  }
-}
-
-class BottomNavBarItem extends StatelessWidget {
-  final LiquidGlassTabBarItem item;
-  final bool selected;
-  final Color selectedColor;
-  final Color unselectedColor;
-  final double iconSize;
-  final double labelFontSize;
-  final VoidCallback onTap;
-
-  const BottomNavBarItem({
-    super.key,
-    required this.item,
-    required this.selected,
-    required this.selectedColor,
-    required this.unselectedColor,
-    required this.iconSize,
-    required this.labelFontSize,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? selectedColor : unselectedColor;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                selected ? (item.selectedIcon ?? item.icon) : item.icon,
-                size: iconSize,
-                color: color,
-              ),
-              if (item.label != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  item.label!,
-                  style: TextStyle(
-                    fontSize: labelFontSize,
-                    fontWeight:
-                        selected ? FontWeight.w600 : FontWeight.w500,
-                    color: color,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

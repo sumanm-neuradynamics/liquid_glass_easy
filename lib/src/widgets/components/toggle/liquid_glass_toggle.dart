@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../controllers/liquid_glass_view_controller.dart';
+import '../../liquid_glass_style.dart';
 import '../../liquid_glass_view.dart';
 import 'liquid_glass_toggle_layout.dart';
 import 'liquid_glass_toggle_thumb.dart';
@@ -55,6 +56,13 @@ class LiquidGlassToggle extends StatefulWidget {
   /// Size + thumb geometry of the switch. Defaults to a 64×32 capsule.
   final LiquidGlassToggleLayout layout;
 
+  /// Glass look of the moving thumb (shape + appearance + refraction),
+  /// the same [LiquidGlassStyle] vocabulary used across the library. When
+  /// null, the tuned default capsule glass is used. A null
+  /// [LiquidGlassStyle.shape] keeps the height-tracking capsule so the
+  /// thumb stays a clean pill as it grows during the slide.
+  final LiquidGlassStyle? style;
+
   /// Capture resolution for the inner view. `1.0` is a good default; use
   /// less for cheaper captures, `0.0` for the device pixel ratio.
   final double pixelRatio;
@@ -66,6 +74,7 @@ class LiquidGlassToggle extends StatefulWidget {
     this.activeColor = const Color(0xFF34C759),
     this.inactiveColor = const Color(0x66808080),
     this.layout = const LiquidGlassToggleLayout(),
+    this.style,
     this.pixelRatio = 1.0,
   });
 
@@ -161,8 +170,11 @@ class _LiquidGlassToggleState extends State<LiquidGlassToggle>
     return SizedBox(
       width: viewWidth,
       height: viewHeight,
-      child: LiquidGlassView(
+      child: LiquidGlassView.withPositionedLenses(
         controller: _viewController,
+        // The track is captured with authored transparency; honor it on
+        // Skia so the glass thumb shows the real screen through the track.
+        honorBackdropAlpha: true,
         pixelRatio: widget.pixelRatio,
         realTimeCapture: true,
         useSync: false,
@@ -203,6 +215,7 @@ class _LiquidGlassToggleState extends State<LiquidGlassToggle>
             trackBottom: padY,
             travelFraction: _fraction.value,
             growFraction: growFraction,
+            style: widget.style,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _handleTap(!widget.value),

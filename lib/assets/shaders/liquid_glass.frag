@@ -21,7 +21,11 @@ uniform sampler2D u_texture_input;
 uniform float u_lensWidth;
 uniform float u_lensHeight;
 uniform float u_cornerRadius;
-uniform float u_cornerSmoothing;
+// Corner shape selector (see the shape branch in main):
+//   0 = circular rounded rect
+//   1 = squircle (Ln-norm continuous corners, full smoothing)
+//   2 = continuous (Apple capsule-style) corners
+uniform float u_cornerStyle;
 
 uniform float u_magnification;
 uniform float u_distortion;
@@ -59,6 +63,21 @@ uniform float u_borderMode;
 // bound without recompositing it back to full size.
 uniform vec2 u_imageOffset;
 uniform vec2 u_imageSize;
+
+// 1.0 = fold the sampled backdrop's alpha into coverage (Skia capture:
+// the bound snapshot carries meaningful authored transparency — e.g. the
+// slider/toggle capture a mostly-transparent track). 0.0 = ignore it and
+// treat the backdrop as opaque (Impeller live backdrop: its alpha is not
+// a transparency signal and reads 0 over dark regions, which would
+// otherwise zero the body coverage and drop the optical rim).
+uniform float u_honorBackdropAlpha;
+
+// Edge-AA band width in FRAGMENT pixels (one logical pixel): 1.0 on the Skia
+// (logical-px) shader space, devicePixelRatio on the Impeller (physical-px)
+// space. Lets the centered shape-coverage ramp be the same ~1 logical px wide
+// on both backends — without it, Impeller's 1-physical-px band undersamples
+// and the corners alias. Must be the LAST uniform (see packLiquidGlassUniforms).
+uniform float u_shapeAaPx;
 
 
 out vec4 frag_color;
@@ -100,6 +119,7 @@ vec3 applySaturation(vec3 color, float saturation) {
 vec4 finalSample(
     vec2 refractedPx,
     float shapeMask,
+    float caShift,
     out vec3 preTintColor
 ){
     vec3 refrColor;
@@ -112,23 +132,25 @@ vec4 finalSample(
     #ifdef IMPELLER_TARGET_OPENGLES
     sampleUV.y = 1.0 - sampleUV.y;
     #endif
-    refrColor = applyChromaticAberration(sampleUV, u_chromaticAberration);
+    // Chromatic aberration is confined to the distortion band (caShift),
+    // not applied across the whole lens body. The caller passes 0 outside
+    // the band and a zoneT-ramped shift inside it, so the colour fringing
+    // appears only where the glass actually bends light — at the edge.
+    refrColor = applyChromaticAberration(sampleUV, caShift);
     // Apply saturation BEFORE tinting
     refrColor = applySaturation(refrColor,u_saturation);
     preTintColor = refrColor; // capture before tint for optical border
 
-    // Alpha-honoring transparency (always on). The captured background
-    // is a premultiplied RGBA texture: a fully transparent texel
-    // decodes to black (rgb 0, a 0) and a colored-but-semi-transparent
-    // texel keeps its premultiplied rgb plus a partial alpha. We sample
-    // that alpha and fold it into the output coverage so the real
-    // backdrop shows through in proportion to the texel's transparency.
-    // For any opaque background (alpha 1) this is a mathematical no-op,
-    // which is why it needs no flag. Because the sample is
-    // premultiplied, refrColor * shapeMask stays the correct
-    // premultiplied rgb; only the alpha changes. The caller still lays
-    // the border on top afterwards, so the rim survives.
-    float coverage = shapeMask * texture(u_texture_input, sampleUV).a;
+    // Coverage = shape mask, optionally modulated by the sampled
+    // backdrop's alpha (see u_honorBackdropAlpha). Skia capture honors it
+    // so an authored-transparent snapshot (slider/toggle track) shows the
+    // real screen through; Impeller ignores it (its live-backdrop alpha
+    // reads 0 over dark regions and would otherwise drop the lens/rim —
+    // the "border missing on a black background" bug).
+    float texA = (u_honorBackdropAlpha > 0.5)
+        ? texture(u_texture_input, sampleUV).a
+        : 1.0;
+    float coverage = shapeMask * texA;
 
     vec4 base = vec4(refrColor * shapeMask, coverage);
     // Then apply lens tint
@@ -138,14 +160,24 @@ vec4 finalSample(
 
 
 float computeShapeMask(float shapeDistPx) {
-    // Original behavior — always worked on Skia and Impeller.
-    // Don't try to use fwidth(): SkSL's transpiler chokes on
-    // fwidth(float) and the vec2 workaround was wrong on this
-    // device too. A 1-pixel constant is fine in practice.
-    float aa = 1.0;
-    float mask = 1.0 - smoothstep(0.0, aa, shapeDistPx);
-    mask *= step(shapeDistPx, 0.0);
-    return mask;
+    // Centered signed-distance coverage. `shapeDistPx` (orthoDist =
+    // fC / length(grad)) is a first-order Euclidean distance measured in
+    // FRAGMENT pixels, so a fixed 1px band CENTERED on the outline is the
+    // correct antialiasing in the shader's own raster space — for circular,
+    // squircle AND continuous corners alike. This makes the edge self-AA so
+    // the silhouette no longer depends on a wrapping drawRRect for coverage.
+    //
+    // (The previous version was `1 - smoothstep(0, aa, sd)` times
+    // `step(sd, 0)`, which pushed the whole ramp OUTSIDE the shape and then
+    // deleted it with step() — i.e. a hard edge with no shader AA. The AA
+    // came entirely from the canvas drawRRect; drawing a plain rect aliased.)
+    //
+    // Don't use fwidth()/dFdx(): SkSL's transpiler chokes on the float form.
+    // The band width comes from u_shapeAaPx (= one logical pixel) so the ramp
+    // is the same physical width on Skia and Impeller; the max() floor keeps a
+    // safe 1px fallback if the uniform is ever unset.
+    float aa = max(u_shapeAaPx, 1.0);
+    return 1.0 - smoothstep(-0.5 * aa, 0.5 * aa, shapeDistPx);
 }
 
 
@@ -174,16 +206,20 @@ void main() {
     float shapeMask;
     ShapeData shapeData;
 
-    // Rounded rectangle. u_cornerSmoothing carries the CONTINUOUS-CORNER
-    // smoothing (0 = plain circular corners, 1 = full Apple-style
-    // continuous corners).
+    // Rounded rectangle. u_cornerStyle selects the corner SDF:
+    //   2 = continuous (Apple capsule-style), 1 = squircle, 0 = circular.
     float maxCorner      = min(u_lensWidth, u_lensHeight) * 0.5;
     float cornerRadiusPx = min(u_cornerRadius, maxCorner);
-    float smoothing      = clamp(u_cornerSmoothing, 0.0, 1.0);
 
-    if (smoothing > 0.001 && cornerRadiusPx > 0.5) {
-        vec2 zn = continuousCornerParams(cornerRadiusPx, smoothing, maxCorner);
-        shapeData = evaluateContinuousRRect(
+    if (u_cornerStyle > 1.5 && cornerRadiusPx > 0.5) {
+        // Continuous (Apple capsule-style) corners.
+        vec2 reach = continuousRoundedRectReach(cornerRadiusPx, lensHalfSizePx);
+        shapeData = evaluateContinuousRoundedRect(
+            fragPx, lensCenterPx, lensHalfSizePx, cornerRadiusPx, reach);
+    } else if (u_cornerStyle > 0.5 && cornerRadiusPx > 0.5) {
+        // Squircle (Ln-norm) corners — smoothing fixed at full (1.0).
+        vec2 zn = squircleCornerParams(cornerRadiusPx, 1.0, maxCorner);
+        shapeData = evaluateSquircleRRect(
             fragPx, lensCenterPx, lensHalfSizePx, zn.x, zn.y);
     } else {
         shapeData = evaluateShape(
@@ -219,9 +255,10 @@ void main() {
     if (zoneMask < 0.5) {
         // Outside distortion zone
         vec3 preTintCol = vec3(0.0);
+        // No chromatic aberration outside the distortion band.
         vec4 base = (u_enableBackgroundTransparency > 0.5)
         ? vec4(0.0)
-        : finalSample(magPx, shapeMask, preTintCol);
+        : finalSample(magPx, shapeMask, 0.0, preTintCol);
 
         vec3 ambientCol = preTintCol;
         vec4 borderPremul = getSweepBorder(
@@ -293,7 +330,11 @@ void main() {
     // Final sample & border
     // ===============================
     vec3 preTintCol2 = vec3(0.0);
-    vec4 base = finalSample(refrPx, shapeMask, preTintCol2);
+    // Confine chromatic aberration to the distortion band and ramp it with
+    // zoneT so the colour fringing is strongest at the shape edge (zoneT→1)
+    // and fades to none at the band's inner boundary (zoneT→0).
+    float caShift = u_chromaticAberration * zoneT;
+    vec4 base = finalSample(refrPx, shapeMask, caShift, preTintCol2);
 
     vec3 ambientCol2 = preTintCol2;
     vec4 borderPremul = getSweepBorder(

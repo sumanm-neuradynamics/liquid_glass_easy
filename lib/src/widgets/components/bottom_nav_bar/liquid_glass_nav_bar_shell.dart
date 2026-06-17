@@ -61,19 +61,10 @@ class LiquidGlassBottomNavBarShell extends StatelessWidget {
           Positioned.fill(
             child: Padding(
               padding: EdgeInsets.all(layout.padding),
-              child: Row(
-                children: [
-                  for (int i = 0; i < items.length; i++)
-                    Expanded(
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(28),
-                          onTap: () => onChanged(i),
-                        ),
-                      ),
-                    ),
-                ],
+              child: NavBarTapRow(
+                itemCount: items.length,
+                onChanged: onChanged,
+                cellHeight: layout.cellHeight,
               ),
             ),
           ),

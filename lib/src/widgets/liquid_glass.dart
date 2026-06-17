@@ -55,6 +55,13 @@ class LiquidGlassWidget extends StatefulWidget {
   /// `ImageFilter.isShaderFilterSupported`.
   final bool useImpellerBackdrop;
 
+  /// Whether the captured backdrop's alpha is folded into coverage on the
+  /// Skia path (the shader's `u_honorBackdropAlpha`). Forwarded to
+  /// [SkiaLiquidGlassLens]; ignored on the Impeller path (which always
+  /// treats the live backdrop as opaque). Set `true` only for the
+  /// slider/toggle, whose captured track is authored-transparent.
+  final bool honorBackdropAlpha;
+
   const LiquidGlassWidget(
       {super.key,
       required this.parentSize,
@@ -64,7 +71,8 @@ class LiquidGlassWidget extends StatefulWidget {
       this.sharedImageRegion,
       this.captureFallback,
       this.border,
-      this.useImpellerBackdrop = false});
+      this.useImpellerBackdrop = false,
+      this.honorBackdropAlpha = false});
 
   @override
   State<LiquidGlassWidget> createState() => _LiquidGlassWidgetState();
@@ -80,26 +88,26 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
-      value: widget.config.visibility ? 0 : 1, // initial value
+      value: widget.config.behavior.visibility ? 0 : 1, // initial value
     );
     // only attach trigger if controller exists
     // Attach controller if provided
-    widget.config.controller?.attach(
+    widget.config.behavior.controller?.attach(
         showLiquidGlass: _showLiquidGlass,
         hideLiquidGlass: _hideLiquidGlass,
         resetLiquidGlassPosition:
             _resetLiquidGlassPosition); // Resolve initial position
-    final initialPosition = widget.config.position.resolve(
+    final initialPosition = widget.config.geometry.position.resolve(
       widget.parentSize,
-      Size(widget.config.width, widget.config.height),
+      Size(widget.config.geometry.width, widget.config.geometry.height),
     );
     _touchNotifier = ValueNotifier<Offset>(initialPosition);
   }
 
   void setPosition() {
-    final initialPosition = widget.config.position.resolve(
+    final initialPosition = widget.config.geometry.position.resolve(
       widget.parentSize,
-      Size(widget.config.width, widget.config.height),
+      Size(widget.config.geometry.width, widget.config.geometry.height),
     );
     _touchNotifier.value = initialPosition;
   }
@@ -157,8 +165,8 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
     super.didUpdateWidget(oldWidget);
     // If config changes and no animation is running → update instantly
     if (!_animController.isAnimating &&
-        widget.config.visibility != oldWidget.config.visibility) {
-      if (widget.config.visibility) {
+        widget.config.behavior.visibility != oldWidget.config.behavior.visibility) {
+      if (widget.config.behavior.visibility) {
         if (_animController.isAnimating) _animController.stop();
         _animController.value = 0;
       } else {
@@ -173,17 +181,17 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
     final config = widget.config;
     if (parentSize.width != oldParentSize.width ||
         parentSize.height != oldParentSize.height ||
-        config.width != oldWidget.config.width ||
-        config.height != oldWidget.config.height ||
-        config.position != oldWidget.config.position) {
+        config.geometry.width != oldWidget.config.geometry.width ||
+        config.geometry.height != oldWidget.config.geometry.height ||
+        config.geometry.position != oldWidget.config.geometry.position) {
       // Compute old and new resolved centers
-      final oldResolvedPosition = oldWidget.config.position.resolve(
+      final oldResolvedPosition = oldWidget.config.geometry.position.resolve(
         oldParentSize,
-        Size(oldWidget.config.width, oldWidget.config.height),
+        Size(oldWidget.config.geometry.width, oldWidget.config.geometry.height),
       );
-      final resolvedPosition = config.position.resolve(
+      final resolvedPosition = config.geometry.position.resolve(
         parentSize,
-        Size(config.width, config.height),
+        Size(config.geometry.width, config.geometry.height),
       );
 
       // Calculate proportional scaling factors
@@ -222,11 +230,11 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
       // be free to extend beyond the parent (e.g. a list row scrolling off
       // the top/bottom); clamping here would pin it to the edge and break
       // the spacing between lenses.
-      if (!widget.config.outOfBoundaries) {
+      if (!widget.config.geometry.outOfBoundaries) {
         final double maxX =
-            parentSize.width - config.width.clamp(0.0, parentSize.width);
+            parentSize.width - config.geometry.width.clamp(0.0, parentSize.width);
         final double maxY =
-            parentSize.height - config.height.clamp(0.0, parentSize.height);
+            parentSize.height - config.geometry.height.clamp(0.0, parentSize.height);
 
         newTouch = Offset(
           newTouch.dx.clamp(0.0, maxX),
@@ -236,14 +244,14 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
 
       _touchNotifier.value = newTouch;
     }
-    // config.width.clamp(0.0, parentSize.width);
-    // config.height.clamp(0.0, parentSize.height);
-    if (!widget.config.outOfBoundaries) {
+    // config.geometry.width.clamp(0.0, parentSize.width);
+    // config.geometry.height.clamp(0.0, parentSize.height);
+    if (!widget.config.geometry.outOfBoundaries) {
       // --- clamp comes here, completely outside the condition ---
       final double maxX =
-          parentSize.width - config.width.clamp(0.0, parentSize.width);
+          parentSize.width - config.geometry.width.clamp(0.0, parentSize.width);
       final double maxY =
-          parentSize.height - config.height.clamp(0.0, parentSize.height);
+          parentSize.height - config.geometry.height.clamp(0.0, parentSize.height);
 
       _touchNotifier.value = Offset(
         _touchNotifier.value.dx.clamp(0.0, maxX),
@@ -254,7 +262,7 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
 
   @override
   void dispose() {
-    widget.config.controller?.detach();
+    widget.config.behavior.controller?.detach();
     _touchNotifier.dispose();
     _animController.dispose();
     super.dispose();
@@ -287,6 +295,7 @@ class _LiquidGlassWidgetState extends State<LiquidGlassWidget>
       touch: _touchNotifier,
       animValue: _animController.value,
       imageRegion: widget.sharedImageRegion,
+      honorBackdropAlpha: widget.honorBackdropAlpha,
     );
   }
 }

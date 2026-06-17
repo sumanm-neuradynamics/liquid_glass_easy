@@ -8,6 +8,10 @@ import '../../../controllers/liquid_glass_view_controller.dart';
 import '../../liquid_glass.dart';
 import '../../liquid_glass_view.dart';
 import '../../utils/liquid_glass_blur.dart';
+import '../../utils/liquid_glass_jelly_config.dart';
+import '../../utils/liquid_glass_jelly_resolver.dart';
+import '../../liquid_glass_style.dart';
+import '../../utils/liquid_glass_shape.dart';
 import '../../utils/liquid_glass_jelly_spring.dart';
 import '../../utils/liquid_glass_position.dart';
 import '../../utils/liquid_glass_refresh_rate.dart';
@@ -17,8 +21,9 @@ import 'liquid_glass_bottom_nav_bar.dart';
 
 /// Self-contained **animated** liquid-glass bottom nav bar —
 /// the iOS-26 "morphing glass pill" that slides between tabs, grows out
-/// of the rest highlight, can be dragged with a jelly-spring stretch,
-/// and reveals the selected icon as it passes.
+/// of the rest highlight, can be picked up with a press-and-hold on the
+/// selected pill and dragged with a jelly-spring stretch, and reveals
+/// the selected icon as it passes.
 ///
 /// This is the internal machinery behind
 /// [LiquidGlassBottomNavBar.glassPill]: it owns the entire dual
@@ -38,13 +43,31 @@ class LiquidGlassAnimatedNavBar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onChanged;
 
+  /// Icon + label styling for every tab cell. Forwarded to the shell so
+  /// the glass tier honors the same [LiquidGlassNavItemStyle] as the
+  /// non-glass tiers.
+  final LiquidGlassNavItemStyle itemStyle;
+
+  /// Whether the selection highlight (the moving glass pill + the static
+  /// rest pill) is drawn. When `false`, only the icons show and the
+  /// selected tab is colored via the shell's `selectedIndex`.
+  final bool showSelectionPill;
+
   /// Bar geometry (size, position, padding). The bottom margin should
   /// already include any safe-area inset.
   final LiquidGlassBottomNavBarLayout layout;
 
   /// Lenses composited in the **outer** view, above the bar — typically
   /// the app bar, the side action button, and any extra glass.
+  ///
+  /// Legacy positional API; prefer [outerChild] for widget-based slots.
   final List<LiquidGlass> outerLenses;
+
+  /// Widget subtree composited in the **outer** view's `child:` slot,
+  /// above the captured bar/body — typically a full-screen `Stack` of
+  /// the app bar and side action ([LiquidGlassLens]-based widgets). This
+  /// is the lens-anywhere replacement for [outerLenses].
+  final Widget? outerChild;
 
   /// Optional solid color behind [body].
   final Color? backgroundColor;
@@ -54,6 +77,19 @@ class LiquidGlassAnimatedNavBar extends StatefulWidget {
   /// against the parent size). When `null` the bar is bottom-center
   /// anchored via [layout]'s `bottomMargin`.
   final LiquidGlassPosition? barPosition;
+
+  /// Overrides the bar-capsule glass shape (e.g. a
+  /// [LiquidGlassShape] or a custom radius/clip). When null,
+  /// the default optical capsule is used.
+  final LiquidGlassShape? barShape;
+
+  /// Refraction of the bar capsule. When `null`, the default optical
+  /// capsule refraction is used.
+  final LiquidGlassRefraction? barRefraction;
+
+  /// Appearance (tint + blur) of the bar capsule. When `null`, the
+  /// default frost is used.
+  final LiquidGlassAppearance? barAppearance;
 
   /// Blur behind the moving glass pill. Defaults to none.
   final LiquidGlassBlur pillBlur;
@@ -73,6 +109,36 @@ class LiquidGlassAnimatedNavBar extends StatefulWidget {
 
   /// When `true`, the glass pill's inner area is transparent.
   final bool pillEnableInnerRadiusTransparent;
+
+  /// Overrides the moving glass pill's shape. When `null` the pill is an
+  /// Apple capsule-style [LiquidGlassShape] whose radius
+  /// tracks the pill height (a clean capsule as it grows/squashes).
+  final LiquidGlassShape? pillShape;
+
+  /// Fill tint of the moving glass pill.
+  final Color pillColor;
+
+  /// Look of the static rest pill (the highlight shown when the glass
+  /// pill is not moving): its `appearance.color` is the fill, `shape` the
+  /// corners, and a border is drawn only when the shape sets a
+  /// `borderColor`.
+  final LiquidGlassStyle restStyle;
+
+  /// Stiffness of the spring carrying the pill between tabs.
+  final double travelStiffness;
+
+  /// Damping of the travel spring. Critical (no overshoot) ≈
+  /// `2·√travelStiffness`; below it the pill bounces.
+  final double travelDamping;
+
+  /// The pill's jelly squash/stretch tuning, applied on both finger-drags
+  /// and tap-travel. The nav bar is **locked to the iOS
+  /// [LiquidGlassJellyStyle.squashStretch]** model — any
+  /// [LiquidGlassJellyConfig.style] passed here is ignored and normalized
+  /// to `squashStretch`. The original `pinchExtrude` model is kept internally
+  /// (it still drives [LiquidGlassJelly]) but is not selectable here; all
+  /// other fields are honored.
+  final LiquidGlassJellyConfig jelly;
 
   // Render pipeline knobs forwarded to both views.
   final double pixelRatio;
@@ -95,15 +161,43 @@ class LiquidGlassAnimatedNavBar extends StatefulWidget {
     required this.selectedIndex,
     required this.onChanged,
     required this.layout,
+    this.itemStyle = const LiquidGlassNavItemStyle(),
+    this.showSelectionPill = true,
     this.outerLenses = const [],
+    this.outerChild,
     this.backgroundColor,
     this.barPosition,
+    this.barShape,
+    this.barRefraction,
+    this.barAppearance,
     this.pillBlur = const LiquidGlassBlur(),
-    this.pillGrowHeight = 16,
+    this.pillGrowHeight = 12,
     this.pillDistortion = 0.06,
     this.pillDistortionWidth = 10,
     this.pillMagnification = 1,
     this.pillEnableInnerRadiusTransparent = false,
+    this.pillShape,
+    this.pillColor = const Color(0x1CFFFFFF),
+    this.restStyle = const LiquidGlassStyle(
+      appearance: LiquidGlassAppearance(color: Color(0x26FFFFFF)),
+    ),
+    this.travelStiffness = 280,
+    this.travelDamping = 31.4,
+    // Kept in sync with [LiquidGlassNavPillStyle]'s iOS squash & stretch
+    // default (softer snap + longer direction memory).
+    this.jelly = const LiquidGlassJellyConfig(
+      style: LiquidGlassJellyStyle.squashStretch,
+      stiffness: 260,
+      damping: 13,
+      maxVelocity: 6,
+      velocityClamp: 60,
+      stretchWidth: 17.1,
+      squashHeight: 9.8,
+      anchorBias: -1.0,
+      recoilScale: 3.0,
+      recoilAnchor: 1.0,
+      directionTau: 0.42,
+    ),
     this.pixelRatio = 1.0,
     this.useSync = true,
     this.useImpellerBackdrop,
@@ -129,12 +223,41 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
   /// Flips only AFTER the glass finishes travelling.
   late int _tabIndexCommitted;
 
-  /// True while the glass pill should be on screen (animating/dragging).
+  /// True while the glass pill should be on screen (animating/dragging,
+  /// or fading out).
   bool _pillGlassActive = false;
   bool _settlingFromDrag = false;
 
-  /// Fractional pill position (0..itemCount-1).
+  // ── Glass→static cross-fade ──────────────────────────────────────
+  // When the pill settles, the glass pill fades OUT (a true opacity fade
+  // of the whole pill); once it's gone the static rest pill fades IN. A
+  // new interaction cancels an in-flight fade.
+  /// Opacity of the moving glass pill (`1` while live; ramps 1→0 to fade).
+  double _glassOpacity = 1.0;
+
+  /// Appear progress of the glass pill (`0`→`1`): drives both a fade-in and
+  /// a grow-in so the pill doesn't pop in at full size. Reset to `0` each
+  /// time the pill appears from rest.
+  double _glassAppear = 1.0;
+
+  /// True while the glass pill is fading out (kept on screen meanwhile).
+  bool _fadingOutGlass = false;
+
+  /// True while the static rest pill is fading in (after the glass is gone).
+  bool _fadingInStatic = false;
+
+  /// Opacity of the static rest pill (`1` at rest; ramps 0→1 on fade-in).
+  double _staticOpacity = 1.0;
+
+  static const double _glassFadeSeconds = 0.28;
+  static const double _staticFadeSeconds = 0.26;
+  static const double _glassAppearSeconds = 0.15;
+
+  /// Fractional pill position (0..itemCount-1). While dragging this is
+  /// the finger's target; the pill is drawn at [_dragFollow], a smoothed
+  /// chase of it (so a hold away from the pill glides over).
   double _tabPillFracIndex = 0;
+  double _dragFollow = 0;
   bool _tabDragging = false;
 
   // ── Travel spring ────────────────────────────────────────────────
@@ -155,10 +278,33 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
   /// Grow envelope value during the drag-release settle (decays 1 → 0).
   double _settleGrow = 0;
 
-  /// Drag jelly — the shared simulation, tuned for tab-fraction units
-  /// (a full-speed flick crosses several cells per second).
+  /// Jelly simulation (in tab-fraction units), shared by finger-drags
+  /// and tap-travel. Its spring constants are pushed from [widget.jelly]
+  /// each frame by [_syncJellyConfig].
   final LiquidGlassJellySpring _dragJelly =
-      LiquidGlassJellySpring(maxVelocity: 8, velocityClamp: 60);
+      LiquidGlassJellySpring(maxVelocity: 6, velocityClamp: 60);
+
+  /// True once the current tap-travel has handed the jelly its release
+  /// (so the recoil/settle fires exactly once per travel, not every tick
+  /// while the spring finishes converging).
+  bool _travelReleased = false;
+
+  /// Whether the active travel should drive the jelly. A tap-travel does
+  /// (the spring motion IS the input); a drag-release travel does NOT —
+  /// the finger already loaded and released the jelly, so the positional
+  /// snap to the nearest tab must not re-pump it.
+  bool _travelFeedsJelly = false;
+
+  /// Pushes the current [widget.jelly] tuning into the live spring.
+  void _syncJellyConfig() {
+    final j = widget.jelly;
+    _dragJelly
+      ..stiffness = j.stiffness
+      ..damping = j.damping
+      ..maxVelocity = j.maxVelocity
+      ..velocityClamp = j.velocityClamp
+      ..directionTau = j.directionTau;
+  }
 
   /// Single ticker driving the travel spring, the drag jelly and the
   /// settle-grow decay.
@@ -234,9 +380,23 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
     }
   }
 
+  // ── Glass→static cross-fade ──────────────────────────────────────
+  /// Cancels any in-flight glass-fade / static-fade so a new interaction
+  /// shows the glass pill at full strength again.
+  void _cancelFades() {
+    _fadingOutGlass = false;
+    _fadingInStatic = false;
+    _glassOpacity = 1.0;
+    _staticOpacity = 1.0; // static is hidden under the active glass anyway
+  }
+
   // ── Selection / animation ────────────────────────────────────────
   void _animateTo(int next, {required bool notify}) {
     if (next == _tabIndex) return;
+    // If the pill is coming back from rest, grow + fade it in.
+    final bool wasInactive = !_pillGlassActive && !_tabDragging;
+    _cancelFades();
+    if (wasInactive) _glassAppear = 0.0;
     setState(() {
       _tabIndex = next;
       _pillGlassActive = true;
@@ -247,6 +407,12 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
       _travelFrom = _travelPos;
       _travelTarget = next.toDouble();
     });
+    // Prime the jelly so the spring-driven travel motion deforms the
+    // pill (squash/stretch) the same way a finger-drag would.
+    _syncJellyConfig();
+    _dragJelly.start(_travelPos);
+    _travelReleased = false;
+    _travelFeedsJelly = true;
     _startCapture();
     _startTicker();
     if (notify) widget.onChanged(next);
@@ -269,39 +435,57 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
     _animateTo(idx, notify: true);
   }
 
-  // ── Drag handlers ────────────────────────────────────────────────
-  void _onTabPillDragStart(DragStartDetails d) {
+  // ── Hold-to-grab handlers ────────────────────────────────────────
+  // Press-and-hold ANYWHERE on the bar lifts the pill and glides it to
+  // the held position, then slides it across tabs while the finger moves;
+  // releasing snaps it to the nearest tab. A quick tap still selects
+  // instantly (handled by the tap recognizer). See [_onTabBarTapUp].
+
+  void _onTabPillLongPressStart(LongPressStartDetails d) {
+    // If the pill is coming back from rest, grow + fade it in.
+    final bool wasInactive = !_pillGlassActive && !_tabDragging;
+    _cancelFades();
+    if (wasInactive) _glassAppear = 0.0;
     _tabDragging = true;
     _pillGlassActive = true;
     _settlingFromDrag = false;
     _travelActive = false;
     _startCapture();
     final frac = _xToTabFrac(d.globalPosition.dx);
-    _dragJelly.start(frac);
-    // Keep the spring's notion of position in sync so an interrupted
-    // tap-travel hands over to the finger without a jump.
-    _travelPos = frac;
+    // Start the smoothed follow at the pill's current resting position so
+    // a hold away from the pill EASES over to the finger instead of
+    // teleporting; _onTick chases the finger target from here.
+    _dragFollow = _travelPos;
+    _syncJellyConfig();
+    _dragJelly.start(_dragFollow);
     _travelVel = 0;
     _startTicker();
     setState(() => _tabPillFracIndex = frac);
   }
 
-  void _onTabPillDragUpdate(DragUpdateDetails d) {
+  void _onTabPillLongPressMoveUpdate(LongPressMoveUpdateDetails d) {
     if (!_tabDragging) return;
     final frac = _xToTabFrac(d.globalPosition.dx);
-    _dragJelly.pump(frac);
+    // Only set the destination; the pill (and its jelly) chase it via the
+    // smoothed follow in _onTick.
     setState(() => _tabPillFracIndex = frac);
   }
 
-  void _onTabPillDragEnd(DragEndDetails d) => _releaseTabPillDrag();
+  void _onTabPillLongPressEnd(LongPressEndDetails d) {
+    if (!_tabDragging) return;
+    _releaseTabPillDrag();
+  }
 
-  void _onTabPillDragCancel() {
+  void _onTabPillLongPressCancel() {
     if (!_tabDragging) return;
     _releaseTabPillDrag();
   }
 
   void _releaseTabPillDrag() {
-    final from = _tabPillFracIndex;
+    // Snap from where the pill VISUALLY is (the smoothed follow), not the
+    // raw finger, so an interrupted glide settles to the nearest tab it
+    // actually reached.
+    final from = _dragFollow;
     final next = from.round().clamp(0, _layout.itemCount - 1);
     final notify = next != _tabIndex;
     setState(() {
@@ -316,6 +500,10 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
       _travelTarget = next.toDouble();
       _settleGrow = 1.0;
     });
+    // The finger already drove the jelly; the post-release positional
+    // snap to the nearest tab must not re-pump it.
+    _travelFeedsJelly = false;
+    _travelReleased = true;
     _dragJelly.release();
     _startTicker();
     if (notify) widget.onChanged(next);
@@ -329,8 +517,8 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
     final dt = (elapsed - last).inMicroseconds / 1e6;
     _tickerLast = elapsed;
 
-    final jellySettled = _dragJelly.tick(dt, dragging: _tabDragging);
-
+    // 1) Travel (positional) spring — advance before feeding the jelly,
+    // so the jelly reads this frame's motion.
     bool travelSettled = true;
     if (_travelActive) {
       final r = liquidGlassSpringStep(
@@ -338,8 +526,8 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
         vel: _travelVel,
         target: _travelTarget,
         dt: dt,
-        stiffness: _kTravelStiffness,
-        damping: _kTravelDamping,
+        stiffness: widget.travelStiffness,
+        damping: widget.travelDamping,
       );
       _travelPos = r.$1;
       _travelVel = r.$2;
@@ -351,7 +539,33 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
       }
     }
 
-    // Drag-release grow decay — replaces the old 140ms linear shrink.
+    // 2) Feed the jelly from a TAP-travel so the pill deforms like a
+    // drag: pump the spring-driven position while moving, then hand it a
+    // single release on arrival so it recoils and wobbles to rest. A
+    // finger-drag feeds the jelly through its own handlers; a
+    // drag-RELEASE snap does not feed it at all (_travelFeedsJelly).
+    _syncJellyConfig();
+    // While dragging, smoothly chase the finger target so a hold away
+    // from the pill glides to the held position; the jelly is fed from
+    // this smoothed motion so it deforms along the glide and the drag.
+    if (_tabDragging) {
+      const followTau = 0.05;
+      _dragFollow +=
+          (_tabPillFracIndex - _dragFollow) * (1 - math.exp(-dt / followTau));
+      _dragJelly.pump(_dragFollow);
+    }
+    final bool travelFeeding =
+        _travelActive && !_tabDragging && _travelFeedsJelly;
+    if (travelFeeding && !travelSettled) {
+      _dragJelly.pump(_travelPos);
+    } else if (travelFeeding && travelSettled && !_travelReleased) {
+      _dragJelly.release();
+      _travelReleased = true;
+    }
+    final bool jellyDriven = _tabDragging || (travelFeeding && !travelSettled);
+    final jellySettled = _dragJelly.tick(dt, dragging: jellyDriven);
+
+    // 3) Drag-release grow decay — replaces the old 140ms linear shrink.
     if (_settlingFromDrag && _settleGrow > 0) {
       const tau = 0.06;
       _settleGrow *= math.exp(-dt / tau);
@@ -359,31 +573,61 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
     }
     final growSettled = !_settlingFromDrag || _settleGrow == 0;
 
+    // 4) Commit the selection once the pill has ARRIVED (travel + grow
+    // settled), even if the jelly is still wobbling. The glass pill sits
+    // over the committed index, so flipping it here causes no flash; the
+    // recoil keeps playing on the now-committed pill.
     if (_travelActive && travelSettled && growSettled && !_tabDragging) {
-      // Commit atomically in the SAME frame the glass pill turns off.
-      // Deferring the commit to a post-frame callback left one frame
-      // where the glass was gone but the shell still showed the OLD
-      // committed index — the "old icon flashes white" glitch.
       _travelActive = false;
-      _pillGlassActive = false;
       _settlingFromDrag = false;
       _settleGrow = 0;
       _tabIndexCommitted = _tabIndex;
-      _maybeStopCapture();
     }
 
-    if (!_tabDragging && !_travelActive && jellySettled) {
+    // 4.5) Grow + fade the pill IN when it first appears.
+    if (_glassAppear < 1.0) {
+      _glassAppear += dt / _glassAppearSeconds;
+      if (_glassAppear >= 1.0) _glassAppear = 1.0;
+    }
+
+    // 5) Cross-fade as soon as the pill ARRIVES (travel settled) and has
+    // finished appearing — do NOT wait for the jelly recoil to die out, or
+    // the fade is held back by the wobble. The pill fades while it finishes
+    // its last little wobble. Once the glass is gone the static rest pill
+    // fades in. A new interaction cancels this (see _cancelFades).
+    final bool arrived = !_travelActive && !_tabDragging && _glassAppear >= 1.0;
+    if (arrived && _pillGlassActive && !_fadingOutGlass) {
+      _fadingOutGlass = true;
+    }
+    if (_fadingOutGlass) {
+      _glassOpacity -= dt / _glassFadeSeconds;
+      if (_glassOpacity <= 0) {
+        _glassOpacity = 0;
+        _fadingOutGlass = false;
+        _pillGlassActive = false; // remove the (now invisible) glass pill
+        _staticOpacity = 0;
+        _fadingInStatic = true;
+      }
+    }
+    if (_fadingInStatic) {
+      _staticOpacity += dt / _staticFadeSeconds;
+      if (_staticOpacity >= 1) {
+        _staticOpacity = 1;
+        _fadingInStatic = false;
+      }
+    }
+
+    // Stop the ticker + capture only once the fades AND the jelly recoil
+    // have all finished.
+    if (arrived && jellySettled && !_fadingOutGlass && !_fadingInStatic) {
+      _maybeStopCapture();
       _ticker?.stop();
     }
+
     if (mounted) setState(() {});
   }
 
-  /// Travel spring tuning — the same family as the jelly (underdamped,
-  /// one soft overshoot at arrival).
-  static const double _kTravelStiffness = 320;
-  static const double _kTravelDamping = 22;
-
-  bool get _pillGlassVisible => _travelActive || _tabDragging;
+  bool get _pillGlassVisible => _pillGlassActive || _tabDragging;
 
   @override
   Widget build(BuildContext context) {
@@ -447,30 +691,88 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
           layout.pillWidth + (targetGlassW - layout.pillWidth) * growT;
       final pillExtraH = glassH - layout.cellHeight;
 
-      final pillFrac = _tabDragging ? _tabPillFracIndex : _travelPos;
+      final basePillFrac = _tabDragging ? _dragFollow : _travelPos;
 
       final staticPillLeft =
           _barLeft + layout.padding + _tabIndexCommitted * cellW;
       final staticBottom = _effBottomMargin + layout.padding;
 
-      // Jelly: width squeezes inward, pill grows a touch taller.
-      final tabStretchMag = _dragJelly.stretch.abs().clamp(0.0, 1.2);
-      final tabSqueezeW = -layout.pillWidth * 0.18 * tabStretchMag;
-      final tabStretchH = layout.pillExtraHeight * 0.18 * tabStretchMag;
+      // Jelly deformation — the same model as the slider thumb, fed by
+      // both finger-drags and tap-travel (see _onTick). It produces a
+      // width delta, a height delta, and a horizontal lean (px); the lean
+      // is folded back into the pill's fractional index below.
+      //
+      //   • pinchExtrude — from the lean spring: squeeze narrower + grow
+      //     taller while loaded, leaning into the motion.
+      //   • stretch (iOS) — from the signed deform spring: elongate along
+      //     the travel axis while moving, then recoil narrower + taller on
+      //     arrival/reversal, with a momentum-sided crumple.
+      // The nav pill is locked to the iOS jelly (squash & stretch) model:
+      // normalize away any `pinchExtrude` the caller passed. That branch is
+      // kept internally (used by [LiquidGlassJelly] and below) but is not
+      // reachable through the nav bar's public API.
+      final jelly = widget.jelly.style == LiquidGlassJellyStyle.squashStretch
+          ? widget.jelly
+          : widget.jelly.copyWith(style: LiquidGlassJellyStyle.squashStretch);
+      double jellyDeltaW = 0;
+      double jellyDeltaH = 0;
+      double jellyBiasPx = 0;
+      if (_pillGlassVisible) {
+        // Squash/stretch via the shared resolver (single source of the
+        // jelly geometry math — also used by LiquidGlassJelly and the
+        // slider thumb). pinch derives its amounts from the pill width;
+        // stretch uses the jelly's stretch/squash amounts.
+        final bool isPinch =
+            jelly.style == LiquidGlassJellyStyle.pinchExtrude;
+        final deform = resolveJellyDeformation(
+          style: isPinch
+              ? LiquidGlassJellyStyle.pinchExtrude
+              : LiquidGlassJellyStyle.squashStretch,
+          springValue: isPinch ? _dragJelly.stretch : _dragJelly.deform,
+          directionSign: _dragJelly.direction.isNegative ? -1.0 : 1.0,
+          alongAmount: isPinch ? layout.pillWidth * 0.18 : jelly.stretchWidth,
+          crossAmount:
+              isPinch ? layout.pillExtraHeight * 0.18 : jelly.squashHeight,
+          anchorBias: jelly.anchorBias,
+          recoilScale: jelly.recoilScale,
+          recoilAnchor: jelly.recoilAnchor,
+          alongFloor: -layout.pillWidth * 0.45,
+          crossFloor: -layout.cellHeight * 0.4,
+        );
+        jellyDeltaW = deform.along;
+        jellyDeltaH = deform.cross;
+        jellyBiasPx = deform.bias;
+      }
 
-      final bool glassOn = _pillGlassVisible;
+      // Damp the jelly wobble by the pill's opacity so it subsides AS the
+      // pill fades out — keeps the disappearance clean no matter how bouncy
+      // a jelly the developer configures (no effect while opacity == 1).
+      jellyDeltaW *= _glassOpacity;
+      jellyDeltaH *= _glassOpacity;
+      jellyBiasPx *= _glassOpacity;
+
+      // Fold the horizontal lean into the fractional index (px → tabs).
+      final pillFrac =
+          basePillFrac + (cellW > 0 ? jellyBiasPx / cellW : 0.0);
+
+      // Grow-in: when the pill appears it scales up from the STATIC-PILL
+      // size (its extras → 0 at appear=0, so width/height = pillWidth ×
+      // cellHeight) to its full glass size as _glassAppear ramps 0→1.
+      final double effExtraW =
+          ((glassW - layout.pillWidth) + jellyDeltaW) * _glassAppear;
+      final double effExtraH = (pillExtraH + jellyDeltaH) * _glassAppear;
+
+      final bool glassOn = _pillGlassVisible && widget.showSelectionPill;
       final double? hlFrac = glassOn ? pillFrac : null;
-      final double? hlW =
-          glassOn ? layout.pillWidth + (glassW - layout.pillWidth) + tabSqueezeW : null;
-      final double? hlH =
-          glassOn ? layout.cellHeight + pillExtraH + tabStretchH : null;
+      final double? hlW = glassOn ? layout.pillWidth + effExtraW : null;
+      final double? hlH = glassOn ? layout.cellHeight + effExtraH : null;
 
       return Stack(
         fit: StackFit.expand,
         children: [
           // OUTER view: captures the inner stack and composites the
           // moving glass pill + the developer's outer lenses on top.
-          LiquidGlassView(
+          LiquidGlassView.withPositionedLenses(
             controller: _outerViewController,
             pixelRatio: widget.pixelRatio,
             useSync: widget.useSync,
@@ -483,6 +785,9 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
               pillW: hlW,
               pillH: hlH,
             ),
+            // Outer slots (app bar, side action) live in the view's
+            // `child:` subtree as lens-anywhere widgets (declared after
+            // `children:` to satisfy sort_child_properties_last).
             children: [
               if (glassOn)
                 buildLiquidGlassBottomNavPill(
@@ -503,8 +808,16 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
                   magnification: widget.pillMagnification,
                   enableInnerRadiusTransparent:
                       widget.pillEnableInnerRadiusTransparent,
-                  extraHeight: pillExtraH + tabStretchH,
-                  extraWidth: (glassW - layout.pillWidth) + tabSqueezeW,
+                  shape: widget.pillShape,
+                  color: widget.pillColor,
+                  // Grow-in from the static-pill size: extras scaled by
+                  // _glassAppear (0 → full).
+                  extraHeight: effExtraH,
+                  extraWidth: effExtraW,
+                  // Fade in/out by opacity: grow-in fade (_glassAppear) on
+                  // appear, fade-out (_glassOpacity) once the selection
+                  // settles (then the static rest pill fades in).
+                  opacity: _glassOpacity * _glassAppear,
                 ),
               // Stable, role-based keys so each outer lens keeps its own
               // `State` regardless of whether the pill is currently in the
@@ -517,19 +830,30 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
                     : widget.outerLenses[i]
                         .copyWith(key: ValueKey('lg-nav-outer-$i')),
             ],
+            child: widget.outerChild,
           ),
-          // Static rest pill — only when the glass is NOT on screen.
-          if (!_pillGlassActive && !_tabDragging)
+          // Static rest pill — only once the glass pill has fully faded
+          // out. It fades IN (via _staticOpacity, 0→1) so the hand-off
+          // reads as two sequential fades.
+          if (!_pillGlassActive && !_tabDragging && widget.showSelectionPill)
             Positioned(
               key: const ValueKey('lg-animated-nav-pill-static'),
               left: staticPillLeft,
               bottom: staticBottom,
-              child: LiquidGlassBottomNavPillStatic(
-                width: layout.pillWidth,
-                height: layout.cellHeight,
+              child: Opacity(
+                opacity: _staticOpacity.clamp(0.0, 1.0),
+                child: LiquidGlassBottomNavPillStatic(
+                  width: layout.pillWidth,
+                  height: layout.cellHeight,
+                  color: widget.restStyle.appearance.color,
+                  shape: widget.restStyle.shape,
+                ),
               ),
             ),
-          // Unified gesture overlay (tap cell + drag pill in one arena).
+          // Unified gesture overlay: a quick tap on any cell selects it;
+          // a press-and-hold on the *selected* pill lifts it to drag.
+          // Both recognizers share one arena — tap wins a quick release,
+          // the long-press wins once the hold deadline passes.
           Positioned(
             key: const ValueKey('lg-animated-nav-gesture-overlay'),
             left: _barLeft + layout.padding,
@@ -544,15 +868,17 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
                   () => TapGestureRecognizer(),
                   (instance) => instance.onTapUp = _onTabBarTapUp,
                 ),
-                HorizontalDragGestureRecognizer:
+                LongPressGestureRecognizer:
                     GestureRecognizerFactoryWithHandlers<
-                        HorizontalDragGestureRecognizer>(
-                  () => HorizontalDragGestureRecognizer(),
+                        LongPressGestureRecognizer>(
+                  () => LongPressGestureRecognizer(
+                    duration: const Duration(milliseconds: 100),
+                  ),
                   (instance) => instance
-                    ..onStart = _onTabPillDragStart
-                    ..onUpdate = _onTabPillDragUpdate
-                    ..onEnd = _onTabPillDragEnd
-                    ..onCancel = _onTabPillDragCancel,
+                    ..onLongPressStart = _onTabPillLongPressStart
+                    ..onLongPressMoveUpdate = _onTabPillLongPressMoveUpdate
+                    ..onLongPressEnd = _onTabPillLongPressEnd
+                    ..onLongPressCancel = _onTabPillLongPressCancel,
                 ),
               },
             ),
@@ -579,7 +905,7 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
     return Stack(
       fit: StackFit.expand,
       children: [
-        LiquidGlassView(
+        LiquidGlassView.withPositionedLenses(
           controller: _innerViewController,
           pixelRatio: widget.pixelRatio,
           useSync: widget.useSync,
@@ -591,6 +917,9 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
             buildLiquidGlassBottomNavCapsule(
               layout: layout,
               position: widget.barPosition,
+              shape: widget.barShape,
+              refraction: widget.barRefraction,
+              appearance: widget.barAppearance,
             ),
           ],
         ),
@@ -604,7 +933,7 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
             child: LiquidGlassAnimatedBottomNavBarShell(
               items: widget.items,
               selectedIndex: _tabIndexCommitted,
-              onChanged: (_) {},
+              itemStyle: widget.itemStyle,
               layout: layout,
               left: _barLeft,
               bottom: _effBottomMargin,

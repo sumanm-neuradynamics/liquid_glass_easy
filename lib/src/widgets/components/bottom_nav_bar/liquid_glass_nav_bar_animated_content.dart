@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/liquid_glass_shape.dart';
 import '../liquid_glass_tab_bar.dart' show LiquidGlassTabBarItem;
+import 'liquid_glass_nav_bar_icon_row.dart';
+import 'liquid_glass_nav_bar_pill.dart';
 import 'liquid_glass_nav_bar_pill_clippers.dart';
+import 'liquid_glass_nav_bar_style.dart';
 
 /// Animated content layer for [LiquidGlassBottomNavBar] when
 /// `animated: true`.
@@ -23,12 +27,14 @@ class AnimatedBottomNavBarContent extends StatefulWidget {
   final double itemPadding;
   final bool showSelectionPill;
   final Color selectionColor;
-  final Color selectedItemColor;
-  final Color unselectedItemColor;
-  final double iconSize;
-  final double labelFontSize;
+  final LiquidGlassNavItemStyle itemStyle;
   final Duration duration;
   final Curve curve;
+
+  /// Corner shape (and optional border) of the sliding selection pill —
+  /// drives the pill fill, its rim (via the shape's `borderColor`), and
+  /// the icon-reveal clip. When `null`, a plain capsule is used.
+  final LiquidGlassShape? pillShape;
 
   const AnimatedBottomNavBarContent({
     super.key,
@@ -38,12 +44,10 @@ class AnimatedBottomNavBarContent extends StatefulWidget {
     required this.itemPadding,
     required this.showSelectionPill,
     required this.selectionColor,
-    required this.selectedItemColor,
-    required this.unselectedItemColor,
-    required this.iconSize,
-    required this.labelFontSize,
+    required this.itemStyle,
     required this.duration,
     required this.curve,
+    this.pillShape,
   });
 
   @override
@@ -113,91 +117,73 @@ class _AnimatedBottomNavBarContentState
       child: Padding(
         padding: EdgeInsets.all(widget.itemPadding),
         child: LayoutBuilder(builder: (context, constraints) {
-        final cellWidth = constraints.maxWidth / widget.items.length;
-        final cellHeight = constraints.maxHeight;
-        return AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
-            final frac = _currentIndex;
-            final pillRect = Rect.fromLTWH(
-              frac * cellWidth,
-              0,
-              cellWidth,
-              cellHeight,
-            );
-            final pillRadius = cellHeight / 2;
-            return Stack(
-              children: [
-                // Moving selection pill — slides behind the icons.
-                // A soft fill plus a faint rim + shadow so it reads as a
-                // raised glass pill rather than a barely-there tint.
-                if (widget.showSelectionPill)
-                  Positioned.fromRect(
-                    rect: pillRect,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: widget.selectionColor,
-                        borderRadius: BorderRadius.circular(pillRadius),
-                        border: Border.all(
-                          color: Colors.white.withAlpha(70),
-                          width: 0.8,
+          final cellWidth = constraints.maxWidth / widget.items.length;
+          final cellHeight = constraints.maxHeight;
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              final frac = _currentIndex;
+              final pillRect = Rect.fromLTWH(
+                frac * cellWidth,
+                0,
+                cellWidth,
+                cellHeight,
+              );
+              final pillRadius = cellHeight / 2;
+              return Stack(
+                children: [
+                  // Moving selection pill — slides behind the icons.
+                  // A soft fill; any rim comes from the pill shape's
+                  // `borderColor` (no fake drop shadow).
+                  if (widget.showSelectionPill)
+                    Positioned.fromRect(
+                      rect: pillRect,
+                      child: CustomPaint(
+                        painter: LiquidGlassNavPillSurfacePainter(
+                          color: widget.selectionColor,
+                          shape: widget.pillShape,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(28),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
                     ),
-                  ),
-                // Unselected icon row, clipped to OUTSIDE the pill.
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: ClipPath(
-                      clipper: NavBarOutsidePillClipper(
-                        pillRect: pillRect,
-                        pillRadius: pillRadius,
-                      ),
-                      child: _animatedIconRow(forceSelected: false),
-                    ),
-                  ),
-                ),
-                // Selected icon row, clipped to INSIDE the pill — this
-                // is the part that "fills in" as the pill passes over.
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: ClipPath(
-                      clipper: NavBarInsidePillClipper(
-                        pillRect: pillRect,
-                        pillRadius: pillRadius,
-                      ),
-                      child: _animatedIconRow(forceSelected: true),
-                    ),
-                  ),
-                ),
-                // Tap layer on top — owns all pointer events.
-                Positioned.fill(
-                  child: Row(
-                    children: [
-                      for (int i = 0; i < widget.items.length; i++)
-                        Expanded(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(28),
-                              onTap: () => widget.onChanged(i),
-                            ),
-                          ),
+                  // Unselected icon row, clipped to OUTSIDE the pill.
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: ClipPath(
+                        clipper: NavBarOutsidePillClipper(
+                          pillRect: pillRect,
+                          pillRadius: pillRadius,
+                          shape: widget.pillShape,
                         ),
-                    ],
+                        child: _animatedIconRow(forceSelected: false),
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
-        );
+                  // Selected icon row, clipped to INSIDE the pill — this
+                  // is the part that "fills in" as the pill passes over.
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: ClipPath(
+                        clipper: NavBarInsidePillClipper(
+                          pillRect: pillRect,
+                          pillRadius: pillRadius,
+                          shape: widget.pillShape,
+                        ),
+                        child: _animatedIconRow(forceSelected: true),
+                      ),
+                    ),
+                  ),
+                  // Tap layer on top — owns all pointer events.
+                  Positioned.fill(
+                    child: NavBarTapRow(
+                      itemCount: widget.items.length,
+                      onChanged: widget.onChanged,
+                      cellHeight: cellHeight,
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
         }),
       ),
     );
@@ -212,36 +198,10 @@ class _AnimatedBottomNavBarContentState
       children: [
         for (final item in widget.items)
           Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    forceSelected
-                        ? (item.selectedIcon ?? item.icon)
-                        : item.icon,
-                    size: widget.iconSize,
-                    color: forceSelected
-                        ? widget.selectedItemColor
-                        : widget.unselectedItemColor,
-                  ),
-                  if (item.label != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      item.label!,
-                      style: TextStyle(
-                        fontSize: widget.labelFontSize,
-                        fontWeight: forceSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: forceSelected
-                            ? widget.selectedItemColor
-                            : widget.unselectedItemColor,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+            child: LiquidGlassNavTabCell(
+              item: item,
+              selected: forceSelected,
+              style: widget.itemStyle,
             ),
           ),
       ],

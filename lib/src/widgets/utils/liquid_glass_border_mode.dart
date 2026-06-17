@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 /// Example:
 /// ```dart
 /// // Classic border with custom shadow color
-/// RoundedRectangleShape(
+/// LiquidGlassShape.roundedRectangle(
 ///   lightColor: Color(0xB2FFFFFF),
 ///   borderType: ClassicBorder(
 ///     borderSoftness: 2.5,
@@ -18,7 +18,7 @@ import 'package:flutter/material.dart';
 /// )
 ///
 /// // Optical border with saturation boost
-/// RoundedRectangleShape(
+/// LiquidGlassShape.roundedRectangle(
 ///   borderType: OpticalBorder(
 ///     borderSaturation: 1.5,
 ///   ),

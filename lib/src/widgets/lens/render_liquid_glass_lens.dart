@@ -220,6 +220,12 @@ class RenderLiquidGlassLens extends RenderProxyBox
     required double scale,
     required double borderWidth,
     required bool includeLensColor,
+    // Lens-anywhere lenses never honor the captured backdrop's alpha: the
+    // capture is treated as opaque so the optical rim/body survive over dark
+    // or empty regions. Only the slider/toggle (a separate painter path) opt
+    // in. Both paint paths here inherit this; Impeller also passes it
+    // explicitly for clarity.
+    bool honorBackdropAlpha = false,
     Offset imageOffset = Offset.zero,
     Size? imageSize,
   }) {
@@ -244,6 +250,7 @@ class RenderLiquidGlassLens extends RenderProxyBox
       refractionMode: _refraction.refractionMode,
       includeLensColor: includeLensColor,
       lensColor: _appearance.color,
+      honorBackdropAlpha: honorBackdropAlpha,
       imageOffset: imageOffset,
       imageSize: imageSize,
     );
@@ -290,6 +297,9 @@ class RenderLiquidGlassLens extends RenderProxyBox
       // pass sits BELOW the shader pass, so the rim stays sharp.
       borderWidth: _fullBorderWidth,
       includeLensColor: true,
+      // Impeller's live backdrop alpha is not a transparency signal
+      // (reads 0 over dark regions); ignore it so the rim/body survive.
+      honorBackdropAlpha: false,
     );
 
     final double radius = liquidGlassClipCornerRadius(_shape);

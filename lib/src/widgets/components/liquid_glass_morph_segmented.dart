@@ -143,16 +143,16 @@ LiquidGlass buildLiquidGlassMorphSegmentedCapsule({
       ),
       width: layout.width,
       height: layout.height,
-      shape: RoundedRectangleShape(
-        cornerRadius: layout.height / 2,
-        borderWidth: 1.0,
-        lightIntensity: 1.0,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.1,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.25,
-        ),
+    ),
+    shape: LiquidGlassShape.roundedRectangle(
+      cornerRadius: layout.height / 2,
+      borderWidth: 1.0,
+      lightIntensity: 1.0,
+      lightDirection: 80,
+      borderType: const OpticalBorder(
+        borderSaturation: 1.1,
+        ambientIntensity: 1.0,
+        borderSolidity: 0.25,
       ),
     ),
     refraction: const LiquidGlassRefraction(
@@ -218,16 +218,16 @@ LiquidGlass buildLiquidGlassMorphSegmentedPill({
       ),
       width: pillW,
       height: pillH,
-      shape: RoundedRectangleShape(
-        cornerRadius: pillH / 2,
-        borderWidth: 1.0,
-        lightIntensity: 1.3,
-        lightDirection: 80,
-        borderType: const OpticalBorder(
-          borderSaturation: 1.4,
-          ambientIntensity: 1.0,
-          borderSolidity: 0.5,
-        ),
+    ),
+    shape: LiquidGlassShape.roundedRectangle(
+      cornerRadius: pillH / 2,
+      borderWidth: 1.0,
+      lightIntensity: 1.3,
+      lightDirection: 80,
+      borderType: const OpticalBorder(
+        borderSaturation: 1.4,
+        ambientIntensity: 1.0,
+        borderSolidity: 0.5,
       ),
     ),
     refraction: const LiquidGlassRefraction(

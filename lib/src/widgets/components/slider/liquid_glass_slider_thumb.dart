@@ -1,10 +1,11 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../liquid_glass.dart';
+import '../../liquid_glass_style.dart';
+import '../../utils/liquid_glass_jelly_config.dart';
+import '../../utils/liquid_glass_jelly_resolver.dart';
+import '../../utils/liquid_glass_shape.dart';
 import '../liquid_glass_morph_pill.dart';
-import 'liquid_glass_slider_jelly.dart';
 import 'liquid_glass_slider_layout.dart';
 
 /// Builds the moving glass thumb at the requested track position.
@@ -43,7 +44,11 @@ LiquidGlass buildLiquidGlassSliderThumb({
   /// (negative = left). Drives the anchor-bias lean; the deformation
   /// itself is direction-symmetric.
   double motionSign = 1,
-  LiquidGlassSliderJelly jelly = const LiquidGlassSliderJelly(),
+  LiquidGlassJellyConfig jelly = const LiquidGlassJellyConfig(),
+
+  /// Glass look of the thumb pill. When null the tuned default capsule
+  /// glass is used; see [buildLiquidGlassMorphPill].
+  LiquidGlassStyle? style,
 
   /// Optional content rendered inside the lens, above the glass (e.g.
   /// the white rest handle + its gesture surface).
@@ -53,53 +58,30 @@ LiquidGlass buildLiquidGlassSliderThumb({
   final extraW = layout.thumbExtraWidth * f;
   final extraH = layout.thumbExtraHeight * f;
 
-  final s = stretchFraction.clamp(-1.5, 1.5);
-  final sMag = s.abs();
-  final sSign = s.isNegative ? -1.0 : 1.0;
-
-  final double deltaW;
-  final double deltaH;
-  final double centerBiasX;
-
-  if (jelly.style == LiquidGlassSliderJellyStyle.pinchExtrude) {
-    // Horizontal SQUEEZE — pill becomes a touch narrower while the
-    // spring is loaded. The center bias below makes the leading
-    // edge lead the trailing edge.
-    deltaW = -layout.thumbSqueezeWidth * sMag;
-    // Vertical STRETCH — pill becomes taller as the width squeezes,
-    // suggesting volume preservation.
-    deltaH = layout.thumbStretchHeight * sMag;
-    // Center bias: pill's center shifts a touch in the direction of
-    // motion. Tied to the squeeze magnitude so the lean scales with
-    // the spring load.
-    centerBiasX = layout.thumbSqueezeWidth * 0.6 * sMag * sSign;
-  } else {
-    // iOS-style squash & stretch. Here [stretchFraction] is the SIGNED
-    // deform spring value, not a direction:
-    //   d > 0 — moving: elongate along the drag axis, flatten slightly
-    //           (volume preservation).
-    //   d < 0 — just stopped: the spring overshot through neutral, so
-    //           the volume rebounds the other way — narrower and TALLER
-    //           — before wobbling to rest. recoilScale exaggerates it.
-    // Direction comes in via [motionSign] and only drives the lean.
-    final d = s >= 0 ? s : s * jelly.recoilScale;
-    // Keep the pill from inverting under extreme recoil settings.
-    deltaW = math.max(jelly.stretchWidth * d, -layout.thumbWidth * 0.45);
-    deltaH = math.max(-jelly.squashHeight * d, -layout.thumbHeight * 0.4);
-    // The anchor-bias lean applies only while stretched along the
-    // motion.
-    final leanBias = jelly.anchorBias * (math.max(deltaW, 0) / 2) * motionSign;
-    // Recoil squash is momentum-sided: shifting the center toward the
-    // (remembered) motion direction by recoilAnchor × half the lost
-    // width pins the leading edge in place, so the whole compression is
-    // absorbed by the trailing side — it piles into the front instead
-    // of shrinking symmetrically. _dir still holds the OLD direction at
-    // squash onset (it lags by design), which is the correct anchor for
-    // both the stop and the reversal case.
-    final squashShift =
-        deltaW < 0 ? jelly.recoilAnchor * (-deltaW / 2) * motionSign : 0.0;
-    centerBiasX = leanBias + squashShift;
-  }
+  // Squash/stretch via the shared resolver (the single source of the
+  // jelly geometry math — also used by LiquidGlassJelly and the nav pill).
+  // pinch squeezes/extrudes by the layout's thumb deltas; stretch uses
+  // the jelly's stretch/squash amounts. [stretchFraction] is already the
+  // style-appropriate spring output (lean spring for pinch, deform spring
+  // for stretch), selected by the slider widget.
+  final bool isPinch = jelly.style == LiquidGlassJellyStyle.pinchExtrude;
+  final deform = resolveJellyDeformation(
+    style: isPinch
+        ? LiquidGlassJellyStyle.pinchExtrude
+        : LiquidGlassJellyStyle.squashStretch,
+    springValue: stretchFraction,
+    directionSign: motionSign,
+    alongAmount: isPinch ? layout.thumbSqueezeWidth : jelly.stretchWidth,
+    crossAmount: isPinch ? layout.thumbStretchHeight : jelly.squashHeight,
+    anchorBias: jelly.anchorBias,
+    recoilScale: jelly.recoilScale,
+    recoilAnchor: jelly.recoilAnchor,
+    alongFloor: -layout.thumbWidth * 0.45,
+    crossFloor: -layout.thumbHeight * 0.4,
+  );
+  final double deltaW = deform.along;
+  final double deltaH = deform.cross;
+  final double centerBiasX = deform.bias;
 
   final pillW = layout.thumbWidth + extraW + deltaW;
   final pillH = layout.thumbHeight + extraH + deltaH;
@@ -126,6 +108,12 @@ LiquidGlass buildLiquidGlassSliderThumb({
     left: left,
     bottom: bottom,
     extraHeight: 0,
+    style: style,
+    // The slider thumb defaults to the Apple continuous rounded rectangle
+    // (honored only when the caller doesn't supply an explicit shape).
+    defaultCornerStyle: LiquidGlassCornerStyle.continuousRoundedRectangle,
+    // Thinner rim than the shared morph-pill default for a subtler thumb.
+    defaultBorderWidth: 0.6,
     child: child,
   );
 }

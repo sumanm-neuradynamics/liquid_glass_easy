@@ -18,11 +18,6 @@ class LiquidGlassLensScope extends InheritedWidget {
   /// the capture pipeline (Skia / Web).
   final bool useImpellerBackdrop;
 
-  /// Whether the owning view has a `backgroundWidget` to capture. On
-  /// the Skia path a lens cannot refract without one and degrades to a
-  /// frosted (non-refracting) look.
-  final bool hasBackground;
-
   /// Bumped after every successful background capture (Skia path).
   /// Lenses repaint when this ticks; the actual image is read through
   /// [currentImage] at paint time so paint never holds a stale frame.
@@ -46,7 +41,6 @@ class LiquidGlassLensScope extends InheritedWidget {
   const LiquidGlassLensScope({
     super.key,
     required this.useImpellerBackdrop,
-    required this.hasBackground,
     required this.captureRevision,
     required this.currentImage,
     required this.captureFallback,
@@ -65,7 +59,6 @@ class LiquidGlassLensScope extends InheritedWidget {
     // State, which compare equal across rebuilds of the same State, so
     // this only notifies on a real configuration change.
     return useImpellerBackdrop != oldWidget.useImpellerBackdrop ||
-        hasBackground != oldWidget.hasBackground ||
         captureRevision != oldWidget.captureRevision ||
         currentImage != oldWidget.currentImage ||
         captureFallback != oldWidget.captureFallback ||

@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../liquid_glass_config.dart';
-import '../utils/liquid_glass_blur.dart';
+import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_shape.dart';
 import 'liquid_glass_lens_scope.dart';
 import 'liquid_glass_shaders.dart';
@@ -53,30 +53,25 @@ import 'render_liquid_glass_lens.dart';
 ///   width: 220,
 ///   height: 120,
 ///   child: LiquidGlassLens(
-///     shape: const RoundedRectangleShape(cornerRadius: 36),
+///     style: const LiquidGlassStyle(
+///       shape: LiquidGlassShape.roundedRectangle(cornerRadius: 36),
+///     ),
 ///     child: const Center(child: Text('glass')),
 ///   ),
 /// )
 /// ```
 class LiquidGlassLens extends StatefulWidget {
-  /// The geometric shape of the lens and its border styling.
-  final LiquidGlassShape shape;
+  /// The lens's look — its [LiquidGlassShape] (corners + border), its
+  /// appearance (tint, blur, saturation) and its refraction (how it bends
+  /// the content behind it) — bundled as one [LiquidGlassStyle]. A `null`
+  /// `style.shape` falls back to a default continuous rounded rectangle.
+  final LiquidGlassStyle style;
 
-  /// How the glass bends light (distortion, magnification, chromatic
-  /// aberration, refraction mode).
-  final LiquidGlassRefraction refraction;
-
-  /// The lens material: tint, blur, saturation.
-  final LiquidGlassAppearance appearance;
-
-  /// Whether the lens is shown. Changing this animates the glass — and
-  /// its [child] — in/out over [visibilityDuration]: the glass uniforms
-  /// relax to neutral and the child fades, so a hidden lens leaves
-  /// nothing behind.
+  /// Whether the lens is shown. When `false` the glass is disabled (no
+  /// backdrop cost) and the [child] is removed, so a hidden lens leaves
+  /// nothing behind. The change is instant — there is no built-in
+  /// show/hide animation; wrap the lens yourself to animate it.
   final bool visibility;
-
-  /// Duration of the show/hide animation driven by [visibility].
-  final Duration visibilityDuration;
 
   /// Override for the Impeller fast-path detection, like
   /// `LiquidGlassView.useImpellerBackdrop`. When null, inherits the
@@ -89,11 +84,8 @@ class LiquidGlassLens extends StatefulWidget {
 
   const LiquidGlassLens({
     super.key,
-    this.shape = const RoundedRectangleShape(),
-    this.refraction = const LiquidGlassRefraction(),
-    this.appearance = const LiquidGlassAppearance(),
+    this.style = const LiquidGlassStyle(),
     this.visibility = true,
-    this.visibilityDuration = const Duration(milliseconds: 600),
     this.useImpellerBackdrop,
     this.child,
   });
@@ -102,17 +94,17 @@ class LiquidGlassLens extends StatefulWidget {
   State<LiquidGlassLens> createState() => _LiquidGlassLensState();
 }
 
-class _LiquidGlassLensState extends State<LiquidGlassLens>
-    with SingleTickerProviderStateMixin {
+class _LiquidGlassLensState extends State<LiquidGlassLens> {
   /// One-time debug notice when a lens has to degrade to frosted glass.
   static bool _warnedFrostedFallback = false;
 
-  /// Show/hide animation driver. Created lazily on the FIRST visibility
-  /// change — a lens whose `visibility` never changes carries no
-  /// controller and no ticker at all. (Never a lazy `late final`: that
-  /// would get its first touch inside dispose(), creating a ticker
-  /// during tree finalization — an illegal ancestor lookup.)
-  AnimationController? _visibilityController;
+  // Resolved look: read straight from the style; a null shape falls back
+  // to the default continuous rounded rectangle (with the cheap circular
+  // rounded-rectangle clip).
+  LiquidGlassShape get _shape =>
+      widget.style.shape ?? const LiquidGlassShape.continuousRoundedRectangle();
+  LiquidGlassAppearance get _appearance => widget.style.appearance;
+  LiquidGlassRefraction get _refraction => widget.style.refraction;
 
   /// Per-lens shader instances, created from the shared program cache.
   /// Deliberately not disposed manually: retained layers may still
@@ -134,67 +126,6 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
     }
   }
 
-  @override
-  void didUpdateWidget(covariant LiquidGlassLens oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _visibilityController?.duration = widget.visibilityDuration;
-    if (widget.visibility != oldWidget.visibility) {
-      final controller = _visibilityController ??= AnimationController(
-        vsync: this,
-        duration: widget.visibilityDuration,
-        // 0 = fully shown, 1 = fully hidden (legacy convention). Start
-        // from the state we are leaving.
-        value: oldWidget.visibility ? 0.0 : 1.0,
-      );
-      controller.animateTo(
-        widget.visibility ? 0.0 : 1.0,
-        curve: Curves.easeInOut,
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _visibilityController?.dispose();
-    super.dispose();
-  }
-
-  /// Resolves the show/hide animation into plain parameter values —
-  /// the ONE place the hide interpolation is defined for this widget.
-  /// At `anim == 0` the caller's values pass through untouched; at
-  /// `anim == 1` the glass is optically neutral (and the render object
-  /// is disabled entirely via `glassEnabled`).
-  ({
-    LiquidGlassRefraction refraction,
-    LiquidGlassAppearance appearance,
-    double borderAlpha,
-  }) _resolveHideAnimation(double anim) {
-    if (anim == 0.0) {
-      return (
-        refraction: widget.refraction,
-        appearance: widget.appearance,
-        borderAlpha: 1.0,
-      );
-    }
-    final r = widget.refraction;
-    final a = widget.appearance;
-    return (
-      refraction: r.copyWith(
-        magnification: anim + r.magnification * (1 - anim),
-        distortionWidth: r.distortionWidth * (1 - anim),
-        chromaticAberration: r.chromaticAberration * (1 - anim),
-      ),
-      appearance: a.copyWith(
-        saturation: anim + a.saturation * (1 - anim),
-        blur: LiquidGlassBlur(
-          sigmaX: a.blur.sigmaX * (1 - anim),
-          sigmaY: a.blur.sigmaY * (1 - anim),
-        ),
-      ),
-      borderAlpha: 1 - anim,
-    );
-  }
-
   void _warnFrostedOnce(String reason) {
     assert(() {
       if (!_warnedFrostedFallback) {
@@ -213,30 +144,28 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
   @override
   Widget build(BuildContext context) {
     final LiquidGlassLensScope? scope = LiquidGlassLensScope.maybeOf(context);
-    final bool impeller = widget.useImpellerBackdrop ??
-        scope?.useImpellerBackdrop ??
-        ui.ImageFilter.isShaderFilterSupported;
+    // `true`/`null` (here or on the scope) → prefer Impeller, but only when
+    // the shader path is actually supported; explicit `false` forces it off.
+    final bool impeller =
+        (widget.useImpellerBackdrop ?? scope?.useImpellerBackdrop ?? true) &&
+            ui.ImageFilter.isShaderFilterSupported;
 
     LiquidGlassLensRenderMode? mode;
     if (impeller) {
       mode = LiquidGlassLensRenderMode.impellerBackdrop;
-    } else if (scope != null && scope.hasBackground) {
+    } else if (scope != null) {
       mode = LiquidGlassLensRenderMode.skiaCapture;
     } else {
-      _warnFrostedOnce(scope == null
-          ? 'no Impeller and no ancestor LiquidGlassView'
-          : 'no Impeller and the ancestor LiquidGlassView has no '
-              'backgroundWidget');
+      _warnFrostedOnce('no Impeller and no ancestor LiquidGlassView');
     }
 
     if (mode == null || !LiquidGlassShaders.isLoaded) {
       // Frosted fallback — also shown for the brief async shader load
       // on the very first lens of the app's lifetime.
       return _FrostedGlassFallback(
-        shape: widget.shape,
-        appearance: widget.appearance,
+        shape: _shape,
+        appearance: _appearance,
         visible: widget.visibility,
-        duration: widget.visibilityDuration,
         child: widget.child,
       );
     }
@@ -253,47 +182,28 @@ class _LiquidGlassLensState extends State<LiquidGlassLens>
         ? null
         : ClipRRect(
             borderRadius: BorderRadius.circular(
-              liquidGlassClipCornerRadius(widget.shape),
+              liquidGlassClipCornerRadius(_shape),
             ),
             child: widget.child,
           );
 
-    Widget buildLens(double anim) {
-      final effective = _resolveHideAnimation(anim);
-      // The child fades out together with the glass, so hiding the lens
-      // hides its content too. At anim 0 it is fully opaque; at anim 1
-      // (fully hidden) it is gone.
-      final Widget? animatedChild = clippedChild == null
-          ? null
-          : Opacity(
-              opacity: (1.0 - anim).clamp(0.0, 1.0),
-              child: clippedChild,
-            );
-      return _RawLiquidGlassLens(
-        mode: mode!,
-        mainShader: _mainShader!,
-        borderShader: _borderShader,
-        shape: widget.shape,
-        refraction: effective.refraction,
-        appearance: effective.appearance,
-        borderAlpha: effective.borderAlpha,
-        glassEnabled: anim < 1.0,
-        screenSize: screenSize,
-        devicePixelRatio: dpr,
-        scope: scope,
-        child: animatedChild,
-      );
-    }
-
-    final AnimationController? controller = _visibilityController;
-    if (controller == null) {
-      // Visibility never changed: no ticker, no per-frame work — the
-      // lens is statically shown or statically hidden.
-      return buildLens(widget.visibility ? 0.0 : 1.0);
-    }
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) => buildLens(controller.value),
+    // Instant show/hide: when hidden the glass paint is skipped
+    // (glassEnabled = false, no backdrop cost) and the child is removed
+    // entirely, so nothing is left behind.
+    final bool visible = widget.visibility;
+    return _RawLiquidGlassLens(
+      mode: mode,
+      mainShader: _mainShader!,
+      borderShader: _borderShader,
+      shape: _shape,
+      refraction: _refraction,
+      appearance: _appearance,
+      borderAlpha: 1.0,
+      glassEnabled: visible,
+      screenSize: screenSize,
+      devicePixelRatio: dpr,
+      scope: scope,
+      child: visible ? clippedChild : null,
     );
   }
 }
@@ -374,19 +284,21 @@ class _FrostedGlassFallback extends StatelessWidget {
   final LiquidGlassShape shape;
   final LiquidGlassAppearance appearance;
   final bool visible;
-  final Duration duration;
   final Widget? child;
 
   const _FrostedGlassFallback({
     required this.shape,
     required this.appearance,
     required this.visible,
-    required this.duration,
     this.child,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Hidden: leave nothing behind (instant), matching the refracting
+    // path where the child is removed and the glass paint is skipped.
+    if (!visible) return const SizedBox.shrink();
+
     final double radius = liquidGlassClipCornerRadius(shape);
     final BorderRadius borderRadius = BorderRadius.circular(radius);
     // Without refraction, blur is what sells "glass" — give it a floor
@@ -401,24 +313,20 @@ class _FrostedGlassFallback extends StatelessWidget {
     final Color borderColor =
         shape.borderColor ?? const Color(0x40FFFFFF);
 
-    return AnimatedOpacity(
-      opacity: visible ? 1.0 : 0.0,
-      duration: duration,
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: borderRadius,
-              border: Border.all(
-                color: borderColor,
-                width: shape.borderWidth > 0 ? shape.borderWidth : 1.0,
-              ),
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: tint,
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: borderColor,
+              width: shape.borderWidth > 0 ? shape.borderWidth : 1.0,
             ),
-            child: child ?? const SizedBox.expand(),
           ),
+          child: child ?? const SizedBox.expand(),
         ),
       ),
     );

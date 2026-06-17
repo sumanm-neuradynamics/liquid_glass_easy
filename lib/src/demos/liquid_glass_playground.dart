@@ -44,7 +44,7 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
   double chromaticAberration = 0.003;
   double saturation = 1;
   double lightDirection = 39.0;
-  double cornerSmoothing = 0;
+  LiquidGlassCornerStyle cornerStyle = LiquidGlassCornerStyle.roundedRectangle;
   double pixelRatio = 1.0;
   bool realTimeCapture = true;
   bool useSync = true;
@@ -111,7 +111,7 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
             height: MediaQuery.of(context).size.height * 0.5 -
                 kToolbarHeight -
                 MediaQuery.of(context).padding.top,
-            child: LiquidGlassView(
+            child: LiquidGlassView.withPositionedLenses(
               controller: viewController,
               pixelRatio: pixelRatio,
               realTimeCapture: realTimeCapture,
@@ -125,18 +125,18 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
                         alignment: Alignment.center),
                     width: lensWidth,
                     height: lensHeight,
-                    shape: RoundedRectangleShape(
-                        cornerRadius: cornerRadius,
-                        cornerSmoothing: cornerSmoothing,
-                        borderWidth: borderWidth,
-                        lightIntensity: lightIntensity,
-                        lightDirection: lightDirection,
-                        lightColor: lightColorValue,
-                        borderType: _buildBorderType(),
-                        lightMode: isRadialLightMode
-                            ? LiquidGlassLightMode.radial
-                            : LiquidGlassLightMode.edge),
                   ),
+                  shape: LiquidGlassShape(
+                      cornerStyle: cornerStyle,
+                      cornerRadius: cornerRadius,
+                      borderWidth: borderWidth,
+                      lightIntensity: lightIntensity,
+                      lightDirection: lightDirection,
+                      lightColor: lightColorValue,
+                      borderType: _buildBorderType(),
+                      lightMode: isRadialLightMode
+                          ? LiquidGlassLightMode.radial
+                          : LiquidGlassLightMode.edge),
                   refraction: LiquidGlassRefraction(
                     magnification: magnification,
                     refractionMode: isRadialRefractionMode
@@ -174,7 +174,7 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
             diagonalFlip: diagonalFlip,
             borderWidth: borderWidth,
             borderSoftness: borderSoftness,
-            cornerSmoothing: cornerSmoothing,
+            cornerStyle: cornerStyle,
             lightDirection: lightDirection,
             lightIntensity: lightIntensity,
             oneSideLightIntensity: oneSideLightIntensity,
@@ -209,8 +209,8 @@ class _LiquidGlassPlaygroundState extends State<LiquidGlassPlayground> {
             onDiagonalFlipChanged: (v) => setState(() => diagonalFlip = v),
             onBorderWidthChanged: (v) => setState(() => borderWidth = v),
             onBorderSoftnessChanged: (v) => setState(() => borderSoftness = v),
-            onCornerSmoothingChanged: (v) =>
-                setState(() => cornerSmoothing = v),
+            onCornerStyleChanged: (v) =>
+                setState(() => cornerStyle = v),
             onLightIntensityChanged: (v) => setState(() => lightIntensity = v),
             onOneSideLightIntensityChanged: (v) =>
                 setState(() => oneSideLightIntensity = v),

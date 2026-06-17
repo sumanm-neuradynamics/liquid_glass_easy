@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../liquid_glass.dart';
-import '../liquid_glass_view.dart';
 import '../../controllers/liquid_glass_view_controller.dart';
-import '../utils/liquid_glass_position.dart';
+import '../liquid_glass_view.dart';
 import '../utils/liquid_glass_refresh_rate.dart';
 import 'bottom_nav_bar/liquid_glass_bottom_nav_bar.dart';
 
@@ -11,13 +9,10 @@ import 'bottom_nav_bar/liquid_glass_bottom_nav_bar.dart';
 ///
 /// [LiquidGlassScaffold] owns a single [LiquidGlassView] internally so
 /// you don't have to wire one up by hand. Your page content goes in
-/// [body] and becomes the **background** that every glass slot
-/// refracts; the [appBar], [bottomNavigationBar], and
-/// [bottomNavigationBarAction] are placed on top of it as liquid-glass
-/// lenses.
-///
-/// Because each slot is just a [LiquidGlass] config object, you compose
-/// the scaffold out of the package's existing drop-in components:
+/// [body] and becomes the **background** that every glass slot refracts;
+/// the [appBar], [bottomNavigationBar], and [bottomNavigationBarAction]
+/// are placed on top of it as ordinary widgets (typically the package's
+/// `LiquidGlassLens`-based components).
 ///
 /// ```dart
 /// LiquidGlassScaffold(
@@ -36,10 +31,6 @@ import 'bottom_nav_bar/liquid_glass_bottom_nav_bar.dart';
 ///     onChanged: (i) => setState(() => _index = i),
 ///   ),
 ///   bottomNavigationBarAction: LiquidGlassTabBarAction(
-///     position: const LiquidGlassAlignPosition(
-///       alignment: Alignment.bottomRight,
-///       margin: EdgeInsets.only(right: 16, bottom: 32),
-///     ),
 ///     icon: Icons.add_rounded,
 ///     onTap: _compose,
 ///   ),
@@ -48,62 +39,53 @@ import 'bottom_nav_bar/liquid_glass_bottom_nav_bar.dart';
 ///
 /// The renderer is chosen automatically — Impeller devices sample the
 /// live backdrop, Skia / Web fall back to a captured snapshot — so the
-/// same scaffold runs on both without any change. The render knobs
-/// ([pixelRatio], [realTimeCapture], [useSync], [refreshRate],
-/// [useImpellerBackdrop]) are forwarded straight through to the
-/// internal [LiquidGlassView].
+/// same scaffold runs on both.
 ///
 /// ### Z-order
 ///
-/// Slots are composited bottom-to-top in this order:
-/// `appBar` → `lenses` → `bottomNavigationBar` → `bottomNavigationBarAction`.
-/// So the nav bar and its action always float above any extra
-/// [lenses], and the app bar sits behind them.
+/// Slots are composited bottom-to-top:
+/// `lenses` → `appBar` → `bottomNavigationBar` → `bottomNavigationBarAction`.
 class LiquidGlassScaffold extends StatelessWidget {
-  /// The primary content of the screen. Rendered behind every glass
-  /// slot and used as the background the lenses refract.
+  /// The primary content of the screen. Rendered behind every glass slot
+  /// and used as the background the lenses refract.
   final Widget body;
 
-  /// A liquid-glass app bar pinned to the top. Typically a
-  /// [LiquidGlassAppBar], but any [LiquidGlass] lens works.
-  final LiquidGlass? appBar;
+  /// A glass app bar pinned to the top. Typically a [LiquidGlassAppBar].
+  final Widget? appBar;
 
-  /// A liquid-glass bottom navigation bar pinned to the bottom.
-  /// Typically a [LiquidGlassBottomNavBar].
-  final LiquidGlass? bottomNavigationBar;
+  /// A glass bottom navigation bar pinned to the bottom. Typically a
+  /// [LiquidGlassBottomNavBar].
+  final Widget? bottomNavigationBar;
 
-  /// A standalone glass action button that floats **next to** the
-  /// [bottomNavigationBar] — the common "tab bar + side action"
-  /// pairing (e.g. a search or compose button). Typically a
-  /// [LiquidGlassTabBarAction]; position it via its own `position`
-  /// (e.g. bottom-right, vertically centered on the nav bar).
-  final LiquidGlass? bottomNavigationBarAction;
+  /// A standalone glass action that floats at the bottom-right, the
+  /// common "tab bar + side action" pairing. Typically a
+  /// [LiquidGlassTabBarAction].
+  final Widget? bottomNavigationBarAction;
 
-  /// Extra free-floating glass lenses composited between the [appBar]
-  /// and the [bottomNavigationBar]. An escape hatch for anything the
-  /// named slots don't cover (docks, cards, FAB-like buttons, …).
-  final List<LiquidGlass> lenses;
+  /// Extra free-floating glass widgets composited between the [body] and
+  /// the bars. An escape hatch — position each with your own
+  /// `Align`/`Positioned`.
+  final List<Widget> lenses;
 
   /// Optional solid color painted behind [body]. Leave `null` to let
-  /// [body] supply its own background (the common case for an image
-  /// or gradient wallpaper).
+  /// [body] supply its own background.
   final Color? backgroundColor;
 
-  /// Whether the bars automatically clear the device safe areas.
-  ///
-  /// When `true` (the default), the scaffold shifts the [appBar] down by
-  /// the top inset (status bar / notch) and the [bottomNavigationBar] +
-  /// [bottomNavigationBarAction] up by the bottom inset (home indicator
-  /// / gesture bar) — so the bars never sit under the system UI. The
-  /// [body] still fills the whole window behind the glass, exactly like
-  /// a normal `Scaffold`. Set to `false` to position every slot against
-  /// the raw window edges yourself.
+  /// Whether the bars automatically clear the device safe areas. When
+  /// `true` (the default), the [appBar] is pushed below the top inset and
+  /// the bottom slots above the bottom inset. The [body] still fills the
+  /// whole window behind the glass.
   final bool safeArea;
+
+  /// Extra space above the [appBar], in addition to the safe-area inset.
+  final double appBarTopMargin;
+
+  /// Bottom-right padding applied to [bottomNavigationBarAction].
+  final double actionMargin;
 
   // ── Render pipeline (forwarded to the internal LiquidGlassView) ──
 
-  /// Controls the internal view's capture pipeline (capture-once,
-  /// start/stop realtime). Optional.
+  /// Controls the internal view's capture pipeline. Optional.
   final LiquidGlassViewController? controller;
 
   /// See [LiquidGlassView.pixelRatio].
@@ -131,6 +113,8 @@ class LiquidGlassScaffold extends StatelessWidget {
     this.lenses = const [],
     this.backgroundColor,
     this.safeArea = true,
+    this.appBarTopMargin = 0,
+    this.actionMargin = 16,
     this.controller,
     this.pixelRatio = 1.0,
     this.realTimeCapture = true,
@@ -141,14 +125,13 @@ class LiquidGlassScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Safe-area insets. The bars are shifted off the system UI, while
-    // the body keeps filling the whole window behind the glass.
+    // Safe-area insets. The bars are shifted off the system UI, while the
+    // body keeps filling the whole window behind the glass.
     final EdgeInsets pad =
         safeArea ? MediaQuery.of(context).padding : EdgeInsets.zero;
 
-    // A LiquidGlassBottomNavBar decides for itself whether to use the
-    // glass-refracting morphing pill on this renderer; the scaffold only
-    // hands over its slots.
+    // Glass-pill morph path: the bar owns the whole-screen dual pipeline,
+    // so the scaffold hands it the body plus the composed outer slots.
     final nav = bottomNavigationBar;
     if (nav is LiquidGlassBottomNavBar &&
         nav.resolveGlassPill(useImpellerBackdrop: useImpellerBackdrop)) {
@@ -156,30 +139,13 @@ class LiquidGlassScaffold extends StatelessWidget {
         body: body,
         backgroundColor: backgroundColor,
         bottomInset: pad.bottom,
-        outerLenses: [
-          if (appBar != null) _inset(appBar!, dy: pad.top),
-          ...lenses,
-          if (bottomNavigationBarAction != null)
-            _inset(bottomNavigationBarAction!, dy: -pad.bottom),
-        ],
+        outerChild: _outerSlots(pad, includeNavBar: false),
         pixelRatio: pixelRatio,
         useSync: useSync,
         useImpellerBackdrop: useImpellerBackdrop,
         realTimeCapture: realTimeCapture,
       );
     }
-
-    // Composite slots bottom-to-top. `children` order is z-order in
-    // LiquidGlassView, so the nav bar + its action float above any
-    // extra lenses, and the app bar sits behind them.
-    final children = <LiquidGlass>[
-      if (appBar != null) _inset(appBar!, dy: pad.top),
-      ...lenses,
-      if (bottomNavigationBar != null)
-        _inset(bottomNavigationBar!, dy: -pad.bottom),
-      if (bottomNavigationBarAction != null)
-        _inset(bottomNavigationBarAction!, dy: -pad.bottom),
-    ];
 
     final Widget background = backgroundColor == null
         ? body
@@ -193,37 +159,64 @@ class LiquidGlassScaffold extends StatelessWidget {
       refreshRate: refreshRate,
       useImpellerBackdrop: useImpellerBackdrop,
       backgroundWidget: background,
-      children: children,
+      child: _outerSlots(pad, includeNavBar: true),
     );
   }
 
-  /// Returns [lens] shifted by [dy] (and [dx]) — used to push a bar off
-  /// the system UI. A zero offset returns the lens untouched so we don't
-  /// allocate or invalidate position equality needlessly.
-  LiquidGlass _inset(LiquidGlass lens, {double dx = 0, double dy = 0}) {
-    if (dx == 0 && dy == 0) return lens;
-    return lens.copyWith(
-      geometry: lens.geometry.copyWith(
-        position: _InsetPosition(lens.position, dx: dx, dy: dy),
+  /// Builds the full-screen `Stack` of glass slots placed over the body.
+  /// When [includeNavBar] is false the bottom nav bar is omitted (the
+  /// glass-pill path renders the bar itself).
+  Widget _outerSlots(EdgeInsets pad, {required bool includeNavBar}) {
+    final EdgeInsets navMargin = bottomNavigationBar is LiquidGlassBottomNavBar
+        ? (bottomNavigationBar as LiquidGlassBottomNavBar).margin
+        : EdgeInsets.zero;
+    final Alignment navAlignment =
+        bottomNavigationBar is LiquidGlassBottomNavBar
+            ? (bottomNavigationBar as LiquidGlassBottomNavBar).alignment
+            : Alignment.bottomCenter;
+
+    // The glass overlays float outside any Scaffold/Material, so bare
+    // Text/Icon in the app bar, nav, side action, or `lenses` would inherit
+    // Flutter's yellow error text style. A transparent Material paints
+    // nothing but installs the theme's DefaultTextStyle/IconTheme, so every
+    // overlay slot is themed normally. Cheap and side-effect-free.
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ...lenses,
+          if (appBar != null)
+            Positioned(
+              top: pad.top + appBarTopMargin,
+              left: 0,
+              right: 0,
+              child: Align(alignment: Alignment.topCenter, child: appBar!),
+            ),
+          if (includeNavBar && bottomNavigationBar != null)
+            Positioned(
+              bottom: pad.bottom + navMargin.bottom,
+              left: 0,
+              right: 0,
+              child: Align(
+                alignment: Alignment(navAlignment.x, 0),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: navMargin.left,
+                    right: navMargin.right,
+                  ),
+                  child: bottomNavigationBar!,
+                ),
+              ),
+            ),
+          if (bottomNavigationBarAction != null)
+            Positioned(
+              bottom: pad.bottom + navMargin.bottom,
+              right: actionMargin,
+              child: bottomNavigationBarAction!,
+            ),
+        ],
       ),
     );
-  }
-}
-
-/// Wraps another [LiquidGlassPosition] and adds a fixed pixel offset to
-/// its resolved result. Lets `LiquidGlassScaffold` nudge a slot by the
-/// safe-area inset without caring whether the underlying position is an
-/// alignment or an absolute offset.
-class _InsetPosition extends LiquidGlassPosition {
-  final LiquidGlassPosition base;
-  final double dx;
-  final double dy;
-
-  const _InsetPosition(this.base, {this.dx = 0, this.dy = 0});
-
-  @override
-  Offset resolve(Size parentSize, Size lensSize) {
-    final o = base.resolve(parentSize, lensSize);
-    return Offset(o.dx + dx, o.dy + dy);
   }
 }

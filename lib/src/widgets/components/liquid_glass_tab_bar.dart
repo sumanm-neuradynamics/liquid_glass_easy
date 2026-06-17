@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../liquid_glass.dart';
+import '../lens/liquid_glass_lens.dart';
+import '../liquid_glass_config.dart';
+import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
-import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// Description of a single tab in [LiquidGlassTabBar].
@@ -28,307 +29,312 @@ class LiquidGlassTabBarItem {
 /// A floating "liquid glass" tab bar.
 ///
 /// Renders 2–5 tabs as a single translucent pill that sits above the
-/// content (not pinned to the screen edge). The active tab is marked
-/// with a soft inner pill that moves **instantly** to the selected
-/// tab (no slide animation).
+/// content. The active tab is marked with a soft inner pill that moves
+/// **instantly** to the selected tab (no slide animation).
 ///
-/// This is the non-animated, release-ready variant. An animated
-/// counterpart ([LiquidGlassAnimatedTabBar]) exists in the source
-/// but is intentionally **not exported** while its motion work is
-/// still being finished.
-///
-/// HIG-style notes that informed the defaults:
-/// - Use three to five tabs in iOS-style apps.
-/// - The bar is translucent and floats over content.
-/// - Selected state is shown via a subtle background pill, not just
-///   color.
-class LiquidGlassTabBar extends LiquidGlass {
-  LiquidGlassTabBar({
-    required LiquidGlassPosition position,
-    required List<LiquidGlassTabBarItem> items,
-    required int selectedIndex,
-    required ValueChanged<int> onChanged,
-    double height = 64,
-    double width = 320,
-    LiquidGlassController? controller,
-
-    /// Corner radius of the capsule. Defaults to a full pill
-    /// (`height / 2`).
-    double? cornerRadius,
-
-    /// Translucent glass tint of the capsule.
-    Color glassColor = const Color(0x1CFFFFFF), // white, alpha 28
-    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-    double distortion = 0.08,
-    double distortionWidth = 32,
-    double chromaticAberration = 0.002,
-    double magnification = 1,
-
-    // ── Border ─────────────────────────────────────────────
-    double borderWidth = 1.2,
-    double lightIntensity = 1.2,
-    double lightDirection = 80,
-    OpticalBorder borderType = const OpticalBorder(
-      borderSaturation: 1.3,
-      ambientIntensity: 1.0,
-      borderSolidity: 0.4,
-    ),
-
-    // ── Selection pill ─────────────────────────────────────
-    /// Whether to draw the soft pill behind the selected tab.
-    bool showSelectionPill = true,
-
-    /// Fill color of the selection pill.
-    Color selectionColor = const Color(0x32FFFFFF), // white, alpha 50
-
-    /// Border color of the selection pill.
-    Color selectionBorderColor = const Color(0x50FFFFFF), // alpha 80
-
-    // ── Items ──────────────────────────────────────────────
-    /// Color of the selected tab's icon + label.
-    Color selectedItemColor = Colors.white,
-
-    /// Color of unselected tabs' icons + labels.
-    Color unselectedItemColor = Colors.white70,
-
-    /// Icon size for every tab.
-    double iconSize = 24,
-
-    /// Label font size (labels show only when an item has a label).
-    double labelFontSize = 10.5,
-    bool draggable = false,
-    bool outOfBoundaries = false,
+/// Drop it anywhere in your layout. Styling uses one [LiquidGlassStyle]
+/// ([style] — shape + appearance + refraction). An animated counterpart
+/// ([LiquidGlassAnimatedTabBar]) exists in the source but is intentionally
+/// **not exported** while its motion work is finished.
+class LiquidGlassTabBar extends StatelessWidget {
+  const LiquidGlassTabBar({
+    super.key,
+    required this.items,
+    required this.selectedIndex,
+    required this.onChanged,
+    this.height = 64,
+    this.width = 320,
+    this.style,
+    this.visibility = true,
+    this.showSelectionPill = true,
+    this.selectionColor = const Color(0x32FFFFFF), // white, alpha 50
+    this.selectionBorderColor = const Color(0x50FFFFFF), // alpha 80
+    this.selectedItemColor = Colors.white,
+    this.unselectedItemColor = Colors.white70,
+    this.iconSize = 24,
+    this.fontSize = 10.5,
   })  : assert(items.length >= 2 && items.length <= 5,
             'Tab bars use 2–5 tabs'),
-        assert(selectedIndex >= 0 && selectedIndex < items.length),
-        super(
-          geometry: LiquidGlassGeometry(
-            position: position,
-            width: width,
-            height: height,
-            shape: RoundedRectangleShape(
-              cornerRadius: cornerRadius ?? height / 2,
-              borderWidth: borderWidth,
-              lightIntensity: lightIntensity,
-              lightDirection: lightDirection,
-              borderType: borderType,
-            ),
-            outOfBoundaries: outOfBoundaries,
-          ),
-          refraction: LiquidGlassRefraction(
-            distortion: distortion,
-            distortionWidth: distortionWidth,
-            chromaticAberration: chromaticAberration,
-            magnification: magnification,
-          ),
-          appearance: LiquidGlassAppearance(
-            color: glassColor,
-            blur: blur,
-          ),
-          behavior: LiquidGlassBehavior(
-            draggable: draggable,
-            controller: controller,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: LayoutBuilder(builder: (context, constraints) {
-              final segWidth = constraints.maxWidth / items.length;
-              return Stack(
-                children: [
-                  // Selected pill — jumps instantly between tabs
-                  // (no slide). The animated slide lives in
-                  // [LiquidGlassAnimatedTabBar].
-                  if (showSelectionPill)
-                    Positioned(
-                      left: selectedIndex * segWidth,
-                      top: 0,
-                      bottom: 0,
-                      width: segWidth,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: selectionColor,
-                          borderRadius:
-                              BorderRadius.circular((height - 12) / 2),
-                          border: Border.all(
-                            color: selectionBorderColor,
-                            width: 0.6,
-                          ),
+        assert(selectedIndex >= 0 && selectedIndex < items.length);
+
+  /// The tabs, left to right.
+  final List<LiquidGlassTabBarItem> items;
+
+  /// Currently selected tab index.
+  final int selectedIndex;
+
+  /// Called with the tapped tab index.
+  final ValueChanged<int> onChanged;
+
+  /// Bar height; also drives the default pill radius (`height / 2`).
+  final double height;
+
+  /// Explicit width. When null the bar hugs its content.
+  final double? width;
+
+  /// The bar's glass look as one [LiquidGlassStyle] (shape + appearance +
+  /// refraction), taken as the complete look. When null the tuned
+  /// [defaultStyle] is used; its `shape` may be null, in which case a full
+  /// pill with a tuned optical border is used. To tweak one facet while
+  /// keeping the rest of the tuned look, compose with `copyWith`, e.g.
+  /// `style: LiquidGlassTabBar.defaultStyle.copyWith(...)`.
+  final LiquidGlassStyle? style;
+
+  /// Whether the bar is shown; toggling animates the glass in/out.
+  final bool visibility;
+
+  /// Whether to draw the soft pill behind the selected tab.
+  final bool showSelectionPill;
+
+  /// Fill color of the selection pill.
+  final Color selectionColor;
+
+  /// Border color of the selection pill.
+  final Color selectionBorderColor;
+
+  /// Color of the selected tab's icon + label.
+  final Color selectedItemColor;
+
+  /// Color of unselected tabs' icons + labels.
+  final Color unselectedItemColor;
+
+  /// Icon size for every tab.
+  final double iconSize;
+
+  /// Label font size (labels show only when an item has a label).
+  final double fontSize;
+
+  static const LiquidGlassAppearance _defaultAppearance =
+      LiquidGlassAppearance(
+    color: Color(0x1CFFFFFF), // white, alpha 28
+    blur: LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
+  );
+
+  static const LiquidGlassRefraction _defaultRefraction =
+      LiquidGlassRefraction(
+    distortion: 0.08,
+    distortionWidth: 32,
+    chromaticAberration: 0.002,
+  );
+
+  /// The tuned default look — a faint white frost over a soft optical
+  /// refraction. Its `shape` is `null`: the bar derives a height-tracking
+  /// capsule when [style] supplies no shape. Compose with `copyWith` to
+  /// tweak one facet, e.g. `style: LiquidGlassTabBar.defaultStyle.copyWith(...)`.
+  static const LiquidGlassStyle defaultStyle = LiquidGlassStyle(
+    appearance: _defaultAppearance,
+    refraction: _defaultRefraction,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final LiquidGlassStyle resolved = defaultStyle.merge(style);
+    final LiquidGlassShape effectiveShape = resolved.shape ?? _tabBarShape(height);
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: LiquidGlassLens(
+        style: LiquidGlassStyle(
+          shape: effectiveShape,
+          appearance: resolved.appearance,
+          refraction: resolved.refraction,
+        ),
+        visibility: visibility,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final segWidth = constraints.maxWidth / items.length;
+            return Stack(
+              children: [
+                if (showSelectionPill)
+                  Positioned(
+                    left: selectedIndex * segWidth,
+                    top: 0,
+                    bottom: 0,
+                    width: segWidth,
+                    child: _SelectionPill(
+                      height: height,
+                      color: selectionColor,
+                      borderColor: selectionBorderColor,
+                    ),
+                  ),
+                Row(
+                  children: [
+                    for (int i = 0; i < items.length; i++)
+                      Expanded(
+                        child: _TabButton(
+                          item: items[i],
+                          selected: i == selectedIndex,
+                          selectedColor: selectedItemColor,
+                          unselectedColor: unselectedItemColor,
+                          iconSize: iconSize,
+                          fontSize: fontSize,
+                          onTap: () => onChanged(i),
                         ),
                       ),
-                    ),
-                  Row(
-                    children: [
-                      for (int i = 0; i < items.length; i++)
-                        Expanded(
-                          child: _TabButton(
-                            item: items[i],
-                            selected: i == selectedIndex,
-                            selectedColor: selectedItemColor,
-                            unselectedColor: unselectedItemColor,
-                            iconSize: iconSize,
-                            labelFontSize: labelFontSize,
-                            onTap: () => onChanged(i),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              );
-            }),
-          ),
-        );
+                  ],
+                ),
+              ],
+            );
+          }),
+        ),
+      ),
+    );
+  }
 }
 
-/// Animated variant of [LiquidGlassTabBar]: the selection pill
-/// **slides** between tabs instead of jumping.
+/// Animated variant of [LiquidGlassTabBar]: the selection pill **slides**
+/// between tabs instead of jumping.
 ///
-/// **Not exported yet.** Kept internal while the animation polish
-/// for the liquid-glass components is still being finished, so it is
-/// only consumed by the package's own example/showcase. Once the
-/// motion work is complete it can be promoted to the public API. It
-/// already carries the full customization surface of
-/// [LiquidGlassTabBar] plus [selectionDuration] and [selectionCurve].
-class LiquidGlassAnimatedTabBar extends LiquidGlass {
-  LiquidGlassAnimatedTabBar({
-    required LiquidGlassPosition position,
-    required List<LiquidGlassTabBarItem> items,
-    required int selectedIndex,
-    required ValueChanged<int> onChanged,
-    double height = 64,
-    double width = 320,
-    LiquidGlassController? controller,
-
-    /// Corner radius of the capsule. Defaults to a full pill
-    /// (`height / 2`).
-    double? cornerRadius,
-
-    /// Translucent glass tint of the capsule.
-    Color glassColor = const Color(0x1CFFFFFF), // white, alpha 28
-    LiquidGlassBlur blur = const LiquidGlassBlur(sigmaX: 4, sigmaY: 4),
-    double distortion = 0.08,
-    double distortionWidth = 32,
-    double chromaticAberration = 0.002,
-    double magnification = 1,
-
-    // ── Border ─────────────────────────────────────────────
-    double borderWidth = 1.2,
-    double lightIntensity = 1.2,
-    double lightDirection = 80,
-    OpticalBorder borderType = const OpticalBorder(
-      borderSaturation: 1.3,
-      ambientIntensity: 1.0,
-      borderSolidity: 0.4,
-    ),
-
-    // ── Selection pill ─────────────────────────────────────
-    /// Whether to draw the soft pill behind the selected tab.
-    bool showSelectionPill = true,
-
-    /// Fill color of the selection pill.
-    Color selectionColor = const Color(0x32FFFFFF), // white, alpha 50
-
-    /// Border color of the selection pill.
-    Color selectionBorderColor = const Color(0x50FFFFFF), // alpha 80
-
-    /// How long the selection pill takes to slide between tabs.
-    Duration selectionDuration = const Duration(milliseconds: 240),
-
-    /// Easing curve for the slide.
-    Curve selectionCurve = Curves.easeOutCubic,
-
-    // ── Items ──────────────────────────────────────────────
-    /// Color of the selected tab's icon + label.
-    Color selectedItemColor = Colors.white,
-
-    /// Color of unselected tabs' icons + labels.
-    Color unselectedItemColor = Colors.white70,
-
-    /// Icon size for every tab.
-    double iconSize = 24,
-
-    /// Label font size (labels show only when an item has a label).
-    double labelFontSize = 10.5,
-    bool draggable = false,
-    bool outOfBoundaries = false,
+/// **Not exported yet.** Kept internal while the animation polish is
+/// finished, so it is only consumed by the package's own example /
+/// showcase.
+class LiquidGlassAnimatedTabBar extends StatelessWidget {
+  const LiquidGlassAnimatedTabBar({
+    super.key,
+    required this.items,
+    required this.selectedIndex,
+    required this.onChanged,
+    this.height = 64,
+    this.width = 320,
+    this.shape,
+    this.appearance = LiquidGlassTabBar._defaultAppearance,
+    this.refraction = LiquidGlassTabBar._defaultRefraction,
+    this.style,
+    this.visibility = true,
+    this.showSelectionPill = true,
+    this.selectionColor = const Color(0x32FFFFFF),
+    this.selectionBorderColor = const Color(0x50FFFFFF),
+    this.selectionDuration = const Duration(milliseconds: 240),
+    this.selectionCurve = Curves.easeOutCubic,
+    this.selectedItemColor = Colors.white,
+    this.unselectedItemColor = Colors.white70,
+    this.iconSize = 24,
+    this.fontSize = 10.5,
   })  : assert(items.length >= 2 && items.length <= 5,
             'Tab bars use 2–5 tabs'),
-        assert(selectedIndex >= 0 && selectedIndex < items.length),
-        super(
-          geometry: LiquidGlassGeometry(
-            position: position,
-            width: width,
-            height: height,
-            shape: RoundedRectangleShape(
-              cornerRadius: cornerRadius ?? height / 2,
-              borderWidth: borderWidth,
-              lightIntensity: lightIntensity,
-              lightDirection: lightDirection,
-              borderType: borderType,
-            ),
-            outOfBoundaries: outOfBoundaries,
-          ),
-          refraction: LiquidGlassRefraction(
-            distortion: distortion,
-            distortionWidth: distortionWidth,
-            chromaticAberration: chromaticAberration,
-            magnification: magnification,
-          ),
-          appearance: LiquidGlassAppearance(
-            color: glassColor,
-            blur: blur,
-          ),
-          behavior: LiquidGlassBehavior(
-            draggable: draggable,
-            controller: controller,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: LayoutBuilder(builder: (context, constraints) {
-              final segWidth = constraints.maxWidth / items.length;
-              return Stack(
-                children: [
-                  // Selected pill — animates (slides) between tabs.
-                  if (showSelectionPill)
-                    AnimatedPositioned(
-                      duration: selectionDuration,
-                      curve: selectionCurve,
-                      left: selectedIndex * segWidth,
-                      top: 0,
-                      bottom: 0,
-                      width: segWidth,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: selectionColor,
-                          borderRadius:
-                              BorderRadius.circular((height - 12) / 2),
-                          border: Border.all(
-                            color: selectionBorderColor,
-                            width: 0.6,
-                          ),
+        assert(selectedIndex >= 0 && selectedIndex < items.length);
+
+  final List<LiquidGlassTabBarItem> items;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+  final double height;
+  final double? width;
+  final LiquidGlassShape? shape;
+  final LiquidGlassAppearance appearance;
+  final LiquidGlassRefraction refraction;
+  final LiquidGlassStyle? style;
+  final bool visibility;
+  final bool showSelectionPill;
+  final Color selectionColor;
+  final Color selectionBorderColor;
+
+  /// How long the selection pill takes to slide between tabs.
+  final Duration selectionDuration;
+
+  /// Easing curve for the slide.
+  final Curve selectionCurve;
+
+  final Color selectedItemColor;
+  final Color unselectedItemColor;
+  final double iconSize;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final LiquidGlassShape effectiveShape = shape ?? _tabBarShape(height);
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: LiquidGlassLens(
+        style: LiquidGlassStyle(
+          shape: effectiveShape,
+          appearance: appearance,
+          refraction: refraction,
+        ).merge(style),
+        visibility: visibility,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final segWidth = constraints.maxWidth / items.length;
+            return Stack(
+              children: [
+                if (showSelectionPill)
+                  AnimatedPositioned(
+                    duration: selectionDuration,
+                    curve: selectionCurve,
+                    left: selectedIndex * segWidth,
+                    top: 0,
+                    bottom: 0,
+                    width: segWidth,
+                    child: _SelectionPill(
+                      height: height,
+                      color: selectionColor,
+                      borderColor: selectionBorderColor,
+                    ),
+                  ),
+                Row(
+                  children: [
+                    for (int i = 0; i < items.length; i++)
+                      Expanded(
+                        child: _TabButton(
+                          item: items[i],
+                          selected: i == selectedIndex,
+                          selectedColor: selectedItemColor,
+                          unselectedColor: unselectedItemColor,
+                          iconSize: iconSize,
+                          fontSize: fontSize,
+                          onTap: () => onChanged(i),
                         ),
                       ),
-                    ),
-                  Row(
-                    children: [
-                      for (int i = 0; i < items.length; i++)
-                        Expanded(
-                          child: _TabButton(
-                            item: items[i],
-                            selected: i == selectedIndex,
-                            selectedColor: selectedItemColor,
-                            unselectedColor: unselectedItemColor,
-                            iconSize: iconSize,
-                            labelFontSize: labelFontSize,
-                            onTap: () => onChanged(i),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              );
-            }),
-          ),
-        );
+                  ],
+                ),
+              ],
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+/// Default pill shape shared by the tab bars (radius derived from the
+/// bar height).
+LiquidGlassShape _tabBarShape(double height) => LiquidGlassShape.roundedRectangle(
+      cornerRadius: height / 2,
+      borderWidth: 1.2,
+      lightIntensity: 1.2,
+      lightDirection: 80,
+      borderType: const OpticalBorder(
+        borderSaturation: 1.3,
+        ambientIntensity: 1.0,
+        borderSolidity: 0.4,
+      ),
+    );
+
+class _SelectionPill extends StatelessWidget {
+  final double height;
+  final Color color;
+  final Color borderColor;
+
+  const _SelectionPill({
+    required this.height,
+    required this.color,
+    required this.borderColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular((height - 12) / 2),
+        border: Border.all(color: borderColor, width: 0.6),
+      ),
+    );
+  }
 }
 
 class _TabButton extends StatelessWidget {
@@ -337,7 +343,7 @@ class _TabButton extends StatelessWidget {
   final Color selectedColor;
   final Color unselectedColor;
   final double iconSize;
-  final double labelFontSize;
+  final double fontSize;
   final VoidCallback onTap;
 
   const _TabButton({
@@ -346,7 +352,7 @@ class _TabButton extends StatelessWidget {
     required this.selectedColor,
     required this.unselectedColor,
     required this.iconSize,
-    required this.labelFontSize,
+    required this.fontSize,
     required this.onTap,
   });
 
@@ -372,9 +378,8 @@ class _TabButton extends StatelessWidget {
                 Text(
                   item.label!,
                   style: TextStyle(
-                    fontSize: labelFontSize,
-                    fontWeight:
-                        selected ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: fontSize,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     color: color,
                   ),
                 ),
@@ -387,74 +392,103 @@ class _TabButton extends StatelessWidget {
   }
 }
 
-/// Companion floating action button rendered as its own
-/// liquid-glass pill, mirroring the pattern of pairing a tab bar with
-/// a separate, side-floating action (often Search).
-class LiquidGlassTabBarAction extends LiquidGlass {
-  LiquidGlassTabBarAction({
-    required LiquidGlassPosition position,
-    required IconData icon,
-    VoidCallback? onTap,
-    Color iconColor = Colors.white,
-    @Deprecated('Use iconColor instead. Retained so existing call sites '
-        'that pass `tint:` still compile.')
-    Color? tint,
-    double size = 56,
-    LiquidGlassController? controller,
-    bool draggable = false,
-    bool outOfBoundaries = false,
-  }) : super(
-          geometry: LiquidGlassGeometry(
-            position: position,
-            width: size,
-            height: size,
-            shape: RoundedRectangleShape(
-              // Border profile mirrors the bottom-nav capsule (see
-              // [buildLiquidGlassBottomNavCapsule]) so the search
-              // button reads as part of the same family rather than
-              // a brighter standalone pill.
-              cornerRadius: size / 2,
-              borderWidth: 1.2,
-              lightIntensity: 1.1,
-              lightDirection: 80,
-              borderType: const OpticalBorder(
-                borderSaturation: 1.2,
-                ambientIntensity: 1.0,
-                borderSolidity: 0.35,
-              ),
-            ),
-            outOfBoundaries: outOfBoundaries,
-          ),
-          refraction: const LiquidGlassRefraction(
-            distortion: 0.07,
-            distortionWidth: 28,
-            chromaticAberration: 0.002,
-          ),
-          // Transparent body — let the underlying liquid-glass
-          // refraction speak for itself. The icon color is
-          // independently controlled by [iconColor] (defaults to
-          // white) so the button doesn't look "tinted".
-          appearance: const LiquidGlassAppearance(
-            blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
-          ),
-          behavior: LiquidGlassBehavior(
-            draggable: draggable,
-            controller: controller,
-          ),
-          child: Material(
-            color: Colors.transparent,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onTap,
-              child: Center(
-                child: Icon(
-                  icon,
-                  color: tint ?? iconColor,
-                  size: size * 0.46,
-                ),
-              ),
-            ),
+/// Companion floating action button rendered as its own liquid-glass
+/// pill, mirroring the pattern of pairing a tab bar with a separate,
+/// side-floating action (often Search).
+class LiquidGlassTabBarAction extends StatelessWidget {
+  const LiquidGlassTabBarAction({
+    super.key,
+    required this.icon,
+    this.onTap,
+    this.foregroundColor = Colors.white,
+    this.size = 56,
+    this.style,
+    this.visibility = true,
+  });
+
+  /// The action glyph.
+  final IconData icon;
+
+  /// Tap callback.
+  final VoidCallback? onTap;
+
+  /// Color of the glyph.
+  final Color foregroundColor;
+
+  /// Diameter of the circular button.
+  final double size;
+
+  /// The action's glass look as one [LiquidGlassStyle] (shape + appearance
+  /// + refraction), taken as the complete look. When null the tuned
+  /// [defaultStyle] is used; its `shape` may be null, in which case a
+  /// circular pill mirroring the bottom-nav capsule rim is used. To tweak
+  /// one facet while keeping the rest, compose with `copyWith`, e.g.
+  /// `style: LiquidGlassTabBarAction.defaultStyle.copyWith(...)`.
+  final LiquidGlassStyle? style;
+
+  /// Whether the button is shown; toggling animates the glass in/out.
+  final bool visibility;
+
+  static const LiquidGlassAppearance _defaultAppearance =
+      LiquidGlassAppearance(
+    // Transparent body — let the refraction speak for itself.
+    blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2),
+  );
+
+  static const LiquidGlassRefraction _defaultRefraction =
+      LiquidGlassRefraction(
+    distortion: 0.07,
+    distortionWidth: 28,
+    chromaticAberration: 0.002,
+  );
+
+  /// The tuned default look — a transparent body over a soft optical
+  /// refraction. Its `shape` is `null`: the action derives a circular pill
+  /// when [style] supplies no shape. Compose with `copyWith` to tweak one
+  /// facet, e.g. `style: LiquidGlassTabBarAction.defaultStyle.copyWith(...)`.
+  static const LiquidGlassStyle defaultStyle = LiquidGlassStyle(
+    appearance: _defaultAppearance,
+    refraction: _defaultRefraction,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final LiquidGlassStyle resolved = defaultStyle.merge(style);
+    final LiquidGlassShape effectiveShape = resolved.shape ??
+        LiquidGlassShape.roundedRectangle(
+          cornerRadius: size / 2,
+          borderWidth: 1.2,
+          lightIntensity: 1.1,
+          lightDirection: 80,
+          borderType: const OpticalBorder(
+            borderSaturation: 1.2,
+            ambientIntensity: 1.0,
+            borderSolidity: 0.35,
           ),
         );
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: LiquidGlassLens(
+        style: LiquidGlassStyle(
+          shape: effectiveShape,
+          appearance: resolved.appearance,
+          refraction: resolved.refraction,
+        ),
+        visibility: visibility,
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Center(
+              child: Icon(icon, color: foregroundColor, size: size * 0.46),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
