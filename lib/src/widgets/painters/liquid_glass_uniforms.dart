@@ -147,13 +147,10 @@ void packLiquidGlassUniforms(
   shader.setFloat(i++, shape.lightDirection);
 
   // u_lensColor — present only on the main shader.
-  // NOTE: the B and G channels are intentionally swapped to match the
-  // original painter behavior. Kept here so the swap lives in exactly
-  // one place.
   if (includeLensColor) {
     shader.setFloat(i++, lensColor.r);
-    shader.setFloat(i++, lensColor.b);
     shader.setFloat(i++, lensColor.g);
+    shader.setFloat(i++, lensColor.b);
     shader.setFloat(i++, lensColor.a);
   }
 

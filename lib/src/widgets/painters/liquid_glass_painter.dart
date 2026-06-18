@@ -155,8 +155,8 @@ class LiquidGlassPainter extends CustomPainter {
 
     shader.setFloat(index++, border!.lightDirection);
     shader.setFloat(index++, color.r);
-    shader.setFloat(index++, color.b);
     shader.setFloat(index++, color.g);
+    shader.setFloat(index++, color.b);
     shader.setFloat(index++, color.a);
     // One-side / double-side specular highlights are classic-only:
     // in optical mode the directional term saturates the internal

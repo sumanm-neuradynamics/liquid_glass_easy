@@ -1,36 +1,76 @@
-# liquid_glass_easy_example
+# liquid_glass_easy — example
 
-A self-contained demo of the [`liquid_glass_easy`](https://pub.dev/packages/liquid_glass_easy)
-package. Everything lives in a single `lib/main.dart`, so you can copy it into a
-fresh Flutter project, add the package to your `pubspec.yaml`, and run it as-is.
+This folder has two entry points:
 
-## What it shows
-
-A single **Next Background** button at the bottom cycles through every demo page:
-
-1. **Control Center** — an iOS-style control center built entirely from liquid glass
-   (connectivity grid, now-playing card, brightness/volume sliders, and round toggle tiles).
-2. **Notifications** — a lock-screen with stacked glass notification cards plus
-   flashlight and camera corner buttons, each using the new `OpticalBorder`.
-3. **Lens playground (6 wallpapers)** — a single draggable `LiquidGlass` lens over
-   different network wallpapers, showcasing both `OpticalBorder` and `ClassicBorder`,
-   plain and continuous-corner rounded-rectangle shapes, blur, and chromatic aberration.
-
-The backgrounds load hosted images and gracefully fall back to in-code gradients,
-so the demo runs even offline.
+- **`lib/main.dart`** — a minimal, self-contained example: one `LiquidGlassLens`
+  over a background. Its only import is the package, so you can copy it straight
+  into a fresh Flutter project and run it.
+- **`lib/gallery.dart`** — the full on-device gallery whose home menu opens each
+  demo (control center, scaffold + glass nav, slider & toggle, corner styles,
+  plus jelly tuners) on its own page. This is what the README screenshots/GIFs
+  come from.
 
 ## Run
 
 ```bash
 cd example
-flutter run
+flutter pub get
+
+flutter run                       # minimal example (lib/main.dart)
+flutter run -t lib/gallery.dart   # full demo gallery
 ```
 
-## Using your own images (optional)
+## Minimal example
 
-The lens playground loads wallpapers over the network. To use bundled assets instead:
+```dart
+import 'package:flutter/material.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
-1. Add your files under `example/assets/` (e.g. `forest.jpg`, `mountain.jpg`).
-2. Uncomment the `assets:` section in `example/pubspec.yaml`.
-3. Replace the `Image.network(...)` calls in `_buildBackground()` (inside `main.dart`)
-   with `Image.asset(..., fit: BoxFit.cover)`.
+void main() => runApp(const MyApp());
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Anything you want refracted behind the glass.
+            Image.network('https://picsum.photos/800/1600', fit: BoxFit.cover),
+            Center(
+              child: SizedBox(
+                width: 260,
+                height: 150,
+                child: LiquidGlassLens(
+                  style: const LiquidGlassStyle(
+                    shape: LiquidGlassShape.squircle(cornerRadius: 44),
+                    refraction: LiquidGlassRefraction(
+                      distortion: 0.13,
+                      distortionWidth: 34,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Liquid Glass',
+                      style: TextStyle(color: Colors.white, fontSize: 20),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+> On the Skia engine, wrap your UI in a `LiquidGlassView` (with a
+> `backgroundWidget`) so the lens has a background to refract — on Impeller no
+> view is needed. See the package
+> [README](https://pub.dev/packages/liquid_glass_easy) for the full API.

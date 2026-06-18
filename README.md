@@ -1,9 +1,11 @@
 # Liquid Glass Easy
 
-[![pub package](https://img.shields.io/pub/v/liquid_glass_easy.svg)](https://pub.dev/packages/liquid_glass_easy)
-[![pub likes](https://img.shields.io/pub/likes/liquid_glass_easy)](https://pub.dev/packages/liquid_glass_easy/score)
-[![pub points](https://img.shields.io/pub/points/liquid_glass_easy)](https://pub.dev/packages/liquid_glass_easy/score)
-[![license](https://img.shields.io/github/license/AhmeedGamil/liquid_glass_easy)](https://github.com/AhmeedGamil/liquid_glass_easy/blob/main/LICENSE)
+<p align="center">
+  <a href="https://pub.dev/packages/liquid_glass_easy"><img src="https://img.shields.io/pub/v/liquid_glass_easy?style=for-the-badge&logo=dart&logoColor=white&label=pub&color=0175C2" alt="pub version"/></a>
+  <a href="https://pub.dev/packages/liquid_glass_easy/score"><img src="https://img.shields.io/pub/likes/liquid_glass_easy?style=for-the-badge&label=likes&color=02569B" alt="pub likes"/></a>
+  <a href="https://pub.dev/packages/liquid_glass_easy/score"><img src="https://img.shields.io/pub/points/liquid_glass_easy?style=for-the-badge&logo=flutter&logoColor=white&label=pub%20points&color=02569B" alt="pub points"/></a>
+  <a href="https://github.com/AhmeedGamil/liquid_glass_easy/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AhmeedGamil/liquid_glass_easy?style=for-the-badge&color=4CAF50" alt="license"/></a>
+</p>
 
 **A Flutter package that adds real-time, interactive liquid glass lenses.**
 These dynamic lenses **magnify**, **distort**, **blur**, **tint**, and **refract** the content behind them — creating stunning, glass-like effects that respond fluidly to **movement** and **touch**.
@@ -237,11 +239,7 @@ the captured `backgroundWidget` on Skia — no changes required.
 
 ### Explore interactively
 
-- See the [`example/`](example/) directory — **`main.dart`** is an on-device gallery whose home menu opens each demo as its own route, exercising every render path:
-
-```bash
-flutter run -t lib/main.dart
-```
+You can find the demos shown above under the [`example/`](example/) folder.
 
 ---
 
@@ -307,12 +305,17 @@ Common parameters: `cornerRadius`, `borderWidth`, `borderColor`, `lightColor`,
 `lightIntensity`, `lightDirection`, `borderType`, and `clipQuality`
 (`roundedRectangle` = cheap circular clip, `exact` = shape-matched `ClipPath`).
 
-> **Tip:** On `continuousRoundedRectangle`, leave `clipQuality` at its default
-> (`roundedRectangle`) — don't reach for `LiquidGlassClipQuality.exact` until you
-> actually need it. `exact` adds an extra save layer (more expensive) just to make
-> the clipped child/blur silhouette hug the continuous corner perfectly. At typical
-> corner radii that difference is usually imperceptible, so only switch to `exact`
-> if you can *see* the clipped edge not lining up with the refraction.
+> **Tip — choosing `clipQuality`:**
+> - **`squircle`:** it's worth using `LiquidGlassClipQuality.exact`. The squircle
+>   has its own shader-matched `ClipPath`, so `exact` makes the clipped child/blur
+>   silhouette follow the true L^n curve instead of a plain rounded rectangle.
+> - **`continuousRoundedRectangle`:** leave `clipQuality` at its default
+>   (`roundedRectangle`). A rounded-rectangle clip already hugs the continuous
+>   corner so closely that there's effectively **no visible difference** from the
+>   `exact` continuous clipper — that continuous clipper is only there as an
+>   experiment, and `exact` just adds an extra (more expensive) save layer for no
+>   real gain. Only reach for `exact` here if you can actually *see* the clipped
+>   edge not lining up with the refraction.
 
 ### `LiquidGlassView` (Skia background provider)
 
@@ -386,20 +389,6 @@ LiquidGlassLens(
 ---
 
 ## Common Patterns
-
-### Multiple lenses
-
-Just place several `LiquidGlassLens` widgets in your layout:
-
-```dart
-Column(
-  children: [
-    SizedBox(width: 160, height: 160, child: LiquidGlassLens(/* ... */)),
-    const SizedBox(height: 24),
-    SizedBox(width: 220, height: 120, child: LiquidGlassLens(/* ... */)),
-  ],
-)
-```
 
 ### Draggable lens
 
@@ -502,7 +491,7 @@ Stack(
 );
 ```
 
-> `.withImpeller` is **Impeller-first**: on Skia / Web (no live-backdrop
+> `.withImpeller` is **Impeller-first**: on Skia (no live-backdrop
 > shader) it falls back to a plain frosted bar that still shows the content
 > behind it. For the refracting morph pill on Skia, use a
 > `LiquidGlassScaffold` with a real `body`.
@@ -555,7 +544,7 @@ await viewController.captureOnce();
 
 ---
 
-## Author
+## Developed by
 
 **Ahmed Gamil**
 
