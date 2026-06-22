@@ -18,6 +18,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../liquid_glass_config.dart';
 import '../../utils/liquid_glass_blur.dart';
 import '../../utils/liquid_glass_refresh_rate.dart';
 
@@ -123,6 +124,10 @@ class LiquidGlassNavPillStyle {
   /// Width of the pill's refraction band, in px.
   final double distortionWidth;
 
+  /// Complete refraction configuration for the moving pill. When set, this
+  /// supersedes [distortion], [distortionWidth], and [magnification].
+  final LiquidGlassRefraction? refraction;
+
   /// Magnification of the content seen through the pill (`1` = none).
   final double magnification;
 
@@ -134,6 +139,7 @@ class LiquidGlassNavPillStyle {
     this.growHeight = 16,
     this.distortion = 0.06,
     this.distortionWidth = 10,
+    this.refraction,
     this.magnification = 1,
     this.enableInnerRadiusTransparent = false,
   });
@@ -143,6 +149,7 @@ class LiquidGlassNavPillStyle {
     double? growHeight,
     double? distortion,
     double? distortionWidth,
+    LiquidGlassRefraction? refraction,
     double? magnification,
     bool? enableInnerRadiusTransparent,
   }) {
@@ -151,6 +158,7 @@ class LiquidGlassNavPillStyle {
       growHeight: growHeight ?? this.growHeight,
       distortion: distortion ?? this.distortion,
       distortionWidth: distortionWidth ?? this.distortionWidth,
+      refraction: refraction ?? this.refraction,
       magnification: magnification ?? this.magnification,
       enableInnerRadiusTransparent:
           enableInnerRadiusTransparent ?? this.enableInnerRadiusTransparent,

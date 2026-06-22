@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../liquid_glass_config.dart';
 import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_shape.dart';
+import 'liquid_glass_blender.dart';
 import 'liquid_glass_lens_scope.dart';
 import 'liquid_glass_shaders.dart';
 import 'render_liquid_glass_lens.dart';
@@ -143,6 +144,18 @@ class _LiquidGlassLensState extends State<LiquidGlassLens> {
 
   @override
   Widget build(BuildContext context) {
+    // When an ancestor LiquidGlassBlender is present, this lens stops
+    // painting its own glass: it hands its geometry to the blender, which
+    // merges all member lenses into one metaball surface.
+    final blenderScope = LiquidGlassBlenderScope.maybeOf(context);
+    if (blenderScope != null) {
+      return blenderScope.buildMember(
+        style: widget.style,
+        visible: widget.visibility,
+        child: widget.child,
+      );
+    }
+
     final LiquidGlassLensScope? scope = LiquidGlassLensScope.maybeOf(context);
     // `true`/`null` (here or on the scope) → prefer Impeller, but only when
     // the shader path is actually supported; explicit `false` forces it off.

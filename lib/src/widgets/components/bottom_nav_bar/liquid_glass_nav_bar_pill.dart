@@ -59,6 +59,10 @@ LiquidGlass buildLiquidGlassBottomNavPill({
   /// Width of the pill's refraction band, in logical pixels.
   double distortionWidth = 10,
 
+  /// Complete refraction configuration. When set, this supersedes
+  /// [distortion], [distortionWidth], and [magnification].
+  LiquidGlassRefraction? refraction,
+
   /// Magnification of the content seen through the pill (`1` = none).
   double magnification = 1,
 
@@ -124,12 +128,13 @@ LiquidGlass buildLiquidGlassBottomNavPill({
             borderSolidity: 0.5,
           ),
         ),
-    refraction: LiquidGlassRefraction(
-      magnification: magnification,
-      distortion: distortion,
-      distortionWidth: distortionWidth,
-      chromaticAberration: 0.002,
-    ),
+    refraction: refraction ??
+        LiquidGlassRefraction(
+          magnification: magnification,
+          distortion: distortion,
+          distortionWidth: distortionWidth,
+          chromaticAberration: 0.002,
+        ),
     appearance: LiquidGlassAppearance(
       color: color ?? Colors.white.withAlpha(28),
       blur: blur,

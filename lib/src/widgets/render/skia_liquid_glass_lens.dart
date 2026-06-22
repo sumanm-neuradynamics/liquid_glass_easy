@@ -72,7 +72,8 @@ class SkiaLiquidGlassLens extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool useBlur = config.effectiveAppearance.blur.sigmaX > 0 || config.effectiveAppearance.blur.sigmaY > 0;
+    final bool useBlur = config.effectiveAppearance.blur.sigmaX > 0 ||
+        config.effectiveAppearance.blur.sigmaY > 0;
 
     return Stack(
       children: [
@@ -91,13 +92,18 @@ class SkiaLiquidGlassLens extends StatelessWidget {
                       lensWidth: config.geometry.width,
                       lensHeight: config.geometry.height,
                       magnification: (animValue) +
-                          (config.effectiveRefraction.magnification * (1 - animValue)),
-                      distortion: config.effectiveRefraction.distortion,
-                      distortionWidth: (config.effectiveRefraction.distortionWidth -
-                          animValue * config.effectiveRefraction.distortionWidth),
+                          (config.effectiveRefraction.magnification *
+                              (1 - animValue)),
+                      distortion:
+                          config.effectiveRefraction.effectiveDistortion,
+                      distortionWidth:
+                          (config.effectiveRefraction.effectiveDistortionWidth -
+                              animValue *
+                                  config.effectiveRefraction
+                                      .effectiveDistortionWidth),
                       diagonalFlip: config.effectiveRefraction.diagonalFlip,
-                      enableInnerRadiusTransparent:
-                          config.effectiveAppearance.enableInnerRadiusTransparent,
+                      enableInnerRadiusTransparent: config
+                          .effectiveAppearance.enableInnerRadiusTransparent,
                       draggable: config.behavior.draggable,
                       parentSize: parentSize,
                       border: config.effectiveShape,
@@ -109,10 +115,13 @@ class SkiaLiquidGlassLens extends StatelessWidget {
                       imageFallback: imageFallback,
                       borderShader: borderShader,
                       chromaticAberration:
-                          config.effectiveRefraction.chromaticAberration * (1 - animValue),
-                      saturation:
-                          (animValue) + (config.effectiveAppearance.saturation * (1 - animValue)),
+                          config.effectiveRefraction.chromaticAberration *
+                              (1 - animValue),
+                      saturation: (animValue) +
+                          (config.effectiveAppearance.saturation *
+                              (1 - animValue)),
                       refractionMode: config.effectiveRefraction.refractionMode,
+                      refractionType: config.effectiveRefraction.refractionType,
                       imageOffset: imageRegion?.topLeft,
                       imageSize: imageRegion?.size,
                       honorBackdropAlpha: honorBackdropAlpha,
@@ -136,8 +145,10 @@ class SkiaLiquidGlassLens extends StatelessWidget {
               shape: config.effectiveShape,
               child: BackdropFilter(
                 filter: ui.ImageFilter.blur(
-                  sigmaX: config.effectiveAppearance.blur.sigmaX * (1 - animValue),
-                  sigmaY: config.effectiveAppearance.blur.sigmaY * (1 - animValue),
+                  sigmaX:
+                      config.effectiveAppearance.blur.sigmaX * (1 - animValue),
+                  sigmaY:
+                      config.effectiveAppearance.blur.sigmaY * (1 - animValue),
                 ),
                 child: Container(),
               ),
@@ -156,18 +167,24 @@ class SkiaLiquidGlassLens extends StatelessWidget {
                 lensPosition: touch.value,
                 lensWidth: config.geometry.width,
                 lensHeight: config.geometry.height,
-                magnification:
-                    (animValue) + (config.effectiveRefraction.magnification * (1 - animValue)),
-                distortion: config.effectiveRefraction.distortion,
-                distortionWidth: (config.effectiveRefraction.distortionWidth -
-                    animValue * config.effectiveRefraction.distortionWidth),
+                magnification: (animValue) +
+                    (config.effectiveRefraction.magnification *
+                        (1 - animValue)),
+                distortion: config.effectiveRefraction.effectiveDistortion,
+                distortionWidth: (config
+                        .effectiveRefraction.effectiveDistortionWidth -
+                    animValue *
+                        config.effectiveRefraction.effectiveDistortionWidth),
                 diagonalFlip: config.effectiveRefraction.diagonalFlip,
                 enableInnerRadiusTransparent:
                     config.effectiveAppearance.enableInnerRadiusTransparent,
                 chromaticAberration:
-                    config.effectiveRefraction.chromaticAberration * (1 - animValue),
-                saturation: (animValue) + (config.effectiveAppearance.saturation * (1 - animValue)),
+                    config.effectiveRefraction.chromaticAberration *
+                        (1 - animValue),
+                saturation: (animValue) +
+                    (config.effectiveAppearance.saturation * (1 - animValue)),
                 refractionMode: config.effectiveRefraction.refractionMode,
+                refractionType: config.effectiveRefraction.refractionType,
                 border: config.effectiveShape,
                 borderAlpha: (1 - animValue),
                 image: image,
@@ -186,8 +203,10 @@ class SkiaLiquidGlassLens extends StatelessWidget {
             return Positioned(
               left: offset.dx,
               top: offset.dy,
-              width: config.geometry.width - config.effectiveShape.borderWidth / 2,
-              height: config.geometry.height - config.effectiveShape.borderWidth / 2,
+              width:
+                  config.geometry.width - config.effectiveShape.borderWidth / 2,
+              height: config.geometry.height -
+                  config.effectiveShape.borderWidth / 2,
               child: GestureDetector(
                 behavior: HitTestBehavior
                     .opaque, // ensures full area receives gestures

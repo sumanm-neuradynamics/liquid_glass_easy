@@ -1,8 +1,7 @@
-/// Determines how light is refracted through the liquid glass surface.
+/// Determines which geometry directs light through the liquid glass surface.
 ///
-/// This enum controls the visual distortion pattern applied to the
-/// background behind the glass effect. It affects how the liquid glass
-/// distorts whatever is behind it, giving different visual appearances.
+/// This is independent of `LiquidGlassRefractionType`, which selects the
+/// standard or optical calculation used to bend the sampled background.
 enum LiquidGlassRefractionMode {
   /// Refracts light based on the underlying shape geometry.
   ///

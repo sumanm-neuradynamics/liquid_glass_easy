@@ -104,6 +104,11 @@ class LiquidGlassAnimatedNavBar extends StatefulWidget {
   /// Width of the glass pill's refraction band.
   final double pillDistortionWidth;
 
+  /// Complete refraction configuration for the moving pill. When set, this
+  /// supersedes [pillDistortion], [pillDistortionWidth], and
+  /// [pillMagnification].
+  final LiquidGlassRefraction? pillRefraction;
+
   /// Magnification of the content seen through the glass pill.
   final double pillMagnification;
 
@@ -174,6 +179,7 @@ class LiquidGlassAnimatedNavBar extends StatefulWidget {
     this.pillGrowHeight = 12,
     this.pillDistortion = 0.06,
     this.pillDistortionWidth = 10,
+    this.pillRefraction,
     this.pillMagnification = 1,
     this.pillEnableInnerRadiusTransparent = false,
     this.pillShape,
@@ -421,8 +427,7 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
   // ── Gesture geometry ─────────────────────────────────────────────
   double _xToTabFrac(double globalDx) {
     // `_barLeft` is the bar's absolute left (honors a custom position).
-    final cell0Center =
-        _barLeft + _layout.padding + _layout.cellWidth / 2;
+    final cell0Center = _barLeft + _layout.padding + _layout.cellWidth / 2;
     final cellW = _layout.cellWidth;
     final raw = (globalDx - cell0Center) / cellW;
     return raw.clamp(0.0, (_layout.itemCount - 1).toDouble());
@@ -531,8 +536,8 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
       );
       _travelPos = r.$1;
       _travelVel = r.$2;
-      travelSettled = (_travelPos - _travelTarget).abs() < 0.003 &&
-          _travelVel.abs() < 0.05;
+      travelSettled =
+          (_travelPos - _travelTarget).abs() < 0.003 && _travelVel.abs() < 0.05;
       if (travelSettled) {
         _travelPos = _travelTarget;
         _travelVel = 0;
@@ -722,8 +727,7 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
         // jelly geometry math — also used by LiquidGlassJelly and the
         // slider thumb). pinch derives its amounts from the pill width;
         // stretch uses the jelly's stretch/squash amounts.
-        final bool isPinch =
-            jelly.style == LiquidGlassJellyStyle.pinchExtrude;
+        final bool isPinch = jelly.style == LiquidGlassJellyStyle.pinchExtrude;
         final deform = resolveJellyDeformation(
           style: isPinch
               ? LiquidGlassJellyStyle.pinchExtrude
@@ -752,8 +756,7 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
       jellyBiasPx *= _glassOpacity;
 
       // Fold the horizontal lean into the fractional index (px → tabs).
-      final pillFrac =
-          basePillFrac + (cellW > 0 ? jellyBiasPx / cellW : 0.0);
+      final pillFrac = basePillFrac + (cellW > 0 ? jellyBiasPx / cellW : 0.0);
 
       // Grow-in: when the pill appears it scales up from the STATIC-PILL
       // size (its extras → 0 at appear=0, so width/height = pillWidth ×
@@ -805,6 +808,7 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
                   blur: widget.pillBlur,
                   distortion: widget.pillDistortion,
                   distortionWidth: widget.pillDistortionWidth,
+                  refraction: widget.pillRefraction,
                   magnification: widget.pillMagnification,
                   enableInnerRadiusTransparent:
                       widget.pillEnableInnerRadiusTransparent,

@@ -261,9 +261,7 @@ class LiquidGlassBottomNavBar extends StatelessWidget {
       pillBlur: glassStyle.appearance.blur,
       pillColor: glassStyle.appearance.color,
       pillGrowHeight: pillStyle.growHeight,
-      pillDistortion: glassStyle.refraction.distortion,
-      pillDistortionWidth: glassStyle.refraction.distortionWidth,
-      pillMagnification: glassStyle.refraction.magnification,
+      pillRefraction: glassStyle.refraction,
       pillEnableInnerRadiusTransparent:
           glassStyle.appearance.enableInnerRadiusTransparent,
       pillShape: glassStyle.shape,

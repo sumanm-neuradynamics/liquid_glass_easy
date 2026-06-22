@@ -35,3 +35,4 @@ flutter:
   shaders:
     - lib/assets/shaders/liquid_glass.frag
     - lib/assets/shaders/liquid_glass_border.frag
+    - lib/assets/shaders/metaball_glass.frag

@@ -238,16 +238,16 @@ class RenderLiquidGlassLens extends RenderProxyBox
       lensWidth: size.width,
       lensHeight: size.height,
       magnification: _refraction.magnification,
-      distortion: _refraction.distortion,
-      distortionWidth: _refraction.distortionWidth,
-      enableInnerRadiusTransparent:
-          _appearance.enableInnerRadiusTransparent,
+      distortion: _refraction.effectiveDistortion,
+      distortionWidth: _refraction.effectiveDistortionWidth,
+      enableInnerRadiusTransparent: _appearance.enableInnerRadiusTransparent,
       diagonalFlip: _refraction.diagonalFlip,
       borderWidth: borderWidth,
       borderAlpha: _borderAlpha,
       chromaticAberration: _refraction.chromaticAberration,
       saturation: _appearance.saturation,
       refractionMode: _refraction.refractionMode,
+      refractionType: _refraction.refractionType,
       includeLensColor: includeLensColor,
       lensColor: _appearance.color,
       honorBackdropAlpha: honorBackdropAlpha,
@@ -257,7 +257,8 @@ class RenderLiquidGlassLens extends RenderProxyBox
   }
 
   double get _fullBorderWidth =>
-      _shape.borderWidth * 2.0 + (_shape.isOpticalBorder ? 2.0 : 0.0);
+      _shape.borderWidth * 2.0 +
+      (_shape.isOpticalBorder && _shape.borderWidth > 0 ? 2.0 : 0.0);
 
   @override
   void paint(PaintingContext context, Offset offset) {
@@ -318,8 +319,7 @@ class RenderLiquidGlassLens extends RenderProxyBox
         // stacked BackdropFilters chain, so the shader refracts the
         // already-blurred backdrop and draws its sharp border last.
         if (_useBlur) {
-          final blurLayer =
-              _blurLayerHandle.layer ??= BackdropFilterLayer();
+          final blurLayer = _blurLayerHandle.layer ??= BackdropFilterLayer();
           blurLayer.filter = ui.ImageFilter.blur(
             sigmaX: _appearance.blur.sigmaX,
             sigmaY: _appearance.blur.sigmaY,
@@ -330,8 +330,7 @@ class RenderLiquidGlassLens extends RenderProxyBox
           _blurLayerHandle.layer = null;
         }
 
-        final shaderLayer =
-            _shaderLayerHandle.layer ??= BackdropFilterLayer();
+        final shaderLayer = _shaderLayerHandle.layer ??= BackdropFilterLayer();
         shaderLayer.filter = ui.ImageFilter.shader(_mainShader);
         context.pushLayer(
             shaderLayer, (PaintingContext context, Offset offset) {}, offset);
@@ -347,9 +346,10 @@ class RenderLiquidGlassLens extends RenderProxyBox
 
   void _paintSkiaCapture(PaintingContext context, Offset offset) {
     final RenderBox? viewBox = _backgroundRenderBox?.call();
-    final ui.Image? image =
-        _currentImage?.call() ?? _captureFallback?.call();
-    if (viewBox == null || !viewBox.attached || !viewBox.hasSize ||
+    final ui.Image? image = _currentImage?.call() ?? _captureFallback?.call();
+    if (viewBox == null ||
+        !viewBox.attached ||
+        !viewBox.hasSize ||
         image == null) {
       // Soft-fail like the legacy pipeline: skip the glass this frame.
       super.paint(context, offset);
@@ -403,8 +403,7 @@ class RenderLiquidGlassLens extends RenderProxyBox
         Offset.zero & size,
         localRRect,
         (PaintingContext context, Offset offset) {
-          final blurLayer =
-              _blurLayerHandle.layer ??= BackdropFilterLayer();
+          final blurLayer = _blurLayerHandle.layer ??= BackdropFilterLayer();
           blurLayer.filter = ui.ImageFilter.blur(
             sigmaX: _appearance.blur.sigmaX,
             sigmaY: _appearance.blur.sigmaY,

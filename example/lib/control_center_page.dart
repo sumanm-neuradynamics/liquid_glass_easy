@@ -120,8 +120,8 @@ LiquidGlassStyle _cardStyle() => LiquidGlassStyle(
       ),
       refraction: const LiquidGlassRefraction(
         magnification: 1,
-        distortion: 0.08,
-        distortionWidth: 34,
+        distortion: 0.15,
+        distortionWidth: 40,
         chromaticAberration: 0,
       ),
       appearance: LiquidGlassAppearance(

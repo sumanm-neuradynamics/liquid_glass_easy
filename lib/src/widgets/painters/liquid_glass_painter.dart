@@ -5,6 +5,7 @@ import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_light_mode.dart';
 import '../utils/liquid_glass_position.dart';
 import '../utils/liquid_glass_refraction_mode.dart';
+import '../utils/liquid_glass_refraction_type.dart';
 import '../utils/liquid_glass_shape.dart';
 
 class LiquidGlassPainter extends CustomPainter {
@@ -25,6 +26,7 @@ class LiquidGlassPainter extends CustomPainter {
   final double chromaticAberration;
   final double saturation;
   final LiquidGlassRefractionMode? refractionMode;
+  final LiquidGlassRefractionType? refractionType;
   final Color color;
   final ui.FragmentShader shader;
   final ui.FragmentShader? borderShader;
@@ -79,6 +81,7 @@ class LiquidGlassPainter extends CustomPainter {
     required this.chromaticAberration,
     required this.saturation,
     required this.refractionMode,
+    required this.refractionType,
     required this.image,
     this.imageFallback,
     this.imageOffset,
@@ -97,6 +100,12 @@ class LiquidGlassPainter extends CustomPainter {
         (border!.lightMode == LiquidGlassLightMode.edge) ? 0 : 1;
     final double selectedRefractionMode =
         (refractionMode == LiquidGlassRefractionMode.shapeRefraction) ? 0 : 1;
+    final double selectedRefractionType =
+        (refractionType?.isOptical ?? false) ? 1 : 0;
+    final double refractionIndex = switch (refractionType) {
+      OpticalRefraction(:final refraction) => refraction,
+      _ => 1.0,
+    };
     final double selectedBorderMode =
         (border!.borderMode == LiquidGlassBorderMode.classic) ? 0 : 1;
 
@@ -112,7 +121,8 @@ class LiquidGlassPainter extends CustomPainter {
     // u_cornerRadius
     shader.setFloat(index++, border?.cornerRadius ?? 0);
     // u_cornerStyle: 2 = continuous (capsule), 1 = squircle, 0 = circular
-    shader.setFloat(index++, border != null ? liquidGlassCornerStyle(border!) : 0);
+    shader.setFloat(
+        index++, border != null ? liquidGlassCornerStyle(border!) : 0);
 
     shader.setFloat(index++, magnification);
     shader.setFloat(index++, distortion);
@@ -130,7 +140,8 @@ class LiquidGlassPainter extends CustomPainter {
     // shader spaces.
     // Blur path: suppress the border in the main shader so the
     // second-pass painter draws it sharp on top of the blur.
-    final double opticalExtra = border!.isOpticalBorder ? 2.0 : 0.0;
+    final double opticalExtra =
+        (border!.isOpticalBorder && border!.borderWidth > 0) ? 2.0 : 0.0;
     shader.setFloat(
         index++, (!useBlur) ? border!.borderWidth * 2.0 + opticalExtra : 0);
     shader.setFloat(index++, border!.borderSoftness);
@@ -168,6 +179,8 @@ class LiquidGlassPainter extends CustomPainter {
     shader.setFloat(index++, saturation);
     shader.setFloat(index++, selectedLightMode);
     shader.setFloat(index++, selectedRefractionMode);
+    shader.setFloat(index++, selectedRefractionType);
+    shader.setFloat(index++, refractionIndex);
     shader.setFloat(index++, border!.ambientIntensity);
     shader.setFloat(index++,
         border!.isOpticalBorder ? 0.0 : border!.doubleSideLightIntensity);
@@ -259,6 +272,7 @@ class LiquidGlassPainter extends CustomPainter {
         oldDelegate.chromaticAberration != chromaticAberration ||
         oldDelegate.saturation != saturation ||
         oldDelegate.refractionMode != refractionMode ||
+        oldDelegate.refractionType != refractionType ||
         oldDelegate.shader != shader ||
         oldDelegate.borderShader != borderShader ||
         oldDelegate.imageOffset != imageOffset ||
@@ -305,6 +319,7 @@ class LiquidGlassBorderPainter extends CustomPainter {
   final double chromaticAberration;
   final double saturation;
   final LiquidGlassRefractionMode refractionMode;
+  final LiquidGlassRefractionType? refractionType;
   final LiquidGlassShape border;
   final double borderAlpha;
   final ui.Image? image;
@@ -332,6 +347,7 @@ class LiquidGlassBorderPainter extends CustomPainter {
     required this.chromaticAberration,
     required this.saturation,
     required this.refractionMode,
+    required this.refractionType,
     required this.border,
     required this.borderAlpha,
     required this.image,
@@ -351,6 +367,12 @@ class LiquidGlassBorderPainter extends CustomPainter {
         (border.borderMode == LiquidGlassBorderMode.classic) ? 0 : 1;
     final double selectedRefractionMode =
         (refractionMode == LiquidGlassRefractionMode.shapeRefraction) ? 0 : 1;
+    final double selectedRefractionType =
+        (refractionType?.isOptical ?? false) ? 1 : 0;
+    final double refractionIndex = switch (refractionType) {
+      OpticalRefraction(:final refraction) => refraction,
+      _ => 1.0,
+    };
 
     final rect = Rect.fromLTWH(
       lensPosition.dx,
@@ -384,8 +406,10 @@ class LiquidGlassBorderPainter extends CustomPainter {
       // Full border-band width: doubled (the shader no longer doubles
       // internally) plus the optical-mode extra, in logical px. Matches
       // the main pass and the Impeller path.
-      ..setFloat(index++,
-          border.borderWidth * 2.0 + (border.isOpticalBorder ? 2.0 : 0.0))
+      ..setFloat(
+          index++,
+          border.borderWidth * 2.0 +
+              (border.isOpticalBorder && border.borderWidth > 0 ? 2.0 : 0.0))
       ..setFloat(index++, border.borderSoftness)
       ..setFloat(index++, border.borderColor?.r ?? 0)
       ..setFloat(index++, border.borderColor?.g ?? 0)
@@ -408,6 +432,8 @@ class LiquidGlassBorderPainter extends CustomPainter {
       ..setFloat(index++, saturation)
       ..setFloat(index++, selectedLightMode)
       ..setFloat(index++, selectedRefractionMode)
+      ..setFloat(index++, selectedRefractionType)
+      ..setFloat(index++, refractionIndex)
       ..setFloat(index++, border.ambientIntensity)
       ..setFloat(index++,
           border.isOpticalBorder ? 0.0 : border.doubleSideLightIntensity)
@@ -455,6 +481,7 @@ class LiquidGlassBorderPainter extends CustomPainter {
         oldDelegate.chromaticAberration != chromaticAberration ||
         oldDelegate.saturation != saturation ||
         oldDelegate.refractionMode != refractionMode ||
+        oldDelegate.refractionType != refractionType ||
         oldDelegate.borderAlpha != borderAlpha ||
         oldDelegate.borderShader != borderShader ||
         oldDelegate.imageOffset != imageOffset ||

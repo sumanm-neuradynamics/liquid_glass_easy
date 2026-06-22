@@ -5,6 +5,7 @@ import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_blur.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_position.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_shape.dart';
 import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_mode.dart';
+import 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_type.dart';
 import 'package:liquid_glass_easy/src/widgets/liquid_glass_style.dart';
 
 /// Represents a single lens in the LiquidGlass system, configured
@@ -195,10 +196,14 @@ class LiquidGlassGeometry {
 ///
 /// One of the four configuration groups accepted by [LiquidGlass].
 class LiquidGlassRefraction {
-  /// Bending strength of the distortion (`0.0`–`1.0`).
+  /// Legacy/default standard distortion strength (`0.0`–`1.0`).
+  ///
+  /// Used only when [refractionType] is `null`.
   final double distortion;
 
-  /// Thickness of the distortion band around the perimeter, in px.
+  /// Legacy/default standard distortion-band width, in logical pixels.
+  ///
+  /// Used only when [refractionType] is `null`.
   final double distortionWidth;
 
   /// Magnification of the content seen through the lens (`1.0` = none).
@@ -207,8 +212,15 @@ class LiquidGlassRefraction {
   /// Strength of the chromatic aberration (color-channel separation).
   final double chromaticAberration;
 
-  /// How light is refracted through the surface (shape vs. radial).
+  /// Geometry used to direct the refraction (shape vs. radial).
   final LiquidGlassRefractionMode refractionMode;
+
+  /// Optional calculation-specific controls.
+  ///
+  /// When `null`, [distortion] and [distortionWidth] select the standard
+  /// calculation for backward compatibility. When non-null, those legacy
+  /// fields are ignored and this object's values are used instead.
+  final LiquidGlassRefractionType? refractionType;
 
   /// Diagonal mirroring/flip of the refraction direction.
   final double diagonalFlip;
@@ -219,8 +231,31 @@ class LiquidGlassRefraction {
     this.magnification = 1,
     this.chromaticAberration = 0.003,
     this.refractionMode = LiquidGlassRefractionMode.shapeRefraction,
+    this.refractionType,
     this.diagonalFlip = 0,
   });
+
+  /// Strength fed to the shader's `u_distortion` uniform.
+  ///
+  /// For [StandardRefraction] this is the legacy distortion. For
+  /// [OpticalRefraction] it carries [OpticalRefraction.depth] — the
+  /// optical displacement strength rides the same wire, so the shader's
+  /// physical path scales its travel distance by it.
+  double get effectiveDistortion => switch (refractionType) {
+        StandardRefraction(:final distortion) => distortion,
+        OpticalRefraction(:final depth) => depth,
+        null => distortion,
+      };
+
+  /// Refractive index for the optical calculation (`1.0` = no bending).
+  double get effectiveRefractionIndex => switch (refractionType) {
+        OpticalRefraction(:final refraction) => refraction,
+        _ => 1.0,
+      };
+
+  /// Width resolved from [refractionType], or the legacy [distortionWidth].
+  double get effectiveDistortionWidth =>
+      refractionType?.width ?? distortionWidth;
 
   LiquidGlassRefraction copyWith({
     double? distortion,
@@ -228,6 +263,10 @@ class LiquidGlassRefraction {
     double? magnification,
     double? chromaticAberration,
     LiquidGlassRefractionMode? refractionMode,
+    LiquidGlassRefractionType? refractionType,
+
+    /// Clears a configured type and restores the legacy standard controls.
+    bool clearRefractionType = false,
     double? diagonalFlip,
   }) {
     return LiquidGlassRefraction(
@@ -236,6 +275,8 @@ class LiquidGlassRefraction {
       magnification: magnification ?? this.magnification,
       chromaticAberration: chromaticAberration ?? this.chromaticAberration,
       refractionMode: refractionMode ?? this.refractionMode,
+      refractionType:
+          clearRefractionType ? null : refractionType ?? this.refractionType,
       diagonalFlip: diagonalFlip ?? this.diagonalFlip,
     );
   }

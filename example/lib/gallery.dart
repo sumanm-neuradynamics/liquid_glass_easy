@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'control_center_page.dart';
 import 'corner_style_page.dart';
+import 'lens_image_page.dart';
+import 'metaball_shapes_test_page.dart';
 import 'nav_jelly_tuner.dart';
 import 'scaffold_demo.dart';
 import 'slider_jelly_tuner.dart';
@@ -92,6 +94,20 @@ class HomePage extends StatelessWidget {
       icon: Icons.rounded_corner_rounded,
       gradient: const [Color(0xFFFF5C8A), Color(0xFFB12A57)],
       builder: (_) => const CornerStylePage(),
+    ),
+    _Destination(
+      title: 'Lens over Image',
+      subtitle: 'LiquidGlassLens refracting a background photo',
+      icon: Icons.image_rounded,
+      gradient: const [Color(0xFF34D399), Color(0xFF0F766E)],
+      builder: (_) => const LensImagePage(),
+    ),
+    _Destination(
+      title: 'Metaball Shapes Test',
+      subtitle: '2 continuous + 1 circular, draggable, blend toggle',
+      icon: Icons.blur_on_rounded,
+      gradient: const [Color(0xFFFF9E2C), Color(0xFFD45C00)],
+      builder: (_) => const MetaballShapesTestPage(),
     ),
   ];
 

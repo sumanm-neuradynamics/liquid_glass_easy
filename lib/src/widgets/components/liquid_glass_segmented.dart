@@ -359,8 +359,7 @@ class _LiquidGlassSegmentedState extends State<LiquidGlassSegmented>
     // When the tinted pill is the *only* indicator (glass off) it slides
     // itself; with the glass pill on it's the static rest pill, parked at
     // the committed selection while the glass pill carries the motion.
-    final double restIndex =
-        pill.glass ? widget.selectedIndex.toDouble() : idx;
+    final double restIndex = pill.glass ? widget.selectedIndex.toDouble() : idx;
     final double restLeft = pad + restIndex * cellW;
 
     return Stack(
@@ -471,6 +470,7 @@ class _LiquidGlassSegmentedState extends State<LiquidGlassSegmented>
     final shape = style.shape;
     final color = style.appearance.color;
     final blur = style.appearance.blur;
+    final refractionType = style.refraction.refractionType;
     return LiquidGlassStyle(
       shape: shape == null
           ? null
@@ -491,7 +491,9 @@ class _LiquidGlassSegmentedState extends State<LiquidGlassSegmented>
         blur: LiquidGlassBlur(sigmaX: blur.sigmaX * f, sigmaY: blur.sigmaY * f),
       ),
       refraction: style.refraction.copyWith(
-        distortion: style.refraction.distortion * f,
+        distortion:
+            refractionType == null ? style.refraction.distortion * f : null,
+        refractionType: refractionType?.withEffectFactor(f),
         chromaticAberration: style.refraction.chromaticAberration * f,
       ),
     );

@@ -5,9 +5,7 @@ export 'package:liquid_glass_easy/src/widgets/liquid_glass_view.dart';
 // `LiquidGlassLens` (the layout-driven lens-anywhere widget) instead.
 // Only the two look groups reused by `LiquidGlassStyle` stay public.
 export 'package:liquid_glass_easy/src/widgets/liquid_glass_config.dart'
-    show
-        LiquidGlassRefraction,
-        LiquidGlassAppearance;
+    show LiquidGlassRefraction, LiquidGlassAppearance;
 // The shared styling descriptor (shape + appearance + refraction) used
 // across the lens, the LiquidGlass config and the components.
 export 'package:liquid_glass_easy/src/widgets/liquid_glass_style.dart'
@@ -20,6 +18,10 @@ export 'package:liquid_glass_easy/src/widgets/liquid_glass_style.dart'
 // on Skia / Web.
 export 'package:liquid_glass_easy/src/widgets/lens/liquid_glass_lens.dart'
     show LiquidGlassLens;
+// Blender: wrap a subtree and merge 2–6 descendant LiquidGlassLens
+// widgets into one smooth metaball glass surface.
+export 'package:liquid_glass_easy/src/widgets/lens/liquid_glass_blender.dart'
+    show LiquidGlassBlender;
 export 'package:liquid_glass_easy/src/widgets/lens/liquid_glass_shaders.dart'
     show LiquidGlassShaders;
 
@@ -32,6 +34,7 @@ export 'package:liquid_glass_easy/src/widgets/components/liquid_glass_draggable.
 export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_light_mode.dart';
 export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_border_mode.dart';
 export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_mode.dart';
+export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refraction_type.dart';
 export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_refresh_rate.dart';
 export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_position.dart';
 export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_jelly_spring.dart';

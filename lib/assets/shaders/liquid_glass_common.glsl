@@ -324,9 +324,16 @@ vec2 computeShapeRefraction(
    incident ray with refract() and displaces the sample by its
    screen-space part.
 
-   Displacement strength = thickness * distortion (the public lens
-   `distortion` parameter, 0..1), tunable from Dart with no shader
-   edit. REFRACTION_DEPTH_SCALE is an extra global multiplier (1.0).
+   Three independent controls:
+     • refractiveIndex (IOR) — the bending ANGLE. Snell's law saturates,
+       so its useful range is ~1.0–2.0; beyond that the ray is already
+       fully bent and higher values barely change the look.
+     • thickness        — the WIDTH of the beveled edge band (the `h` ramp).
+     • strength         — HOW MUCH the sample is displaced (the public lens
+       `distortion` dial, 0..1). This is the magnitude knob; without it the
+       displacement is welded to `thickness` and the index becomes the only
+       (saturating) control.
+   REFRACTION_DEPTH_SCALE is an extra global multiplier (1.0).
    =========================== */
 #ifndef REFRACTION_DEPTH_SCALE
 #define REFRACTION_DEPTH_SCALE 1.0
@@ -338,7 +345,7 @@ vec2 computeRefractedPosition(
     float sdf,
     float thickness,
     float refractiveIndex,
-    float distortion,
+    float strength,
     float zoneT
 ){
     // 2D gradient -> 3D surface normal.
@@ -348,12 +355,14 @@ vec2 computeRefractedPosition(
 
     // Incident ray straight into the screen.
     vec3  I   = vec3(0.0, 0.0, -1.0);
-    float eta = 1.0 / max(refractiveIndex, EPS);
+    float eta = 1.0 / max(refractiveIndex, 1.0);
 
     vec3 refr = refract(I, normal3D, eta);
 
-    // Displace by the refracted ray's screen-space (xy) component.
-    float depth = thickness * distortion * 5*REFRACTION_DEPTH_SCALE * zoneT;
+    // Displace by the refracted ray's screen-space (xy) component. The
+    // `strength` dial scales the travel distance independently of the band
+    // width; the 5.0 matches the original optical tuning.
+    float depth = thickness * strength * 5.0 * REFRACTION_DEPTH_SCALE * zoneT;
     return fragPx + refr.xy * depth;
 }
 

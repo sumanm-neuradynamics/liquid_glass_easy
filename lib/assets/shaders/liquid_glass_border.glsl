@@ -141,6 +141,9 @@ vec4 getOpticalBorder(
     float doubleSideLightIntensity,
     float borderSaturation,
     float borderSolidity
+#ifdef LIQUID_GLASS_RIM_WRAP
+    , float wrap   // half-Lambert blend amount; only compiled for the metaball
+#endif
 ){
     if (borderWidthPx <= 0.0 || borderAlpha <= 0.0) return vec4(0.0);
 
@@ -211,9 +214,23 @@ vec4 getOpticalBorder(
     //    These terms control how strongly the rim shows, but must not
     //    extend its physical extent. We sum them up first, then cap the
     //    total to 1.0 before multiplying by the geometric mask.
+    // Angular response. Default: lights the front and back of the light
+    // axis but is ZERO at 90° — fine for a single convex shape. Under
+    // LIQUID_GLASS_RIM_WRAP (metaball only) it blends toward a half-Lambert
+    // response (0.5 at 90°), so a merged shape's concave neck — whose
+    // normals are perpendicular to the light — keeps a rim and the border
+    // stays connected. The production single-lens shaders don't define the
+    // macro, so this compiles to exactly the original two lines.
+#ifdef LIQUID_GLASS_RIM_WRAP
+    float ndl = dot(normal, lightDirV);
+    float hard = max(ndl, 0.0) + max(-ndl, 0.0) * 0.8;
+    float wrapped = ndl * 0.5 + 0.5;
+    float totalInfluence = mix(hard, wrapped, clamp(wrap, 0.0, 1.0));
+#else
     float mainLight = max(dot(normal, lightDirV), 0.0);
     float oppositeLight = max(dot(normal, -lightDirV), 0.0);
     float totalInfluence = mainLight + oppositeLight * 0.8;
+#endif
 
     float directional = pow(totalInfluence, 1.5) * lightIntensity * 3.0;
     float ambient = ambientIntensity * 0.1;
@@ -271,6 +288,9 @@ vec4 getSweepBorder(
     float borderSaturation,
     float borderSolidity,
     float borderMode
+#ifdef LIQUID_GLASS_RIM_WRAP
+    , float wrap
+#endif
 ){
     if (borderMode >= 0.5) {
         // OPTICAL mode
@@ -283,6 +303,9 @@ vec4 getSweepBorder(
             ambientColor, ambientIntensity,
             doubleSideLightIntensity, borderSaturation,
             borderSolidity
+#ifdef LIQUID_GLASS_RIM_WRAP
+            , wrap
+#endif
         );
     } else {
         // CLASSIC mode

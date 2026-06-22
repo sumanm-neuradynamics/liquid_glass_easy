@@ -45,6 +45,8 @@ uniform float u_chromaticAberration;
 uniform float u_saturation;
 uniform float u_lightMode;
 uniform float u_refractionMode;
+uniform float u_refractionType;
+uniform float u_refractionIndex;
 uniform float u_ambientIntensity;
 uniform float u_doubleSideLightIntensity;
 uniform float u_borderSaturation;
@@ -61,6 +63,8 @@ out vec4 frag_color;
 
 #define REFRACTION_SHAPE    0
 #define REFRACTION_RADIAL   1
+#define REFRACTION_STANDARD 0
+#define REFRACTION_OPTICAL  1
 
 vec3 applyChromaticAberration(vec2 uv, float shift) {
     vec3 color = texture(u_texture_input, uv).rgb;
@@ -174,12 +178,31 @@ void main() {
         }
     } else {
         float zoneT = 1.0 - clamp(distAbsPx / max(zoneLimit, EPS), 0.0, 1.0);
-        float distortionFactor = computeDistortionFactor(u_distortion, zoneT);
         vec2 refrPx;
 
-        if (u_refractionMode == REFRACTION_SHAPE) {
+        if (u_refractionType == REFRACTION_OPTICAL) {
+            // Match the main shader's optical sample for both geometries.
+            vec2 opticalNormal = shapeData.normal;
+            if (u_refractionMode == REFRACTION_RADIAL) {
+                vec2 radial = magPx - lensCenterPx;
+                float radialLength = length(radial);
+                if (radialLength > EPS) {
+                    opticalNormal = radial / radialLength;
+                }
+            }
+            refrPx = computeRefractedPosition(
+                magPx,
+                opticalNormal,
+                shapeData.sdf,
+                u_distortionThicknessPx,
+                u_refractionIndex,
+                u_distortion,
+                zoneT
+            );
+        } else if (u_refractionMode == REFRACTION_SHAPE) {
             // Stable shape refraction (inset-anchor based) — keep in
             // sync with liquid_glass.frag.
+            float distortionFactor = computeDistortionFactor(u_distortion, zoneT);
             refrPx = computeShapeRefraction(
                 magPx,
                 shapeData.normal,
@@ -191,19 +214,8 @@ void main() {
                 zoneT
             );
 
-            // Experimental physical (Snell's law) refraction — disabled
-            // for now (suspected Impeller raster crash on some devices).
-            // Kept here to re-enable later; do not delete.
-            // refrPx = computeRefractedPosition(
-            //     magPx,
-            //     shapeData.normal,
-            //     shapeData.sdf,
-            //     u_distortionThicknessPx,
-            //     3.0,
-            //     u_distortion,
-            //     zoneT
-            // );
         } else {
+            float distortionFactor = computeDistortionFactor(u_distortion, zoneT);
             refrPx = refractFromAnchorPx(
                 magPx,
                 lensCenterPx,

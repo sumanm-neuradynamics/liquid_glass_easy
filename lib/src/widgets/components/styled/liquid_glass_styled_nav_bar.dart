@@ -170,7 +170,8 @@ class _LiquidGlassStyledNavBarState extends State<LiquidGlassStyledNavBar>
     _tabIndex = widget.selectedIndex;
     _tabIndexCommitted = widget.selectedIndex;
     _tabPillFracIndex = widget.selectedIndex.toDouble();
-    _tabAnim = AnimationController(vsync: this, duration: widget.motion.duration);
+    _tabAnim =
+        AnimationController(vsync: this, duration: widget.motion.duration);
     _tabIndexTween = AlwaysStoppedAnimation<double>(_tabIndex.toDouble());
     _tabAnim.addListener(() => setState(() {}));
     _tabAnim.addStatusListener((status) {
@@ -430,8 +431,7 @@ class _LiquidGlassStyledNavBarState extends State<LiquidGlassStyledNavBar>
           layout.pillWidth + (targetGlassW - layout.pillWidth) * growT;
       final pillExtraH = glassH - layout.cellHeight;
 
-      final pillFrac =
-          _tabDragging ? _tabPillFracIndex : _tabIndexTween.value;
+      final pillFrac = _tabDragging ? _tabPillFracIndex : _tabIndexTween.value;
 
       final staticPillLeft =
           _barLeft + layout.padding + _tabIndexCommitted * cellW;
@@ -476,6 +476,7 @@ class _LiquidGlassStyledNavBarState extends State<LiquidGlassStyledNavBar>
                   blur: widget.pill.blur,
                   distortion: widget.pill.distortion,
                   distortionWidth: widget.pill.distortionWidth,
+                  refraction: widget.pill.refraction,
                   magnification: widget.pill.magnification,
                   enableInnerRadiusTransparent:
                       widget.pill.enableInnerRadiusTransparent,
@@ -650,6 +651,7 @@ LiquidGlass _buildStyledNavPill({
   LiquidGlassBlur blur = const LiquidGlassBlur(),
   double distortion = 0.06,
   double distortionWidth = 10,
+  LiquidGlassRefraction? refraction,
   double magnification = 1,
   bool enableInnerRadiusTransparent = false,
 }) {
@@ -681,12 +683,13 @@ LiquidGlass _buildStyledNavPill({
         borderSolidity: 0.5,
       ),
     ),
-    refraction: LiquidGlassRefraction(
-      distortion: distortion,
-      distortionWidth: distortionWidth,
-      magnification: magnification,
-      chromaticAberration: 0.002,
-    ),
+    refraction: refraction ??
+        LiquidGlassRefraction(
+          distortion: distortion,
+          distortionWidth: distortionWidth,
+          magnification: magnification,
+          chromaticAberration: 0.002,
+        ),
     appearance: LiquidGlassAppearance(
       color: Colors.white.withAlpha(28),
       blur: blur,
@@ -945,7 +948,8 @@ class _InsidePillClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     return Path()
-      ..addRRect(RRect.fromRectAndRadius(pillRect, Radius.circular(pillRadius)));
+      ..addRRect(
+          RRect.fromRectAndRadius(pillRect, Radius.circular(pillRadius)));
   }
 
   @override
@@ -964,10 +968,10 @@ class _OutsidePillClipper extends CustomClipper<Path> {
 
   @override
   Path getClip(Size size) {
-    final full = Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    final full = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
     final pill = Path()
-      ..addRRect(RRect.fromRectAndRadius(pillRect, Radius.circular(pillRadius)));
+      ..addRRect(
+          RRect.fromRectAndRadius(pillRect, Radius.circular(pillRadius)));
     return Path.combine(PathOperation.difference, full, pill);
   }
 

@@ -100,8 +100,10 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
     final cfg = widget.config;
     final shape = cfg.effectiveShape;
 
+    final double configuredDistortionWidth =
+        cfg.effectiveRefraction.effectiveDistortionWidth;
     final double effectiveDistortionWidth =
-        cfg.effectiveRefraction.distortionWidth - animValue * cfg.effectiveRefraction.distortionWidth;
+        configuredDistortionWidth - animValue * configuredDistortionWidth;
     final double effectiveMagnification =
         animValue + (cfg.effectiveRefraction.magnification * (1 - animValue));
     final double effectiveSaturation =
@@ -125,20 +127,23 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
       lensWidth: cfg.geometry.width,
       lensHeight: cfg.geometry.height,
       magnification: effectiveMagnification,
-      distortion: cfg.effectiveRefraction.distortion,
+      distortion: cfg.effectiveRefraction.effectiveDistortion,
       distortionWidth: effectiveDistortionWidth,
-      enableInnerRadiusTransparent: cfg.effectiveAppearance.enableInnerRadiusTransparent,
+      enableInnerRadiusTransparent:
+          cfg.effectiveAppearance.enableInnerRadiusTransparent,
       diagonalFlip: cfg.effectiveRefraction.diagonalFlip,
       // Full border-band width in logical px: doubled (the outer half is
       // clipped by the lens shape), plus the optical-mode extra. Passing
       // it here — rather than adding a constant inside the shader — lets
       // `packLiquidGlassUniforms` apply `scale` (dpr) so the rim has the
       // same logical width on Impeller as it does on Skia.
-      borderWidth: shape.borderWidth * 2.0 + (shape.isOpticalBorder ? 2.0 : 0.0),
+      borderWidth: shape.borderWidth * 2.0 +
+          (shape.isOpticalBorder && shape.borderWidth > 0 ? 2.0 : 0.0),
       borderAlpha: effectiveBorderAlpha,
       chromaticAberration: effectiveChromaticAberration,
       saturation: effectiveSaturation,
       refractionMode: cfg.effectiveRefraction.refractionMode,
+      refractionType: cfg.effectiveRefraction.refractionType,
       includeLensColor: true,
       lensColor: cfg.effectiveAppearance.color,
       // Impeller's live backdrop alpha is not a transparency signal
@@ -153,7 +158,8 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
   Widget _buildImpellerLens(
       BuildContext context, Offset lensPosition, double animValue) {
     final config = widget.config;
-    final useBlur = config.effectiveAppearance.blur.sigmaX > 0 || config.effectiveAppearance.blur.sigmaY > 0;
+    final useBlur = config.effectiveAppearance.blur.sigmaX > 0 ||
+        config.effectiveAppearance.blur.sigmaY > 0;
     final shader = widget.shader;
     final dpr = MediaQuery.devicePixelRatioOf(context);
 
@@ -235,7 +241,8 @@ class _ImpellerLiquidGlassLensState extends State<ImpellerLiquidGlassLens> {
           left: lensPosition.dx,
           top: lensPosition.dy,
           width: config.geometry.width - config.effectiveShape.borderWidth / 2,
-          height: config.geometry.height - config.effectiveShape.borderWidth / 2,
+          height:
+              config.geometry.height - config.effectiveShape.borderWidth / 2,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onPanUpdate: config.behavior.draggable
