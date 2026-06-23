@@ -26,7 +26,8 @@
 #include "liquid_glass_border.glsl"
 #define PI 3.14159265
 
-precision highp float;
+// mediump perf test: inherit the shared toggle from liquid_glass_common.glsl.
+precision GLASS_FLOAT_PRECISION float;
 
 // =====================================================
 // Uniforms
@@ -53,6 +54,17 @@ uniform vec4 u_lensMeta2;
 uniform vec4 u_lensMeta3;
 uniform vec4 u_lensMeta4;
 uniform vec4 u_lensMeta5;
+
+// u_lensSidesN = per-lens side-blend activation (right, left, down, up), each
+// 0..1, computed on the Dart side from neighbour proximity. Drives the
+// per-corner continuous→rounded-rect morph: a corner rounds when either of the
+// two sides it joins is active.
+uniform vec4 u_lensSides0;
+uniform vec4 u_lensSides1;
+uniform vec4 u_lensSides2;
+uniform vec4 u_lensSides3;
+uniform vec4 u_lensSides4;
+uniform vec4 u_lensSides5;
 
 // Metaball blend radius in px (the "gooeyness").
 uniform float u_smoothness;
@@ -118,6 +130,24 @@ out vec4 frag_color;
 // light — keeps a rim and the merged border stays connected. Tune 0..1.
 #define METABALL_RIM_WRAP 1.0
 
+// EXPERIMENT (lens-anywhere-v4): two approaches to the bad CONTINUOUS blend.
+//
+// METABALL_EIKONAL_CONTINUOUS: the continuous (capsule) shoulder is NOT a
+// true distance field, so the smin — which places the bridge from the SDF
+// VALUE, assuming it equals true distance — lands the bridge off the
+// outline. Eikonal-renormalize the continuous value (f / |grad f|) before it
+// enters the smin so the bridge tracks the real continuous corner. Squircle
+// and circular lenses stay raw (already ~unit-gradient; squircle blends fine).
+// Older approach (kept for comparison): eikonal-renormalize the continuous
+// value before the smin. Fixes the bridge but the shoulder gradient spike
+// paints a stray rim whisker, and gating it back to raw reintroduces the
+// bridge warp at the transition — the two fight. Disabled.
+#define METABALL_EIKONAL_CONTINUOUS 0
+
+// Convert continuous → circular rounded rectangle at the blending corner.
+// Disabled: keep the raw continuous corner through the blend.
+#define METABALL_FLATTEN_CONTINUOUS_BLEND 0
+
 // =====================================================
 // Metaball field: smooth-union of the enabled lens SDFs
 // =====================================================
@@ -132,26 +162,130 @@ float smoothUnion(float a, float b, float k) {
 
 // One lens's signed distance.
 //
-// Always the EXACT rounded-rectangle SDF (|grad| ~ 1). The metaball
-// smooth-union requires a true distance field to produce a correct bridge:
-// the continuous/squircle corner SDFs carry a non-unit-gradient "shoulder"
-// near their corners, which warps the blend so it stops following the
-// outline. Circular corners blend cleanly at any radius, and a full-radius
-// square is still a perfect circle.
+// meta.z selects the corner SDF (0 = circular rounded rect, 1 = squircle,
+// 2 = continuous), mirroring the single-lens shader's u_cornerStyle.
+//
+// CAVEAT: only the circular rounded-rect SDF is a TRUE distance field
+// (|grad| ~ 1). The metaball smooth-union assumes that to grow a correct
+// bridge — the squircle/continuous corner SDFs carry a non-unit-gradient
+// "shoulder" near their corners, which warps the blend so the neck stops
+// hugging the outline. The squircle branch below is intentionally exposed
+// so the look can be evaluated on device; expect bridge distortion when
+// two squircle lenses fuse near their corners.
 float lensDistance(vec2 p, vec4 lens, vec4 meta) {
+    vec2 halfSize  = max(lens.zw, vec2(EPS));
+    float maxCorner = min(halfSize.x, halfSize.y);
+    float r = min(meta.x, maxCorner);
+
+    // Continuous (Apple capsule-style) corners. RAW here; the per-corner morph
+    // lives in lensDistanceMorph (used by field only).
+    if (meta.z > 1.5 && r > 0.5) {
+        vec2 reach = continuousRoundedRectReach(r, halfSize);
+        return continuousRoundedRectShape(p, lens.xy, halfSize, r, reach);
+    }
+
+    // Squircle (Ln-norm) corners — full, fixed smoothing (1.0), matching the
+    // single-lens squircle branch in liquid_glass.frag.
+    if (meta.z > 0.5 && meta.z < 1.5 && r > 0.5) {
+        vec2 zn = squircleCornerParams(r, 1.0, maxCorner);
+        return squircleShape(p, lens.xy, halfSize, zn.x, zn.y);
+    }
+
+    return roundedRectangleShape(p, lens.xy, halfSize, r);
+}
+
+// Per-lens SDF with the PER-CORNER continuous→rounded-rect morph. `sides` =
+// (right, left, down, up) activation from Dart. A corner rounds when either of
+// the two sides it joins is active, so the WHOLE corner attached to a blending
+// side flattens. Cheap: just a quadrant lookup, no neighbour search. Used for
+// the silhouette (field) only — fieldHard/anchor keep the raw lensDistance.
+float lensDistanceMorph(vec2 p, vec4 lens, vec4 meta, vec4 sides) {
+    float base = lensDistance(p, lens, meta);
+    if (meta.z < 1.5) return base;                       // only continuous morphs
     vec2 halfSize = max(lens.zw, vec2(EPS));
     float r = min(meta.x, min(halfSize.x, halfSize.y));
-    return roundedRectangleShape(p, lens.xy, halfSize, r);
+    vec2 rel = p - lens.xy;
+    // Which corner is this fragment in → the two sides it joins.
+    float xAct = (rel.x > 0.0) ? sides.x : sides.y;      // right : left
+    float yAct = (rel.y > 0.0) ? sides.z : sides.w;      // down  : up
+    float w = max(xAct, yAct);                           // either side rounds it
+    if (w < 0.001) return base;
+    float rrect = roundedRectangleShape(p, lens.xy, halfSize, r);
+    return mix(base, rrect, w);
+}
+
+// The distance actually fed into the metaball smin. For CONTINUOUS lenses,
+// renormalize the raw value to a first-order true distance (f / |grad f|) so
+// the smin's bridge, which assumes value == distance, sits on the real
+// outline. |grad f| is taken from hardware derivatives (the lens value across
+// the 2x2 quad). Circular/squircle pass through unchanged. meta.z is uniform,
+// so the dFdx/dFdy sit in uniform control flow.
+float lensDistanceBlend(vec2 p, vec4 lens, vec4 meta) {
+    float f = lensDistance(p, lens, meta);
+#if METABALL_EIKONAL_CONTINUOUS
+    if (meta.z > 1.5) {
+        vec2 g = vec2(dFdx(f), dFdy(f));
+        // Clamp the divisor. The shoulder makes |grad| SPIKE along a fixed
+        // band; an unbounded f/|grad| collapses there and paints a stray rim
+        // whisker flicking off the convex side (opposite the bridge). The
+        // bridge correction only needs |grad| in a moderate range, so bound
+        // it — gentle where it should be, no blow-up at the spike.
+        f = f / clamp(length(g), 0.7, 1.4);
+    }
+#endif
+    return f;
+}
+
+// Like lensDistance, but a CONTINUOUS lens (meta.z > 1.5) is replaced by the
+// plain circular rounded-rect SDF — a true distance field that blends cleanly.
+// Crossfading field() against this (by the bridge indicator) converts the
+// continuous corner smoothly into a rounded rectangle exactly at the blending
+// corner, and nowhere else. Squircle/circular lenses are unchanged.
+float lensDistanceContFlat(vec2 p, vec4 lens, vec4 meta) {
+    if (meta.z > 1.5) {
+        vec2 halfSize = max(lens.zw, vec2(EPS));
+        float r = min(meta.x, min(halfSize.x, halfSize.y));
+        return roundedRectangleShape(p, lens.xy, halfSize, r);
+    }
+    return lensDistance(p, lens, meta);
 }
 
 float field(vec2 p) {
     float d = 1e9;
-    if (u_lensMeta0.y > 0.5) d = smoothUnion(d, lensDistance(p, u_lens0, u_lensMeta0), u_smoothness);
-    if (u_lensMeta1.y > 0.5) d = smoothUnion(d, lensDistance(p, u_lens1, u_lensMeta1), u_smoothness);
-    if (u_lensMeta2.y > 0.5) d = smoothUnion(d, lensDistance(p, u_lens2, u_lensMeta2), u_smoothness);
-    if (u_lensMeta3.y > 0.5) d = smoothUnion(d, lensDistance(p, u_lens3, u_lensMeta3), u_smoothness);
-    if (u_lensMeta4.y > 0.5) d = smoothUnion(d, lensDistance(p, u_lens4, u_lensMeta4), u_smoothness);
-    if (u_lensMeta5.y > 0.5) d = smoothUnion(d, lensDistance(p, u_lens5, u_lensMeta5), u_smoothness);
+    if (u_lensMeta0.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens0, u_lensMeta0, u_lensSides0), u_smoothness);
+    if (u_lensMeta1.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens1, u_lensMeta1, u_lensSides1), u_smoothness);
+    if (u_lensMeta2.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens2, u_lensMeta2, u_lensSides2), u_smoothness);
+    if (u_lensMeta3.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens3, u_lensMeta3, u_lensSides3), u_smoothness);
+    if (u_lensMeta4.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens4, u_lensMeta4, u_lensSides4), u_smoothness);
+    if (u_lensMeta5.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens5, u_lensMeta5, u_lensSides5), u_smoothness);
+    return d;
+}
+
+// EIKONAL smooth union — continuous lenses renormalized (lensDistanceBlend).
+// Used ONLY inside the neck via fieldShape, so its shoulder artifacts never
+// reach the exposed convex corners. Identical to field() for squircle/circular.
+float fieldEik(vec2 p) {
+    float d = 1e9;
+    if (u_lensMeta0.y > 0.5) d = smoothUnion(d, lensDistanceBlend(p, u_lens0, u_lensMeta0), u_smoothness);
+    if (u_lensMeta1.y > 0.5) d = smoothUnion(d, lensDistanceBlend(p, u_lens1, u_lensMeta1), u_smoothness);
+    if (u_lensMeta2.y > 0.5) d = smoothUnion(d, lensDistanceBlend(p, u_lens2, u_lensMeta2), u_smoothness);
+    if (u_lensMeta3.y > 0.5) d = smoothUnion(d, lensDistanceBlend(p, u_lens3, u_lensMeta3), u_smoothness);
+    if (u_lensMeta4.y > 0.5) d = smoothUnion(d, lensDistanceBlend(p, u_lens4, u_lensMeta4), u_smoothness);
+    if (u_lensMeta5.y > 0.5) d = smoothUnion(d, lensDistanceBlend(p, u_lens5, u_lensMeta5), u_smoothness);
+    return d;
+}
+
+// Same smooth union as field(), but continuous corners flattened to circular
+// (see lensDistanceContFlat). Identical to field() for squircle/circular
+// lenses — only the continuous ones differ.
+float fieldContFlat(vec2 p) {
+    float d = 1e9;
+    if (u_lensMeta0.y > 0.5) d = smoothUnion(d, lensDistanceContFlat(p, u_lens0, u_lensMeta0), u_smoothness);
+    if (u_lensMeta1.y > 0.5) d = smoothUnion(d, lensDistanceContFlat(p, u_lens1, u_lensMeta1), u_smoothness);
+    if (u_lensMeta2.y > 0.5) d = smoothUnion(d, lensDistanceContFlat(p, u_lens2, u_lensMeta2), u_smoothness);
+    if (u_lensMeta3.y > 0.5) d = smoothUnion(d, lensDistanceContFlat(p, u_lens3, u_lensMeta3), u_smoothness);
+    if (u_lensMeta4.y > 0.5) d = smoothUnion(d, lensDistanceContFlat(p, u_lens4, u_lensMeta4), u_smoothness);
+    if (u_lensMeta5.y > 0.5) d = smoothUnion(d, lensDistanceContFlat(p, u_lens5, u_lensMeta5), u_smoothness);
     return d;
 }
 
@@ -182,15 +316,49 @@ float bridgeWrap(vec2 fragPx, float smoothSdf) {
     return t * METABALL_RIM_WRAP;
 }
 
+// Shape SDF used for the silhouette/refraction. Continuous corners survive
+// where the lens is isolated, and crossfade to the flattened (circular) blend
+// inside the neck so the capsule shoulder can't warp the bridge. Squircle and
+// circular lenses are unaffected (field == fieldContFlat for them). The blend
+// amount reuses the bridge indicator (`fieldHard - field`, ~0 isolated, ~1 at
+// the neck).
+float fieldShape(vec2 p) {
+#if METABALL_FLATTEN_CONTINUOUS_BLEND
+    float styled = field(p);
+    float bridge = fieldHard(p) - styled;                       // >= 0, peaks at neck
+    // Smooth S-curve ramp (not a linear clamp) so the continuous corner
+    // converts into the rounded rectangle GRADUALLY across the blending
+    // corner — C1 at both ends, no visible kink where the morph starts/ends.
+    // Saturates a touch before the deepest neck so the bridge itself is fully
+    // rounded-rect.
+    float t = smoothstep(0.0, u_smoothness * 0.05, bridge);
+    return mix(styled, fieldContFlat(p), t);                    // blend corner -> rounded rect
+#elif METABALL_EIKONAL_CONTINUOUS
+    // Gate the eikonal to the concave NECK. Raw continuous everywhere (correct
+    // capsule corner, no whisker), crossfading to the eikonal-corrected field
+    // only where the smin actually bridges — so the shoulder artifact can't
+    // reach the exposed convex corners. Bridge indicator = fieldHard - field.
+    float raw    = field(p);
+    float bridge = fieldHard(p) - raw;                          // >= 0
+    float t = clamp(bridge / max(u_smoothness * 0.25, EPS), 0.0, 1.0);
+    return mix(raw, fieldEik(p), t);                            // neck -> eikonal
+#else
+    return field(p);
+#endif
+}
+
 // Merged ShapeData via the same 5-tap central-difference scheme as
 // evaluateShape(), but over the smooth-union field.
 ShapeData evaluateField(vec2 fragPx) {
+#if SHAPE_GRAD_1TAP
+    return shapeFrom1Tap(fieldShape(fragPx));
+#else
     float h = 1.0;
-    float fC  = field(fragPx);
-    float fXp = field(fragPx + vec2(h, 0.0));
-    float fXm = field(fragPx - vec2(h, 0.0));
-    float fYp = field(fragPx + vec2(0.0, h));
-    float fYm = field(fragPx - vec2(0.0, h));
+    float fC  = fieldShape(fragPx);
+    float fXp = fieldShape(fragPx + vec2(h, 0.0));
+    float fXm = fieldShape(fragPx - vec2(h, 0.0));
+    float fYp = fieldShape(fragPx + vec2(0.0, h));
+    float fYm = fieldShape(fragPx - vec2(0.0, h));
 
     vec2 grad = 0.5 * vec2(fXp - fXm, fYp - fYm);
     float gL = max(length(grad), EPS);
@@ -201,6 +369,7 @@ ShapeData evaluateField(vec2 fragPx) {
     d.normal    = grad / gL;
     d.orthoDist = fC / gL;
     return d;
+#endif
 }
 
 // Influence-weighted centroid: the magnification / radial-light anchor that

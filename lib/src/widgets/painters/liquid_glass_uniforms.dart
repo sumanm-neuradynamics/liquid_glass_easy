@@ -212,6 +212,8 @@ class MetaballLensUniform {
     required this.halfSize,
     required this.cornerRadius,
     this.cornerStyle = 0,
+    this.blend = 0.0,
+    this.sides = const [0.0, 0.0, 0.0, 0.0],
   });
 
   /// Lens centre in logical px.
@@ -229,6 +231,15 @@ class MetaballLensUniform {
   /// The shader picks the matching per-lens SDF before the metaball union,
   /// so members keep their own corners through the merge.
   final int cornerStyle;
+
+  /// Overall continuous→rounded-rect blend amount (max of [sides]); packed in
+  /// `meta.w` and kept for early-outs / debugging.
+  final double blend;
+
+  /// Per-side blend activation `[right, left, down, up]`, each 0..1, computed
+  /// from neighbour proximity. The shader rounds a continuous lens's corner
+  /// when either of the two sides it joins is active. Passed in `u_lensSidesN`.
+  final List<double> sides;
 }
 
 /// Maximum lenses the metaball shader (`metaball_glass.frag`) unions.
@@ -305,13 +316,29 @@ void packMetaballGlassUniforms(
     }
   }
 
-  // u_lensMeta0..5 — cornerRadius px + enabled flag + corner style (+ 1 unused).
+  // u_lensMeta0..5 — cornerRadius px + enabled flag + corner style + blend.
   for (int n = 0; n < kMetaballMaxLenses; n++) {
     if (n < lenses.length) {
       shader.setFloat(i++, lenses[n].cornerRadius * scale);
       shader.setFloat(i++, 1.0);
       shader.setFloat(i++, lenses[n].cornerStyle.toDouble());
+      shader.setFloat(i++, lenses[n].blend);
+    } else {
       shader.setFloat(i++, 0);
+      shader.setFloat(i++, 0);
+      shader.setFloat(i++, 0);
+      shader.setFloat(i++, 0);
+    }
+  }
+
+  // u_lensSides0..5 — per-side blend activation (right, left, down, up).
+  for (int n = 0; n < kMetaballMaxLenses; n++) {
+    if (n < lenses.length) {
+      final s = lenses[n].sides;
+      shader.setFloat(i++, s[0]);
+      shader.setFloat(i++, s[1]);
+      shader.setFloat(i++, s[2]);
+      shader.setFloat(i++, s[3]);
     } else {
       shader.setFloat(i++, 0);
       shader.setFloat(i++, 0);

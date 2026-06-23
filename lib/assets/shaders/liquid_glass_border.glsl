@@ -12,7 +12,12 @@
 #define BORDER_MODE_CLASSIC  0
 #define BORDER_MODE_OPTICAL  1
 #define PI 3.14159265
-precision highp float;
+// mediump perf test: inherit the shared toggle from liquid_glass_common.glsl
+// (always #included first). Falls back to mediump if compiled standalone.
+#ifndef GLASS_FLOAT_PRECISION
+#define GLASS_FLOAT_PRECISION mediump
+#endif
+precision GLASS_FLOAT_PRECISION float;
 
 // =======================================================
 //  Luma weights (Rec. 709) — used by optical mode

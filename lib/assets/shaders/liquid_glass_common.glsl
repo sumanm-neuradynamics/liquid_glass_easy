@@ -8,7 +8,18 @@
 #ifndef LIQUID_GLASS_HELPER_GLSL
 #define LIQUID_GLASS_HELPER_GLSL
 
-precision highp float;
+// EXPERIMENT (mediump perf test): single switch for the default float
+// precision across ALL glass shaders. This file is #included FIRST by every
+// shader, so the macro is defined before any other precision statement.
+// Flip GLASS_FLOAT_PRECISION back to `highp` to fully revert.
+//
+// NOTE: mediump (fp16) quantizes the large PIXEL-space coordinates the SDF/
+// refraction math runs on (≈1px steps above 1024), so expect blockier edges /
+// wobbling refraction. This toggle exists to MEASURE the perf trade on-device.
+#ifndef GLASS_FLOAT_PRECISION
+#define GLASS_FLOAT_PRECISION mediump
+#endif
+precision GLASS_FLOAT_PRECISION float;
 #define PI 3.14159265
 
 /* ===========================
@@ -31,6 +42,45 @@ struct ShapeData {
     vec2  normal;
     float orthoDist;
 };
+
+/* ===========================
+   EXPERIMENT (lens-anywhere-v4): 1-TAP SHAPE GRADIENT
+   ---------------------------------------------------
+   When SHAPE_GRAD_1TAP == 1, the evaluate* functions below sample their
+   SDF ONCE and derive the gradient from hardware screen-space derivatives
+   (dFdx/dFdy) instead of the 5-tap central difference (center + 4
+   neighbours). ~5x fewer SDF evals — the cost the squircle/continuous
+   corners were paying. The trade-off: dFdx/dFdy are constant per 2x2
+   pixel quad, so the normal (and the orthoDist it feeds) is quantised at
+   quad granularity — expect blockier edge AA / rim near corners and thin
+   features. Set to 0 to restore the exact 5-tap everywhere.
+   =========================== */
+#define SHAPE_GRAD_1TAP 1
+
+// Build ShapeData from a single SDF sample, gradient via hardware
+// screen-space derivatives. fragPx tracks screen pixels 1:1, so dFdx(fC)
+// is the per-pixel x-gradient — directly comparable to the central diff.
+//
+// The 5-tap perturbs fragPx directly, so its gradient lives in
+// FlutterFragCoord space (orientation-independent). The hardware
+// derivatives instead live in FRAMEBUFFER space, which is y-flipped on the
+// GLES backend (same reason the sampler mirrors sampleUV.y). Left
+// unflipped, dFdy comes back negated → the normal's y inverts → refraction
+// reaches OUTWARD and samples outside the lens. Mirror it back here so the
+// 1-tap normal matches the 5-tap.
+ShapeData shapeFrom1Tap(float fC){
+    vec2 grad = vec2(dFdx(fC), dFdy(fC));
+    #ifdef IMPELLER_TARGET_OPENGLES
+    grad.y = -grad.y;
+    #endif
+    float gL  = max(length(grad), EPS);
+    ShapeData d;
+    d.sdf       = fC;
+    d.grad      = grad;
+    d.normal    = grad / gL;
+    d.orthoDist = fC / gL;
+    return d;
+}
 
 /* ===========================
    ROUNDED RECTANGLE SDF
@@ -73,6 +123,10 @@ ShapeData evaluateShape(
     vec2 halfSizePx,
     float radius
 ){
+#if SHAPE_GRAD_1TAP
+    return shapeFrom1Tap(
+        roundedRectangleShape(fragPx, centerPx, halfSizePx, radius));
+#else
     float h = 1.0;
 
     float fC  = roundedRectangleShape(fragPx,                  centerPx, halfSizePx, radius);
@@ -91,6 +145,7 @@ ShapeData evaluateShape(
     d.orthoDist = fC / gL;
 
     return d;
+#endif
 }
 
 /* ===========================
@@ -131,6 +186,10 @@ ShapeData evaluateSquircleRRect(
     float zone,
     float n
 ){
+#if SHAPE_GRAD_1TAP
+    return shapeFrom1Tap(
+        squircleShape(fragPx, centerPx, halfSizePx, zone, n));
+#else
     float h = 1.0;
     float fC  = squircleShape(fragPx,               centerPx, halfSizePx, zone, n);
     float fXp = squircleShape(fragPx + vec2(h,0.0), centerPx, halfSizePx, zone, n);
@@ -147,6 +206,7 @@ ShapeData evaluateSquircleRRect(
     d.normal    = grad / gL;
     d.orthoDist = fC / gL;
     return d;
+#endif
 }
 
 /* ===========================
@@ -200,7 +260,14 @@ float continuousRoundedRectShape(vec2 p, vec2 c, vec2 hsz, float rr, vec2 reach)
     float fLower = length(vec2(max(q.x, 0.0), max(q.y - gV, 0.0))) - rr;
     // Upper half (closer to a horizontal edge, q.y > q.x): shoulder on q.x.
     float fUpper = length(vec2(max(q.x - gH, 0.0), max(q.y, 0.0))) - rr;
-    float corner = (q.x >= q.y) ? fLower : fUpper;
+    // FIX #1: smooth crossfade across the 45° seam instead of a hard
+    // (q.x >= q.y) branch. fLower/fUpper are equal at q.x==q.y but their
+    // SLOPES differ, so the ternary leaves a gradient kink there — that kink
+    // is what warps the metaball bridge and spikes the eikonal derivative.
+    // Blending over a small band (scaled to rr) makes the corner C1 smooth;
+    // the apex is unchanged (both halves coincide at the diagonal).
+    float seamW  = max(rr * 0.15, 1.0);
+    float corner = mix(fUpper, fLower, smoothstep(-seamW, seamW, q.x - q.y));
     return min(max(q.x, q.y), 0.0) + corner;
 }
 
@@ -216,6 +283,10 @@ ShapeData evaluateContinuousRoundedRect(
     float rr,
     vec2 reach
 ){
+#if SHAPE_GRAD_1TAP
+    return shapeFrom1Tap(
+        continuousRoundedRectShape(fragPx, centerPx, halfSizePx, rr, reach));
+#else
     float h = 1.0;
     float fC  = continuousRoundedRectShape(fragPx,               centerPx, halfSizePx, rr, reach);
     float fXp = continuousRoundedRectShape(fragPx + vec2(h,0.0), centerPx, halfSizePx, rr, reach);
@@ -232,6 +303,7 @@ ShapeData evaluateContinuousRoundedRect(
     d.normal    = grad / gL;
     d.orthoDist = fC / gL;
     return d;
+#endif
 }
 
 /* ===========================

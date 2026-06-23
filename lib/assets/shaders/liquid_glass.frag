@@ -10,7 +10,8 @@
 #include "liquid_glass_border.glsl"
 #define PI 3.14159265
 
-precision highp float;
+// mediump perf test: inherit the shared toggle from liquid_glass_common.glsl.
+precision GLASS_FLOAT_PRECISION float;
 
 // =====================================================
 // Uniforms

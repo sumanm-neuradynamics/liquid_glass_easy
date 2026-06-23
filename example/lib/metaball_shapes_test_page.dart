@@ -35,6 +35,7 @@ class _MetaballShapesTestPageState extends State<MetaballShapesTestPage> {
   Offset _squircle = const Offset(60, 520);
 
   bool _blend = true;
+  bool _perSideMorph = true;
 
   // Per-lens styles — identical except for the corner style. The blender reads
   // each member's corner STYLE (not just its radius), so each shape keeps its
@@ -80,6 +81,12 @@ class _MetaballShapesTestPageState extends State<MetaballShapesTestPage> {
         actions: [
           Row(
             children: [
+              const Text('Per-side'),
+              Switch(
+                value: _perSideMorph,
+                onChanged: (v) => setState(() => _perSideMorph = v),
+              ),
+              const SizedBox(width: 8),
               const Text('Blend'),
               Switch(
                 value: _blend,
@@ -95,6 +102,7 @@ class _MetaballShapesTestPageState extends State<MetaballShapesTestPage> {
           if (_blend)
             LiquidGlassBlender(
               smoothness: 50,
+              perSideMorph: _perSideMorph,
               style: _continuousStyle,
               child: lenses,
             )

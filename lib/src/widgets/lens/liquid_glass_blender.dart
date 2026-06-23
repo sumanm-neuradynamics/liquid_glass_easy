@@ -11,6 +11,14 @@ import '../painters/liquid_glass_uniforms.dart';
 import '../utils/liquid_glass_shape.dart';
 import 'liquid_glass_lens_scope.dart';
 
+/// How strongly a neighbour-direction component activates its side:
+/// `smoothstep(0, 0.4, x)`. A diagonal neighbour (component ~0.7) fully
+/// activates both of its sides; a nearly-perpendicular one barely does.
+double _sideDir(double x) {
+  final double t = (x / 0.4).clamp(0.0, 1.0).toDouble();
+  return t * t * (3.0 - 2.0 * t);
+}
+
 /// Blends two to six descendant `LiquidGlassLens` widgets into one surface.
 ///
 /// The descendant lenses keep their normal layout and child content, but their
@@ -57,6 +65,7 @@ class LiquidGlassBlender extends StatefulWidget {
     required this.child,
     this.style = const LiquidGlassStyle(),
     this.smoothness = 48,
+    this.perSideMorph = true,
     this.useImpellerBackdrop,
     this.useEngineBlur = true,
   }) : assert(smoothness > 0);
@@ -69,6 +78,22 @@ class LiquidGlassBlender extends StatefulWidget {
 
   /// Radius, in logical pixels, over which nearby lens outlines flow together.
   final double smoothness;
+
+  /// How continuous (Apple capsule-style) lenses morph toward a circular
+  /// rounded rectangle as neighbours close in — so the capsule corners don't
+  /// fight the metaball bridge.
+  ///
+  /// * `true` (default): **per-side estimation.** Only the corners on the
+  ///   side(s) actually facing a close neighbour (and all corners when a
+  ///   neighbour sinks inside) morph; the rest of the lens keeps its capsule
+  ///   corners. Localized and subtle.
+  /// * `false`: **whole-shape morph.** The entire continuous lens morphs to a
+  ///   circular rounded rectangle by its overall proximity to any neighbour —
+  ///   every corner rounds together, regardless of direction.
+  ///
+  /// Only continuous lenses are affected either way; squircle and circular
+  /// members are never morphed.
+  final bool perSideMorph;
 
   /// Overrides renderer detection. When null, inherits `LiquidGlassView` and
   /// otherwise uses Flutter's shader-filter capability.
@@ -130,6 +155,7 @@ class _LiquidGlassBlenderState extends State<LiquidGlassBlender> {
               shader: _shader!,
               style: widget.style,
               smoothness: widget.smoothness,
+              perSideMorph: widget.perSideMorph,
               useImpellerBackdrop: useImpeller,
               useEngineBlur: widget.useEngineBlur,
               lensScope: lensScope,
@@ -342,6 +368,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
     required this.shader,
     required this.style,
     required this.smoothness,
+    required this.perSideMorph,
     required this.useImpellerBackdrop,
     required this.useEngineBlur,
     required this.lensScope,
@@ -353,6 +380,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
   final ui.FragmentShader shader;
   final LiquidGlassStyle style;
   final double smoothness;
+  final bool perSideMorph;
   final bool useImpellerBackdrop;
   final bool useEngineBlur;
   final LiquidGlassLensScope? lensScope;
@@ -366,6 +394,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
       shader: shader,
       style: style,
       smoothness: smoothness,
+      perSideMorph: perSideMorph,
       useImpellerBackdrop: useImpellerBackdrop,
       useEngineBlur: useEngineBlur,
       lensScope: lensScope,
@@ -384,6 +413,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
       ..shader = shader
       ..style = style
       ..smoothness = smoothness
+      ..perSideMorph = perSideMorph
       ..useImpellerBackdrop = useImpellerBackdrop
       ..useEngineBlur = useEngineBlur
       ..lensScope = lensScope
@@ -398,6 +428,7 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     required ui.FragmentShader shader,
     required LiquidGlassStyle style,
     required double smoothness,
+    required bool perSideMorph,
     required bool useImpellerBackdrop,
     required bool useEngineBlur,
     required LiquidGlassLensScope? lensScope,
@@ -407,6 +438,7 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
         _shader = shader,
         _style = style,
         _smoothness = smoothness,
+        _perSideMorph = perSideMorph,
         _useImpellerBackdrop = useImpellerBackdrop,
         _useEngineBlur = useEngineBlur,
         _lensScope = lensScope,
@@ -421,6 +453,7 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   ui.FragmentShader _shader;
   LiquidGlassStyle _style;
   double _smoothness;
+  bool _perSideMorph;
   bool _useImpellerBackdrop;
   bool _useEngineBlur;
   LiquidGlassLensScope? _lensScope;
@@ -454,6 +487,13 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   set smoothness(double value) {
     if (_smoothness == value) return;
     _smoothness = value;
+    markNeedsPaint();
+  }
+
+  bool get perSideMorph => _perSideMorph;
+  set perSideMorph(bool value) {
+    if (_perSideMorph == value) return;
+    _perSideMorph = value;
     markNeedsPaint();
   }
 
@@ -671,19 +711,100 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     List<_RenderLiquidGlassBlenderMember> members,
     RenderObject? target,
   ) {
-    return members.map((member) {
-      final Rect rect = MatrixUtils.transformRect(
-        member.getTransformTo(target),
-        Offset.zero & member.size,
-      );
+    final List<Rect> rects = members
+        .map((member) => MatrixUtils.transformRect(
+              member.getTransformTo(target),
+              Offset.zero & member.size,
+            ))
+        .toList(growable: false);
+
+    return List<MetaballLensUniform>.generate(members.length, (i) {
+      final member = members[i];
+      final Rect rect = rects[i];
       final double maxCorner = math.min(rect.width, rect.height) * 0.5;
+
+      // Per-side blend activation [right, left, down, up]: a side lights up
+      // when a CLOSE neighbour lies in that direction. The shader rounds the
+      // corners on each active side. Only continuous lenses use it, so skip
+      // the work for the others.
+      final List<double> sides = [0.0, 0.0, 0.0, 0.0];
+      if (member.shape.cornerStyle ==
+          LiquidGlassCornerStyle.continuousRoundedRectangle) {
+        for (int j = 0; j < rects.length; j++) {
+          if (j == i) continue;
+          final Rect other = rects[j];
+          final double dx = math.max(
+              0.0, math.max(rect.left - other.right, other.left - rect.right));
+          final double dy = math.max(
+              0.0, math.max(rect.top - other.bottom, other.top - rect.bottom));
+          final double gap = math.sqrt(dx * dx + dy * dy);
+          // Proximity 1 at touching → 0 at the band edge, sharpened by
+          // morphSpeed so it saturates well before contact.
+          final double u =
+              (gap / math.max(_smoothness, 1.0)).clamp(0.0, 1.0).toDouble();
+          const double morphSpeed = 4.0;
+          final double sp =
+              ((1.0 - u) * morphSpeed).clamp(0.0, 1.0).toDouble();
+          final double prox = sp * sp * (3.0 - 2.0 * sp);
+          if (prox <= 0.0) continue;
+
+          // Whole-shape morph (per-side estimation off): every corner rounds
+          // by the overall proximity, regardless of which way the neighbour
+          // lies — the original pre-estimation behaviour.
+          if (!perSideMorph) {
+            sides[0] = math.max(sides[0], prox);
+            sides[1] = math.max(sides[1], prox);
+            sides[2] = math.max(sides[2], prox);
+            sides[3] = math.max(sides[3], prox);
+            continue;
+          }
+
+          // When the boxes sink INTO each other (overlap on both axes) the
+          // merged silhouette wraps around every side, so morph all four
+          // corners — not just the ones facing the neighbour. The deeper the
+          // interpenetration, the more isotropic the activation; otherwise the
+          // far-side corners stay capsule while the blend warps them.
+          final double overlapX = math.min(rect.right, other.right) -
+              math.max(rect.left, other.left);
+          final double overlapY = math.min(rect.bottom, other.bottom) -
+              math.max(rect.top, other.top);
+          if (overlapX > 0.0 && overlapY > 0.0) {
+            final double minHalf = math.max(
+                1.0, math.min(rect.shortestSide, other.shortestSide) * 0.5);
+            final double o = (math.min(overlapX, overlapY) / minHalf)
+                .clamp(0.0, 1.0)
+                .toDouble();
+            final double omni = prox * (o * o * (3.0 - 2.0 * o));
+            sides[0] = math.max(sides[0], omni);
+            sides[1] = math.max(sides[1], omni);
+            sides[2] = math.max(sides[2], omni);
+            sides[3] = math.max(sides[3], omni);
+          }
+
+          // Direction to the neighbour → which side(s) it activates.
+          final Offset d = other.center - rect.center;
+          final double len = d.distance;
+          if (len < 1e-3) continue;
+          final double nx = d.dx / len;
+          final double ny = d.dy / len;
+          sides[0] = math.max(sides[0], prox * _sideDir(nx)); // right
+          sides[1] = math.max(sides[1], prox * _sideDir(-nx)); // left
+          sides[2] = math.max(sides[2], prox * _sideDir(ny)); // down (+y)
+          sides[3] = math.max(sides[3], prox * _sideDir(-ny)); // up (-y)
+        }
+      }
+      final double blend = math.max(
+          math.max(sides[0], sides[1]), math.max(sides[2], sides[3]));
+
       return MetaballLensUniform(
         center: rect.center,
         halfSize: Size(rect.width * 0.5, rect.height * 0.5),
         cornerRadius: math.min(member.shape.cornerRadius, maxCorner),
         cornerStyle: member.shape.cornerStyle.index,
+        blend: blend,
+        sides: sides,
       );
-    }).toList(growable: false);
+    }, growable: false);
   }
 
   /// Tight clip for the costly backdrop pass: the union of the [members]'

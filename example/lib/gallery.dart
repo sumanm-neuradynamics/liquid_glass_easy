@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'control_center_page.dart';
 import 'corner_style_page.dart';
+import 'glass_shapes_showcase.dart';
 import 'lens_image_page.dart';
 import 'metaball_shapes_test_page.dart';
 import 'nav_jelly_tuner.dart';
@@ -101,6 +102,13 @@ class HomePage extends StatelessWidget {
       icon: Icons.image_rounded,
       gradient: const [Color(0xFF34D399), Color(0xFF0F766E)],
       builder: (_) => const LensImagePage(),
+    ),
+    _Destination(
+      title: 'Glass Shapes over Text',
+      subtitle: '2 circles + 1 squircle + 1 continuous, metaball-merged over text',
+      icon: Icons.text_fields_rounded,
+      gradient: const [Color(0xFF4B6CB7), Color(0xFF182848)],
+      builder: (_) => const GlassShapesShowcase(),
     ),
     _Destination(
       title: 'Metaball Shapes Test',
