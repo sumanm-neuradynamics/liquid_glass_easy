@@ -449,6 +449,17 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
       LayerHandle<BackdropFilterLayer>();
   final LayerHandle<ClipRectLayer> _clipLayer = LayerHandle<ClipRectLayer>();
 
+  // Watches the global transform of the surface AND every member, and
+  // repaints when any of them moves between frames — even when the move
+  // comes from an ancestor (page slide-in, scroll, parent drag) or from a
+  // member's own animated transform layer (SlideTransition, Transform,
+  // AnimatedBuilder), neither of which re-runs this surface's paint on its
+  // own. Without it the merged surface freezes its screen-space uniforms at
+  // whatever position it was last painted and only "snaps" back on the next
+  // registry notify (a rebuild, resize, or membership change).
+  final LayerHandle<_MetaballTransformTrackingLayer> _trackingLayer =
+      LayerHandle<_MetaballTransformTrackingLayer>();
+
   _LiquidGlassBlenderRegistry _registry;
   ui.FragmentShader _shader;
   LiquidGlassStyle _style;
@@ -540,7 +551,7 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   }
 
   @override
-  bool get alwaysNeedsCompositing => _useImpellerBackdrop;
+  bool get alwaysNeedsCompositing => true;
 
   @override
   void attach(PipelineOwner owner) {
@@ -553,6 +564,10 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   void detach() {
     _registry.removeListener(markNeedsPaint);
     _lensScope?.captureRevision.removeListener(markNeedsPaint);
+    _trackingLayer.layer
+      ?..surface = null
+      ..registry = null
+      ..onChanged = null;
     super.detach();
   }
 
@@ -560,7 +575,28 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   void dispose() {
     _shaderLayer.layer = null;
     _clipLayer.layer = null;
+    _trackingLayer.layer = null;
     super.dispose();
+  }
+
+  /// Pushes (and lazily creates) the metaball transform probe — one empty
+  /// layer that, after layout/paint, samples this surface's and every
+  /// member's `getTransformTo(null)` and repaints when any changed since the
+  /// last frame. One probe covers both ancestor motion and per-member
+  /// animation, with no extra compositing layers on the members themselves.
+  void _pushTransformTracking(PaintingContext context, Offset offset) {
+    final layer = _trackingLayer.layer ??= _MetaballTransformTrackingLayer();
+    layer
+      ..surface = this
+      ..registry = _registry
+      ..onChanged = () {
+        if (attached) markNeedsPaint();
+      };
+    context.pushLayer(
+      layer,
+      (PaintingContext context, Offset offset) {},
+      offset,
+    );
   }
 
   @override
@@ -572,6 +608,11 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
+    // Repaint whenever an ancestor moves us (page transition, scroll, parent
+    // drag), so the merged surface's screen-space uniforms stay in sync with
+    // where the lenses actually are — same probe the single lens uses.
+    _pushTransformTracking(context, offset);
+
     final members = _registry.members
         .where((member) =>
             member.attached &&
@@ -614,12 +655,38 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     final double sigma = _blurSigma;
     final bool engineBlur = _useEngineBlur && sigma > 0;
 
+    // The engine Gaussian inflates its snapshot beyond the (full-surface) clip
+    // by ~3·sigma on each side, and the outer shader samples THAT inflated
+    // snapshot. Without telling it, the shader maps screen pixels over the bare
+    // resolution and reads a too-large window out of the texture — downscaling
+    // the refracted content inside the lens. So expand the sampling window by
+    // the blur coverage:
+    //   • SIZE: the surface's own size (the clip), NOT _screenSize — the surface
+    //     is usually shorter than the FlutterView (status bar / system-nav
+    //     insets), and sizing against _screenSize.height leaves a vertical-only
+    //     downscale.
+    //   • OFFSET: just −m. The snapshot's sampling origin already aligns with
+    //     the surface, so adding the surface's global top-left would shift the
+    //     refracted content off the lens.
+    // Logical px; the packer scales by dpr. (3·sigma ≈ Impeller's Gaussian
+    // coverage; nudge if a residual uniform scale shows.)
+    const double kBlurCoverageSigmas = 3.0;
+    final double m = kBlurCoverageSigmas * sigma;
+    final Size surfaceSize = engineBlur
+        ? MatrixUtils.transformRect(getTransformTo(null), Offset.zero & size)
+            .size
+        : Size.zero;
+
     _packShared(
       resolution: _screenSize,
       lenses: _lensesIn(members, null),
       scale: _devicePixelRatio,
       // Engine blur runs before the shader → don't blur again in-shader.
       blur: engineBlur ? 0.0 : sigma,
+      imageOffset: engineBlur ? Offset(-m, -m) : Offset.zero,
+      imageSize: engineBlur
+          ? Size(surfaceSize.width + 2 * m, surfaceSize.height + 2 * m)
+          : null,
     );
 
     final ui.ImageFilter shaderFilter = ui.ImageFilter.shader(_shader);
@@ -636,9 +703,25 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
 
     final layer = _shaderLayer.layer ??= BackdropFilterLayer();
     layer.filter = filter;
-    // Restrict the backdrop filter to the glass region instead of the whole
-    // (Positioned.fill) surface.
-    final Rect clipRect = _glassClipRect(members, this, Offset.zero & size);
+    // Clip region for the backdrop pass.
+    //
+    // Plain shader path: a tight clip (the union of the member rects) just
+    // limits where pixels land — the shader's backdrop sampler is the FULL
+    // screen regardless — so we keep it as a cost saver.
+    //
+    // Engine-blur COMPOSE path: the inner blur first renders a snapshot bounded
+    // by THIS clip, and the outer shader samples that snapshot while still
+    // computing uv = refractedPx / u_resolution over the whole screen
+    // (u_imageOffset=0, u_imageSize=resolution). A tight clip would make the
+    // shader read a screen-sized UV range out of a union-sized texture —
+    // scaling the refracted content by clip.size/screen and shifting it by
+    // clip.topLeft (the "content shifts/scales inside the lens" artefact). So we
+    // clip to the FULL surface here: the snapshot spans the screen and the
+    // shader's full-screen sampling assumption holds. (Costs a full-surface
+    // backdrop pass, but only when a blurred style is used.)
+    final Rect clipRect = engineBlur
+        ? (Offset.zero & size)
+        : _glassClipRect(members, this, Offset.zero & size);
     _clipLayer.layer = context.pushClipRect(
       needsCompositing,
       offset,
@@ -851,6 +934,12 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     required List<MetaballLensUniform> lenses,
     required double scale,
     required double blur,
+    // The backdrop sampling window, in logical px (the packer scales by
+    // [scale]). Defaults to the full backdrop (offset 0, size = resolution).
+    // The engine-blur path overrides these so the shader maps screen pixels
+    // into the blur's inflated snapshot instead of downscaling against it.
+    Offset imageOffset = Offset.zero,
+    Size? imageSize,
   }) {
     final shape =
         _style.shape ?? const LiquidGlassShape.continuousRoundedRectangle();
@@ -879,9 +968,86 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
       refractionType: refraction.refractionType,
       lensColor: appearance.color,
       honorBackdropAlpha: false,
+      imageOffset: imageOffset,
+      imageSize: imageSize,
     );
   }
 
   double get _blurSigma =>
       math.max(_style.appearance.blur.sigmaX, _style.appearance.blur.sigmaY);
+}
+
+/// A zero-content probe layer for the merged surface.
+///
+/// The blender's shader uniforms encode every member's on-screen rect, but
+/// when an ancestor moves the group (a page slide-in, a scroll) or a member
+/// moves under its own animated transform layer (`SlideTransition`,
+/// `Transform`, `AnimatedBuilder`), the surface's `paint()` is usually NOT
+/// re-run — the compositor just shifts retained layers — so the uniforms go
+/// stale and the glass lags behind the content.
+///
+/// Like [LensTransformTrackingLayer] for the single lens, this layer is
+/// re-added every frame ([alwaysNeedsAddToScene]) and its [addToScene] runs
+/// *after* all layout and paint, when `getTransformTo(null)` is final. It
+/// samples the surface's transform plus each member's, and when the set
+/// differs from the previous frame it calls [onChanged] (typically
+/// `markNeedsPaint`) so the next frame's uniforms are correct.
+///
+/// One probe covers the whole group: members stay plain proxy boxes (no
+/// per-member compositing). The cost is N `getTransformTo` calls and N matrix
+/// compares per frame, for the two-to-six members the blender allows.
+///
+/// Detection lags movement by one frame by construction (the stale frame is
+/// already built when the change is seen); during continuous animation it
+/// self-corrects every frame and the final resting frame is exact.
+class _MetaballTransformTrackingLayer extends OffsetLayer {
+  RenderObject? surface;
+  _LiquidGlassBlenderRegistry? registry;
+  VoidCallback? onChanged;
+
+  List<Matrix4>? _last;
+
+  @override
+  bool get alwaysNeedsAddToScene => true;
+
+  @override
+  void addToScene(ui.SceneBuilder builder) {
+    // Intentionally does NOT call super: contributes nothing visual; it
+    // exists purely as a post-paint transform probe.
+    final RenderObject? ro = surface;
+    final _LiquidGlassBlenderRegistry? reg = registry;
+    if (ro == null || reg == null || !ro.attached) return;
+
+    // Signature: the surface's transform first (catches ancestor motion even
+    // on a frame where no member is laid out yet), then each attached,
+    // measured member's transform (catches per-member animation).
+    final List<Matrix4> current = <Matrix4>[ro.getTransformTo(null)];
+    for (final member in reg.members) {
+      if (member.attached && member.hasSize) {
+        current.add(member.getTransformTo(null));
+      }
+    }
+
+    final List<Matrix4>? last = _last;
+    if (last == null) {
+      // First frame: just record — the frame being built already used these
+      // transforms, so there is nothing to correct yet.
+      _last = current;
+      return;
+    }
+
+    bool changed = last.length != current.length;
+    if (!changed) {
+      for (int i = 0; i < current.length; i++) {
+        if (!MatrixUtils.matrixEquals(last[i], current[i])) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (changed) {
+      _last = current;
+      onChanged?.call();
+    }
+  }
 }

@@ -44,6 +44,8 @@ class _MetaballShapesTestPageState extends State<MetaballShapesTestPage> {
     shape: LiquidGlassShape.roundedRectangle(cornerRadius: _radius),
   );
   static const _continuousStyle = LiquidGlassStyle(
+        appearance: LiquidGlassAppearance(blur: LiquidGlassBlur(sigmaX: 0.5, sigmaY: 0.5)),
+
     shape: LiquidGlassShape.continuousRoundedRectangle(cornerRadius: 50),
   );
   static const _squircleStyle = LiquidGlassStyle(

@@ -115,11 +115,15 @@ class LiquidGlassSliderTrack extends StatelessWidget {
         },
         onHorizontalDragUpdate: (d) => _handle(d.localPosition.dx - hitSlopX),
         onHorizontalDragEnd: (_) => onChangeEnd?.call(value),
+        // Mirror *End* on a stolen gesture (e.g. a parent scrollable wins
+        // the arena) so the host's grow/jelly state is never left latched.
+        onHorizontalDragCancel: () => onChangeEnd?.call(value),
         onTapDown: (d) {
           onChangeStart?.call(value);
           _handle(d.localPosition.dx - hitSlopX);
         },
         onTapUp: (_) => onChangeEnd?.call(value),
+        onTapCancel: () => onChangeEnd?.call(value),
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: hitSlopX),
           child: Stack(

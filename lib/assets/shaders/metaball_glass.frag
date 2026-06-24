@@ -394,6 +394,85 @@ vec2 anchorFor(vec2 p) {
 }
 
 // =====================================================
+// FUSED single-pass evaluation (perf): compute the smooth union (field),
+// the hard min (fieldHard) and the influence-weighted anchor (anchorFor) in
+// ONE loop over the lenses, from a SINGLE raw lensDistance() per lens.
+//
+// The original main() evaluated each lens's SDF up to three times at the
+// same fragment — once for field() (via lensDistanceMorph), once for
+// fieldHard() and once for anchorFor(). lensDistance() is pure, so reusing
+// its result here is bit-identical: smoothSdf == field(p), hardSdf ==
+// fieldHard(p), anchor == anchorFor(p). No visual change; ~3x fewer SDFs.
+//
+// Used only on the DEFAULT path (1-tap gradient, no experiment macro). The
+// 5-tap and EIKONAL/FLATTEN paths still go through the separate field*()
+// functions above, which they need.
+// =====================================================
+struct MergedField {
+    float smoothSdf;   // == field(p)
+    float hardSdf;     // == fieldHard(p)
+    vec2  anchor;      // == anchorFor(p)
+};
+
+void accumulateMerged(vec2 p, vec4 lens, vec4 meta, vec4 sides,
+                      inout float smoothSdf, inout float hardSdf,
+                      inout vec2 anchorAcc, inout float anchorW) {
+    if (meta.y < 0.5) return;
+
+    // The one raw SDF for this lens — shared by all three accumulators.
+    float base = lensDistance(p, lens, meta);
+
+    // Hard union (== fieldHard's min).
+    hardSdf = min(hardSdf, base);
+
+    // Anchor weight (== accumulateAnchor).
+    float w = exp(-max(base, 0.0) / max(u_smoothness, EPS));
+    anchorAcc += lens.xy * w;
+    anchorW   += w;
+
+    // Per-corner continuous→rounded-rect morph (== lensDistanceMorph),
+    // reusing `base` instead of recomputing lensDistance().
+    float dMorph = base;
+    if (meta.z > 1.5) {                                  // only continuous morphs
+        vec2 halfSize = max(lens.zw, vec2(EPS));
+        float r = min(meta.x, min(halfSize.x, halfSize.y));
+        vec2 rel = p - lens.xy;
+        float xAct = (rel.x > 0.0) ? sides.x : sides.y;  // right : left
+        float yAct = (rel.y > 0.0) ? sides.z : sides.w;  // down  : up
+        float wMorph = max(xAct, yAct);                  // either side rounds it
+        if (wMorph >= 0.001) {
+            float rrect = roundedRectangleShape(p, lens.xy, halfSize, r);
+            dMorph = mix(base, rrect, wMorph);
+        }
+    }
+
+    // Smooth union (== field's smoothUnion chain).
+    smoothSdf = smoothUnion(smoothSdf, dMorph, u_smoothness);
+}
+
+MergedField evaluateMerged(vec2 p) {
+    MergedField m;
+    m.smoothSdf = 1e9;
+    m.hardSdf   = 1e9;
+    vec2 anchorAcc = vec2(0.0);
+    float anchorW = 0.0;
+    accumulateMerged(p, u_lens0, u_lensMeta0, u_lensSides0, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens1, u_lensMeta1, u_lensSides1, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens2, u_lensMeta2, u_lensSides2, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens3, u_lensMeta3, u_lensSides3, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens4, u_lensMeta4, u_lensSides4, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens5, u_lensMeta5, u_lensSides5, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    m.anchor = (anchorW > EPS) ? anchorAcc / anchorW : p;
+    return m;
+}
+
+// The fused path is exact only when fieldShape == field (no experiment
+// macro) AND the gradient is the 1-tap derivative (the 5-tap needs field
+// sampled at 4 neighbours, which the fused single-point pass doesn't give).
+#define METABALL_FUSED_PATH \
+    (SHAPE_GRAD_1TAP && !METABALL_EIKONAL_CONTINUOUS && !METABALL_FLATTEN_CONTINUOUS_BLEND)
+
+// =====================================================
 // Background sampling (CA + optional in-shader blur), saturation, tint —
 // mirrors liquid_glass.frag's finalSample.
 // =====================================================
@@ -469,6 +548,24 @@ void main() {
     vec2 uvNorm   = fragPx * invResY;
 
     // Merged silhouette + flowing anchor.
+#if METABALL_FUSED_PATH
+    // Fast path: one per-lens pass yields the smooth union, the hard min and
+    // the anchor together (see evaluateMerged). Bit-identical to the
+    // separate-pass branch below for this config.
+    MergedField mf      = evaluateMerged(fragPx);
+    ShapeData shapeData = shapeFrom1Tap(mf.smoothSdf);
+    float shapeDistPx   = shapeData.orthoDist;
+    float shapeMask     = computeShapeMask(shapeDistPx);
+
+    // Rim wrap only at the blend neck; 0 on isolated lenses (== bridgeWrap,
+    // reusing the hard min we already have).
+    float bridge  = mf.hardSdf - mf.smoothSdf;                       // >= 0
+    float rimWrap = clamp(bridge / max(u_smoothness * 0.25, EPS), 0.0, 1.0)
+                    * METABALL_RIM_WRAP;
+
+    vec2 anchorPx   = mf.anchor;
+    vec2 anchorNorm = anchorPx * invResY;
+#else
     ShapeData shapeData = evaluateField(fragPx);
     float shapeDistPx   = shapeData.orthoDist;
     float shapeMask     = computeShapeMask(shapeDistPx);
@@ -478,6 +575,7 @@ void main() {
 
     vec2 anchorPx   = anchorFor(fragPx);
     vec2 anchorNorm = anchorPx * invResY;
+#endif
 
     float distAbsPx = abs(shapeDistPx);
     float zoneLimit = u_distortionThicknessPx;

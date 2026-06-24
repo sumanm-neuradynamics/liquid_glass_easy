@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 // =============================================================
-// Metaball glass shapes over a text background.
+// Glass shapes over a text background.
 //
-// A wall of text sits behind four liquid-glass lenses, all merged into ONE
-// smooth metaball surface by a LiquidGlassBlender. Drag any two together
-// and their silhouettes flow into each other; each keeps its own corners:
+// A wall of text sits behind four independent liquid-glass lenses — no
+// metaball blending. Drag any two together and they simply overlap; each
+// keeps its own corners:
 //   • 2 × CIRCLE    — a circular rounded-rectangle on a square box whose
 //                     corner radius is half the side (= a perfect circle)
 //   • 1 × SQUIRCLE  — iOS-style continuous-curvature corners
 //   • 1 × CONTINUOUS rounded rectangle — Apple capsule-style corners
 //
-// On Impeller the merged surface refracts the live backdrop with no extra
-// setup. (The blender supports 2–6 member lenses.)
+// On Impeller each lens refracts the live backdrop with no extra setup.
 // =============================================================
 
 class GlassShapesShowcase extends StatefulWidget {
@@ -61,46 +60,42 @@ class _GlassShapesShowcaseState extends State<GlassShapesShowcase> {
           // 1) The text background.
           const Positioned.fill(child: _TextBackground()),
 
-          // 2) The four lenses, merged into ONE metaball surface by the
-          //    blender. Drag any two together to watch their silhouettes
-          //    flow into each other. Each member keeps its own corner
-          //    style (circle / squircle / continuous) through the merge.
+          // 2) The four lenses, each rendering its OWN glass surface — no
+          //    metaball merge. Drag them together and they simply overlap;
+          //    each keeps its own corner style (circle / squircle /
+          //    continuous).
           Positioned.fill(
-            child: LiquidGlassBlender(
-              smoothness: 50,
-              style: _continuousStyle,
-              child: Stack(
-                children: [
-                  _draggable(
-                    pos: _circleA,
-                    size: const Size.square(_circleSize),
-                    style: _circleStyle,
-                    label: 'circle',
-                    onMove: (d) => setState(() => _circleA += d),
-                  ),
-                  _draggable(
-                    pos: _circleB,
-                    size: const Size.square(_circleSize),
-                    style: _circleStyle,
-                    label: 'circle',
-                    onMove: (d) => setState(() => _circleB += d),
-                  ),
-                  _draggable(
-                    pos: _squircle,
-                    size: const Size(200, 150),
-                    style: _squircleStyle,
-                    label: 'squircle',
-                    onMove: (d) => setState(() => _squircle += d),
-                  ),
-                  _draggable(
-                    pos: _continuous,
-                    size: const Size(240, 130),
-                    style: _continuousStyle,
-                    label: 'continuous',
-                    onMove: (d) => setState(() => _continuous += d),
-                  ),
-                ],
-              ),
+            child: Stack(
+              children: [
+                _draggable(
+                  pos: _circleA,
+                  size: const Size.square(_circleSize),
+                  style: _circleStyle,
+                  label: 'circle',
+                  onMove: (d) => setState(() => _circleA += d),
+                ),
+                _draggable(
+                  pos: _circleB,
+                  size: const Size.square(_circleSize),
+                  style: _circleStyle,
+                  label: 'circle',
+                  onMove: (d) => setState(() => _circleB += d),
+                ),
+                _draggable(
+                  pos: _squircle,
+                  size: const Size(200, 150),
+                  style: _squircleStyle,
+                  label: 'squircle',
+                  onMove: (d) => setState(() => _squircle += d),
+                ),
+                _draggable(
+                  pos: _continuous,
+                  size: const Size(240, 130),
+                  style: _continuousStyle,
+                  label: 'continuous',
+                  onMove: (d) => setState(() => _continuous += d),
+                ),
+              ],
             ),
           ),
         ],

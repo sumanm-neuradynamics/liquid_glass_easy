@@ -17,7 +17,7 @@
 // refraction math runs on (≈1px steps above 1024), so expect blockier edges /
 // wobbling refraction. This toggle exists to MEASURE the perf trade on-device.
 #ifndef GLASS_FLOAT_PRECISION
-#define GLASS_FLOAT_PRECISION mediump
+#define GLASS_FLOAT_PRECISION highp
 #endif
 precision GLASS_FLOAT_PRECISION float;
 #define PI 3.14159265

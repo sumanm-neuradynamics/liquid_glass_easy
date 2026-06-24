@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -347,20 +348,46 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
             motionSign: _jelly.direction,
             jelly: jelly,
             style: widget.style,
-            child: GestureDetector(
+            // Once the user lands on the thumb we want the slider to OWN
+            // the gesture: grabbing the pill and moving vertically should
+            // hold/adjust the slider, never scroll an ancestor list. A
+            // plain GestureDetector loses that contest — the parent
+            // Scrollable wins the arena on vertical motion and the drag is
+            // cancelled (leaving the glass latched). So we use an eager
+            // pan recognizer that claims the arena the instant a pointer
+            // lands, beating any ancestor Scrollable. A pan (not
+            // horizontal-only) recognizer also keeps the grab alive under
+            // vertical movement; the value still tracks horizontal x only.
+            child: RawGestureDetector(
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (d) {
-                _onStart(widget.value);
-                _handleGlobalDrag(d.globalPosition);
+              gestures: <Type, GestureRecognizerFactory>{
+                _EagerPanGestureRecognizer:
+                    GestureRecognizerFactoryWithHandlers<
+                        _EagerPanGestureRecognizer>(
+                  () => _EagerPanGestureRecognizer(debugOwner: this),
+                  (instance) {
+                    instance
+                      // Fire onStart at touch-down (not after slop) so the
+                      // glass grows the instant the thumb is grabbed.
+                      ..dragStartBehavior = DragStartBehavior.down
+                      ..onStart = (d) {
+                        _onStart(widget.value);
+                        _handleGlobalDrag(d.globalPosition);
+                      }
+                      ..onUpdate = (d) {
+                        _handleGlobalDrag(d.globalPosition);
+                      }
+                      ..onEnd = (_) {
+                        _onEnd(widget.value);
+                      }
+                      // Still revert cleanly if the gesture is ever
+                      // cancelled for any other reason.
+                      ..onCancel = () {
+                        _onEnd(widget.value);
+                      };
+                  },
+                ),
               },
-              onHorizontalDragUpdate: (d) =>
-                  _handleGlobalDrag(d.globalPosition),
-              onHorizontalDragEnd: (_) => _onEnd(widget.value),
-              onTapDown: (d) {
-                _onStart(widget.value);
-                _handleGlobalDrag(d.globalPosition);
-              },
-              onTapUp: (_) => _onEnd(widget.value),
               // White rest handle, drawn over the glass. Hidden (but
               // still hit-testable) while the glass is active.
               child: glassActive
@@ -378,5 +405,24 @@ class _LiquidGlassSliderState extends State<LiquidGlassSlider>
         ],
       ),
     );
+  }
+}
+
+/// A [PanGestureRecognizer] that wins the gesture arena the instant a
+/// pointer lands on it, instead of waiting to accumulate drag slop.
+///
+/// This is what lets the slider thumb beat an ancestor [Scrollable]:
+/// normally both join the arena and the scrollable wins as soon as the
+/// finger moves vertically, stealing the drag. By resolving
+/// [GestureDisposition.accepted] in [addAllowedPointer], the thumb claims
+/// the pointer immediately — so once you grab the pill, moving in any
+/// direction keeps controlling the slider and the page never scrolls.
+class _EagerPanGestureRecognizer extends PanGestureRecognizer {
+  _EagerPanGestureRecognizer({super.debugOwner});
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }

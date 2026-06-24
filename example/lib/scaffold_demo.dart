@@ -113,7 +113,7 @@ class _ScaffoldDemoState extends State<ScaffoldDemo> {
       // ── the colourful feed = the captured, refracted background ──
       // Every tab shows the SAME feed page (only the accent/theme shifts),
       // so tapping a tab moves the selection pill without navigating away.
-      body: _Feed(
+      body: AuroraFeed(
         accent: _accent,
         overline: _overlines[_index],
         greeting: _greetings[_index],
@@ -124,9 +124,10 @@ class _ScaffoldDemoState extends State<ScaffoldDemo> {
         items: _items,
         selectedIndex: _index,
         onChanged: (i) => setState(() => _index = i),
-        alignment: Alignment.bottomLeft,
-        // Inset the bar from the left edge (the bottom gap stays 24).
-        margin: const EdgeInsets.only(bottom: 24, left: 20),
+        alignment: Alignment.bottomCenter,
+        // Centered bar — only the bottom gap matters (symmetric side insets
+        // are a no-op on a fixed-width centered bar).
+        margin: const EdgeInsets.only(bottom: 24),
         // Bar look + pill jelly come from the shared store, so the values
         // dialled in the Nav Jelly Tuner show up here for the GIF. Default
         // is a dark frost with light direction 39.
@@ -142,12 +143,24 @@ class _ScaffoldDemoState extends State<ScaffoldDemo> {
 //  The beautiful scrolling feed.
 // ════════════════════════════════════════════════════════════════
 
-class _Feed extends StatelessWidget {
-  const _Feed({required this.accent, required this.overline, required this.greeting});
+/// The colourful "Aurora" music feed used by [ScaffoldDemo] — exposed so
+/// other demos can reuse the EXACT same scrolling background. Pass a
+/// [controller] to drive behaviour off its scroll position.
+class AuroraFeed extends StatelessWidget {
+  const AuroraFeed({
+    super.key,
+    required this.accent,
+    required this.overline,
+    required this.greeting,
+    this.controller,
+  });
 
   final Color accent;
   final String overline;
   final String greeting;
+
+  /// Optional scroll controller for the feed's `ListView`.
+  final ScrollController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +202,7 @@ class _Feed extends StatelessWidget {
 
         // The scrolling content.
         ListView(
+          controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 64, 20, 150),
           children: [
             _header(),
