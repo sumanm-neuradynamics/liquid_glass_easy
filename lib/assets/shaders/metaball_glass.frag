@@ -40,32 +40,40 @@ precision GLASS_FLOAT_PRECISION float;
 uniform vec2 u_resolution;
 uniform sampler2D u_texture_input;
 
-// --- Packed uniforms (Metal [[buffer(N)]] limit fix) -----------------------
-// iOS 26 Impeller binds each runtime-effect uniform to its own Metal buffer
-// and caps at ~30; this shader had 52 declarations. The six per-lens vec4s in
-// each group are collapsed into a vec4[6] ARRAY (one declaration / one binding
-// instead of six), and the scalar block is merged into vec4s — exactly as in
-// liquid_glass.frag. The #define block below restores every original name, and
-// the float-offset order is IDENTICAL to the old per-uniform layout, so
-// packMetaballGlassUniforms is unchanged.
+// Up to six lenses. u_lensN = (centerX, centerY, halfWidth, halfHeight) px.
+uniform vec4 u_lens0;
+uniform vec4 u_lens1;
+uniform vec4 u_lens2;
+uniform vec4 u_lens3;
+uniform vec4 u_lens4;
+uniform vec4 u_lens5;
+// u_lensMetaN = (cornerRadius px, enabled[>0.5], unused, unused).
+uniform vec4 u_lensMeta0;
+uniform vec4 u_lensMeta1;
+uniform vec4 u_lensMeta2;
+uniform vec4 u_lensMeta3;
+uniform vec4 u_lensMeta4;
+uniform vec4 u_lensMeta5;
 
-// u_lens[n]      = (centerX, centerY, halfWidth, halfHeight) px.
-uniform vec4 u_lens[6];
-// u_lensMeta[n]  = (cornerRadius px, enabled[>0.5], cornerStyle, blend).
-uniform vec4 u_lensMeta[6];
-// u_lensSides[n] = per-lens side-blend activation (right, left, down, up),
-// each 0..1, from Dart neighbour proximity. Drives the per-corner
-// continuous→rounded-rect morph (a corner rounds when either side it joins is
-// active).
-uniform vec4 u_lensSides[6];
+// u_lensSidesN = per-lens side-blend activation (right, left, down, up), each
+// 0..1, computed on the Dart side from neighbour proximity. Drives the
+// per-corner continuous→rounded-rect morph: a corner rounds when either of the
+// two sides it joins is active.
+uniform vec4 u_lensSides0;
+uniform vec4 u_lensSides1;
+uniform vec4 u_lensSides2;
+uniform vec4 u_lensSides3;
+uniform vec4 u_lensSides4;
+uniform vec4 u_lensSides5;
 
 // Metaball blend radius in px (the "gooeyness").
 uniform float u_smoothness;
 
 // ── Shared glass block (same semantics as liquid_glass.frag) ──────────────
-// x=magnification  y=distortion  z=distortionThicknessPx
-// w=enableBackgroundTransparency
-uniform vec4 u_warp;
+uniform float u_magnification;
+uniform float u_distortion;
+uniform float u_distortionThicknessPx;
+uniform float u_enableBackgroundTransparency;
 uniform float u_diagonalFlip;
 
 uniform float u_borderWidth;
@@ -77,12 +85,18 @@ uniform vec4  u_lightColor;
 uniform vec4  u_shadowColor;
 uniform float u_lightDirection;
 uniform vec4  u_lensColor;
-// x=oneSideLightIntensity  y=chromaticAberration  z=saturation  w=lightMode
-uniform vec4 u_packA;
-// x=refractionMode  y=refractionType  z=refractionIndex  w=ambientIntensity
-uniform vec4 u_packB;
-// x=doubleSideLightIntensity  y=borderSaturation  z=borderSolidity  w=borderMode
-uniform vec4 u_packC;
+uniform float u_oneSideLightIntensity;
+uniform float u_chromaticAberration;
+uniform float u_saturation;
+uniform float u_lightMode;
+uniform float u_refractionMode;
+uniform float u_refractionType;
+uniform float u_refractionIndex;
+uniform float u_ambientIntensity;
+uniform float u_doubleSideLightIntensity;
+uniform float u_borderSaturation;
+uniform float u_borderSolidity;
+uniform float u_borderMode;
 
 // Capture-region mapping (see liquid_glass.frag). Full-frame capture =
 // offset (0,0), size u_resolution.
@@ -102,45 +116,6 @@ uniform float u_blur;
 // Edge-AA band width in FRAGMENT px (1.0 on Skia, dpr on Impeller). MUST be
 // the last uniform — see packMetaballGlassUniforms.
 uniform float u_shapeAaPx;
-
-// --- Restore original names ------------------------------------------------
-// Per-lens accessors use CONSTANT indices only (u_lens[0]..u_lens[5]), the
-// always-supported form; the body references each lens explicitly, never via a
-// runtime-variable index. Scalar aliases are plain single-component reads.
-#define u_lens0      u_lens[0]
-#define u_lens1      u_lens[1]
-#define u_lens2      u_lens[2]
-#define u_lens3      u_lens[3]
-#define u_lens4      u_lens[4]
-#define u_lens5      u_lens[5]
-#define u_lensMeta0  u_lensMeta[0]
-#define u_lensMeta1  u_lensMeta[1]
-#define u_lensMeta2  u_lensMeta[2]
-#define u_lensMeta3  u_lensMeta[3]
-#define u_lensMeta4  u_lensMeta[4]
-#define u_lensMeta5  u_lensMeta[5]
-#define u_lensSides0 u_lensSides[0]
-#define u_lensSides1 u_lensSides[1]
-#define u_lensSides2 u_lensSides[2]
-#define u_lensSides3 u_lensSides[3]
-#define u_lensSides4 u_lensSides[4]
-#define u_lensSides5 u_lensSides[5]
-#define u_magnification                u_warp.x
-#define u_distortion                   u_warp.y
-#define u_distortionThicknessPx        u_warp.z
-#define u_enableBackgroundTransparency u_warp.w
-#define u_oneSideLightIntensity        u_packA.x
-#define u_chromaticAberration          u_packA.y
-#define u_saturation                   u_packA.z
-#define u_lightMode                    u_packA.w
-#define u_refractionMode               u_packB.x
-#define u_refractionType               u_packB.y
-#define u_refractionIndex              u_packB.z
-#define u_ambientIntensity             u_packB.w
-#define u_doubleSideLightIntensity     u_packC.x
-#define u_borderSaturation             u_packC.y
-#define u_borderSolidity               u_packC.z
-#define u_borderMode                   u_packC.w
 
 out vec4 frag_color;
 

@@ -19,24 +19,19 @@ precision GLASS_FLOAT_PRECISION float;
 uniform vec2  u_resolution;
 uniform vec2  u_touch;
 uniform sampler2D u_texture_input;
+uniform float u_lensWidth;
+uniform float u_lensHeight;
+uniform float u_cornerRadius;
+// Corner shape selector (see the shape branch in main):
+//   0 = circular rounded rect
+//   1 = squircle (Ln-norm continuous corners, full smoothing)
+//   2 = continuous (Apple capsule-style) corners
+uniform float u_cornerStyle;
 
-// --- Packed scalar uniforms (Metal [[buffer(N)]] limit fix) ----------------
-// iOS 26 Impeller binds each runtime-effect uniform to its own Metal buffer
-// and caps at ~30. To stay under the limit, several scalars are merged into
-// vec4s below; the #define block right after restores the original scalar
-// names. The float-offset order is IDENTICAL to the old per-scalar layout, so
-// the Dart-side packing code (packLiquidGlassUniforms, the painters) is
-// unchanged.
-
-// x=lensWidth  y=lensHeight  z=cornerRadius  w=cornerStyle
-//   cornerStyle selects the corner SDF (see the shape branch in main):
-//   0 = circular rounded rect, 1 = squircle (Ln-norm, full smoothing),
-//   2 = continuous (Apple capsule-style) corners.
-uniform vec4 u_lensGeom;
-// x=magnification  y=distortion  z=distortionThicknessPx
-// w=enableBackgroundTransparency
-uniform vec4 u_warp;
-
+uniform float u_magnification;
+uniform float u_distortion;
+uniform float u_distortionThicknessPx;
+uniform float u_enableBackgroundTransparency;
 uniform float u_diagonalFlip;
 
 // Border
@@ -49,36 +44,18 @@ uniform vec4  u_lightColor;
 uniform vec4  u_shadowColor;
 uniform float u_lightDirection;
 uniform vec4 u_lensColor;
-// x=oneSideLightIntensity  y=chromaticAberration  z=saturation  w=lightMode
-uniform vec4 u_packA;
-// x=refractionMode  y=refractionType  z=refractionIndex  w=ambientIntensity
-uniform vec4 u_packB;
-// x=doubleSideLightIntensity  y=borderSaturation  z=borderSolidity  w=borderMode
-uniform vec4 u_packC;
-
-// Restore the original scalar names. These are plain float aliases (a single
-// component access, no swizzle chaining), so the shader body and every helper
-// function below compile unchanged.
-#define u_lensWidth                    u_lensGeom.x
-#define u_lensHeight                   u_lensGeom.y
-#define u_cornerRadius                 u_lensGeom.z
-#define u_cornerStyle                  u_lensGeom.w
-#define u_magnification                u_warp.x
-#define u_distortion                   u_warp.y
-#define u_distortionThicknessPx        u_warp.z
-#define u_enableBackgroundTransparency u_warp.w
-#define u_oneSideLightIntensity        u_packA.x
-#define u_chromaticAberration          u_packA.y
-#define u_saturation                   u_packA.z
-#define u_lightMode                    u_packA.w
-#define u_refractionMode               u_packB.x
-#define u_refractionType               u_packB.y
-#define u_refractionIndex              u_packB.z
-#define u_ambientIntensity             u_packB.w
-#define u_doubleSideLightIntensity     u_packC.x
-#define u_borderSaturation             u_packC.y
-#define u_borderSolidity               u_packC.z
-#define u_borderMode                   u_packC.w
+uniform float u_oneSideLightIntensity;
+uniform float u_chromaticAberration;
+uniform float u_saturation;
+uniform float u_lightMode;
+uniform float u_refractionMode;
+uniform float u_refractionType;
+uniform float u_refractionIndex;
+uniform float u_ambientIntensity;
+uniform float u_doubleSideLightIntensity;
+uniform float u_borderSaturation;
+uniform float u_borderSolidity;
+uniform float u_borderMode;
 
 // Capture-region mapping. The bound texture (u_texture_input) covers the
 // parent-space rectangle [u_imageOffset, u_imageOffset + u_imageSize] in
