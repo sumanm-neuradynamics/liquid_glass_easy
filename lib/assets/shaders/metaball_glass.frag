@@ -53,15 +53,35 @@ uniform sampler2D u_texture_input;
 // the float-offset order is IDENTICAL to the old per-uniform layout, so
 // packMetaballGlassUniforms is unchanged.
 
-// u_lens[n]      = (centerX, centerY, halfWidth, halfHeight) px.
-uniform vec4 u_lens[6];
-// u_lensMeta[n]  = (cornerRadius px, enabled[>0.5], cornerStyle, blend).
-uniform vec4 u_lensMeta[6];
-// u_lensSides[n] = per-lens side-blend activation (right, left, down, up),
-// each 0..1, from Dart neighbour proximity. Drives the per-corner
-// continuous→rounded-rect morph (a corner rounds when either side it joins is
-// active).
-uniform vec4 u_lensSides[6];
+// A/B TEST (array-revert): the per-lens groups are declared as SIX individual
+// vec4 uniforms again (NOT vec4[6] arrays), to isolate whether Impeller's
+// setFloat index mapping for uniform ARRAYS — the one construct the working
+// single-lens shader never uses — is what desynced the Dart packer (read as a
+// too-large u_smoothness → phantom centre blob + screen frost on blend). The
+// scalar vec4 packs (u_warp/u_packA/B/C) are KEPT (proven good in liquid_glass.frag).
+// u_lensN = (centerX, centerY, halfWidth, halfHeight) px.
+uniform vec4 u_lens0;
+uniform vec4 u_lens1;
+uniform vec4 u_lens2;
+uniform vec4 u_lens3;
+uniform vec4 u_lens4;
+uniform vec4 u_lens5;
+// u_lensMetaN = (cornerRadius px, enabled[>0.5], cornerStyle, blend).
+uniform vec4 u_lensMeta0;
+uniform vec4 u_lensMeta1;
+uniform vec4 u_lensMeta2;
+uniform vec4 u_lensMeta3;
+uniform vec4 u_lensMeta4;
+uniform vec4 u_lensMeta5;
+// u_lensSidesN = per-lens side-blend activation (right, left, down, up), each
+// 0..1, from Dart neighbour proximity. Drives the per-corner continuous→rounded
+// morph (a corner rounds when either side it joins is active).
+uniform vec4 u_lensSides0;
+uniform vec4 u_lensSides1;
+uniform vec4 u_lensSides2;
+uniform vec4 u_lensSides3;
+uniform vec4 u_lensSides4;
+uniform vec4 u_lensSides5;
 
 // Metaball blend radius in px (the "gooeyness").
 uniform float u_smoothness;
@@ -108,27 +128,9 @@ uniform float u_blur;
 uniform float u_shapeAaPx;
 
 // --- Restore original names ------------------------------------------------
-// Per-lens accessors use CONSTANT indices only (u_lens[0]..u_lens[5]), the
-// always-supported form; the body references each lens explicitly, never via a
-// runtime-variable index. Scalar aliases are plain single-component reads.
-#define u_lens0      u_lens[0]
-#define u_lens1      u_lens[1]
-#define u_lens2      u_lens[2]
-#define u_lens3      u_lens[3]
-#define u_lens4      u_lens[4]
-#define u_lens5      u_lens[5]
-#define u_lensMeta0  u_lensMeta[0]
-#define u_lensMeta1  u_lensMeta[1]
-#define u_lensMeta2  u_lensMeta[2]
-#define u_lensMeta3  u_lensMeta[3]
-#define u_lensMeta4  u_lensMeta[4]
-#define u_lensMeta5  u_lensMeta[5]
-#define u_lensSides0 u_lensSides[0]
-#define u_lensSides1 u_lensSides[1]
-#define u_lensSides2 u_lensSides[2]
-#define u_lensSides3 u_lensSides[3]
-#define u_lensSides4 u_lensSides[4]
-#define u_lensSides5 u_lensSides[5]
+// u_lensN / u_lensMetaN / u_lensSidesN are now real individual uniforms (see the
+// array-revert A/B test above), so no per-lens aliases are needed. Only the
+// scalar vec4 packs are aliased back to their original names below.
 #define u_magnification                u_warp.x
 #define u_distortion                   u_warp.y
 #define u_distortionThicknessPx        u_warp.z
