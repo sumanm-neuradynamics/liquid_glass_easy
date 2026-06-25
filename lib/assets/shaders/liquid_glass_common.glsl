@@ -44,30 +44,54 @@ struct ShapeData {
 };
 
 /* ===========================
-   EXPERIMENT (lens-anywhere-v4): 1-TAP SHAPE GRADIENT
+   SHAPE-SDF GRADIENT METHOD (lens-anywhere-v4)
    ---------------------------------------------------
-   When SHAPE_GRAD_1TAP == 1, the evaluate* functions below sample their
-   SDF ONCE and derive the gradient from hardware screen-space derivatives
-   (dFdx/dFdy) instead of the 5-tap central difference (center + 4
-   neighbours). ~5x fewer SDF evals — the cost the squircle/continuous
-   corners were paying. The trade-off: dFdx/dFdy are constant per 2x2
-   pixel quad, so the normal (and the orthoDist it feeds) is quantised at
-   quad granularity — expect blockier edge AA / rim near corners and thin
-   features. Set to 0 to restore the exact 5-tap everywhere.
+   How evaluateShape / evaluateSquircleRRect / evaluateContinuousRoundedRect
+   turn an SDF sample into the surface normal (drives refraction) and orthoDist
+   (edge AA). Choose ONE via GLASS_GRAD_METHOD — flip this single line to switch:
+
+     GLASS_GRAD_DERIVATIVE  hardware dFdx/dFdy on the SDF value. 1 SDF eval,
+                            cheapest, quad-quantised normal. *** IMPELLER ONLY ***
+                            Skia's SkSL has no dFdx(float) → the program is
+                            invalid SkSL and FAILS TO LOAD on Skia/web (the whole
+                            lens then frosts).
+     GLASS_GRAD_ANALYTIC    analytic gradient from rounded-rect geometry. 1 SDF
+                            eval, NO derivatives → valid on BOTH backends. Exact
+                            normal for circular corners; squircle/continuous
+                            reuse the circular-corner normal direction (their SDF
+                            VALUE stays exact) — visually very close.
+     GLASS_GRAD_5TAP        5-tap central difference (center + 4 neighbours).
+                            Exact for EVERY corner style on BOTH backends, at
+                            ~5x the SDF cost.
+
+   To compare: on Impeller flip DERIVATIVE <-> ANALYTIC; on Skia flip
+   5TAP <-> ANALYTIC (DERIVATIVE won't load there). Default ANALYTIC keeps the
+   single-lens shaders valid on every backend out of the box.
+
+   NB: the metaball shader's MERGED smooth-union field has no analytic gradient,
+   so it always uses the derivative 1-tap (shapeFrom1Tap) via SHAPE_GRAD_1TAP +
+   GLASS_USE_DERIVATIVE_GRAD below — it is an Impeller-only feature.
    =========================== */
+#define GLASS_GRAD_DERIVATIVE 0
+#define GLASS_GRAD_ANALYTIC   1
+#define GLASS_GRAD_5TAP       2
+
+#ifndef GLASS_GRAD_METHOD
+#define GLASS_GRAD_METHOD GLASS_GRAD_ANALYTIC
+#endif
+
+// Metaball merged-field gradient (separate from the single-lens method above).
+// 1 = derivative 1-tap; 0 = the field's own 5-tap. Only metaball uses this.
 #define SHAPE_GRAD_1TAP 1
 
-// Build ShapeData from a single SDF sample, gradient via hardware
-// screen-space derivatives. fragPx tracks screen pixels 1:1, so dFdx(fC)
-// is the per-pixel x-gradient — directly comparable to the central diff.
+// Derivative-based gradient (dFdx/dFdy on the float SDF value). Skia's SkSL has
+// no dFdx(float), and spirv-cross emits EVERY declared function whether or not
+// it's called — so this is only COMPILED when actually needed: under the
+// DERIVATIVE method, or when the metaball opts in via GLASS_USE_DERIVATIVE_GRAD.
 //
-// The 5-tap perturbs fragPx directly, so its gradient lives in
-// FlutterFragCoord space (orientation-independent). The hardware
-// derivatives instead live in FRAMEBUFFER space, which is y-flipped on the
-// GLES backend (same reason the sampler mirrors sampleUV.y). Left
-// unflipped, dFdy comes back negated → the normal's y inverts → refraction
-// reaches OUTWARD and samples outside the lens. Mirror it back here so the
-// 1-tap normal matches the 5-tap.
+// The hardware derivatives live in FRAMEBUFFER space, y-flipped on the GLES
+// backend — mirror dFdy back so this normal matches the 5-tap one.
+#if (GLASS_GRAD_METHOD == GLASS_GRAD_DERIVATIVE) || defined(GLASS_USE_DERIVATIVE_GRAD)
 ShapeData shapeFrom1Tap(float fC){
     vec2 grad = vec2(dFdx(fC), dFdy(fC));
     #ifdef IMPELLER_TARGET_OPENGLES
@@ -80,6 +104,34 @@ ShapeData shapeFrom1Tap(float fC){
     d.normal    = grad / gL;
     d.orthoDist = fC / gL;
     return d;
+}
+#endif
+
+// Analytic gradient (no derivatives → Skia-safe). One SDF evaluation, passed in
+// as `sdfValue`; the normal is computed from rounded-rect geometry. Exact for
+// the circular rounded rect; the squircle/continuous evaluators pass their own
+// SDF value but reuse this rounded-rect normal direction at the corners.
+//   corner region (q.x>0 && q.y>0): normal = sign(rel) · normalize(q)
+//   edge region:                    normal = the dominant axis
+ShapeData shapeFrom1TapAnalytic(vec2 p, vec2 c, vec2 hsz, float r, float sdfValue){
+    vec2 rel = p - c;
+    vec2 sg  = sign(rel);
+    vec2 q   = abs(rel) - hsz + r;
+    vec2 grad;
+    if (q.x > 0.0 && q.y > 0.0) {
+        grad = sg * normalize(max(q, vec2(EPS)));   // rounded corner
+    } else if (q.x > q.y) {
+        grad = vec2(sg.x, 0.0);                      // left / right edge
+    } else {
+        grad = vec2(0.0, sg.y);                      // top / bottom edge
+    }
+    float gL = max(length(grad), EPS);
+    ShapeData o;
+    o.sdf       = sdfValue;
+    o.grad      = grad;
+    o.normal    = grad / gL;
+    o.orthoDist = sdfValue / gL;
+    return o;
 }
 
 /* ===========================
@@ -123,8 +175,11 @@ ShapeData evaluateShape(
     vec2 halfSizePx,
     float radius
 ){
-#if SHAPE_GRAD_1TAP
+#if GLASS_GRAD_METHOD == GLASS_GRAD_DERIVATIVE
     return shapeFrom1Tap(
+        roundedRectangleShape(fragPx, centerPx, halfSizePx, radius));
+#elif GLASS_GRAD_METHOD == GLASS_GRAD_ANALYTIC
+    return shapeFrom1TapAnalytic(fragPx, centerPx, halfSizePx, radius,
         roundedRectangleShape(fragPx, centerPx, halfSizePx, radius));
 #else
     float h = 1.0;
@@ -186,8 +241,11 @@ ShapeData evaluateSquircleRRect(
     float zone,
     float n
 ){
-#if SHAPE_GRAD_1TAP
+#if GLASS_GRAD_METHOD == GLASS_GRAD_DERIVATIVE
     return shapeFrom1Tap(
+        squircleShape(fragPx, centerPx, halfSizePx, zone, n));
+#elif GLASS_GRAD_METHOD == GLASS_GRAD_ANALYTIC
+    return shapeFrom1TapAnalytic(fragPx, centerPx, halfSizePx, zone,
         squircleShape(fragPx, centerPx, halfSizePx, zone, n));
 #else
     float h = 1.0;
@@ -283,8 +341,11 @@ ShapeData evaluateContinuousRoundedRect(
     float rr,
     vec2 reach
 ){
-#if SHAPE_GRAD_1TAP
+#if GLASS_GRAD_METHOD == GLASS_GRAD_DERIVATIVE
     return shapeFrom1Tap(
+        continuousRoundedRectShape(fragPx, centerPx, halfSizePx, rr, reach));
+#elif GLASS_GRAD_METHOD == GLASS_GRAD_ANALYTIC
+    return shapeFrom1TapAnalytic(fragPx, centerPx, halfSizePx, rr,
         continuousRoundedRectShape(fragPx, centerPx, halfSizePx, rr, reach));
 #else
     float h = 1.0;
