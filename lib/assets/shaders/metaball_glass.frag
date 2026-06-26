@@ -544,23 +544,37 @@ vec3 sampleChroma(vec2 uv, float shift) {
     return vec3(r, g, b);
 }
 
-vec3 sampleBackground(vec2 refractedPx, float caShift) {
-    vec2 uv = refractedToUv(refractedPx);
-    if (u_blur < 0.5) return sampleChroma(uv, caShift);
-    // Two-ring blur in px space, converted to UV via u_imageSize.
+// Two-ring blur of the raw backdrop (NO chroma split), px-space kernel.
+vec3 blurField(vec2 uv) {
     vec2 pxToUv = 1.0 / max(u_imageSize, vec2(EPS));
-    vec3 color = sampleChroma(uv, caShift);
+    vec3 color = texture(u_texture_input, uv).rgb;
     float count = 1.0;
     for (int ring = 1; ring <= 2; ring++) {
         float radius = u_blur * float(ring) * 0.5;
         for (int tap = 0; tap < 6; tap++) {
             float angle = 6.2831853 * float(tap) / 6.0 + float(ring) * 0.5;
             vec2 duv = vec2(cos(angle), sin(angle)) * radius * pxToUv;
-            color += sampleChroma(clamp(uv + duv, vec2(0.001), vec2(0.999)), caShift);
+            color += texture(u_texture_input,
+                             clamp(uv + duv, vec2(0.001), vec2(0.999))).rgb;
             count += 1.0;
         }
     }
     return color / count;
+}
+
+vec3 sampleBackground(vec2 refractedPx, float caShift) {
+    vec2 uv = refractedToUv(refractedPx);
+    // No in-shader blur (e.g. Impeller engine-blur path): CA on the sample.
+    if (u_blur < 0.5) return sampleChroma(uv, caShift);
+    // Skia in-shader blur: blur FIRST, then split RGB on the blurred field so
+    // CA lands AFTER the blur (matches Impeller's engine-blur-then-CA order).
+    vec3 base = blurField(uv);
+    if (caShift < 0.001) return base;
+    float luma = dot(base, vec3(0.2126, 0.7152, 0.0722));
+    vec2 offset = vec2(caShift * luma);
+    float r = blurField(clamp(uv + offset, vec2(0.001), vec2(0.999))).r;
+    float b = blurField(clamp(uv - offset, vec2(0.001), vec2(0.999))).b;
+    return vec3(r, base.g, b);
 }
 
 vec3 applySaturation(vec3 color, float saturation) {

@@ -1,3 +1,10 @@
+## 3.1.0
+- **New — `LiquidGlassBlender`:** blend two to six `LiquidGlassLens` descendants into one liquid surface. Neighbouring lenses fuse with a smooth metaball bridge as they meet and pull apart as they separate, while each member keeps its own corner style. Place it inside a `LiquidGlassView` and it works on **both backends** — Impeller samples the live backdrop, Skia refracts the captured background.
+- **Metaball gradient split:** the merged-field normal uses the hardware-derivative 1-tap on Impeller and a 5-tap central difference on Skia (whose SkSL has no `dFdx`), selected per backend so the blend loads and renders on both.
+- **Single-lens shaders** now use the exact 5-tap gradient for every corner style.
+- Chromatic aberration on the Skia blend path is now applied **after** the blur (matching Impeller's order); in-shader blur is disabled on the Skia blend path for now.
+- **Note:** the blend is **not optimized for Skia yet** — it works on the Skia capture path but can be heavy there; best performance is on Impeller for now.
+
 ## 3.0.0
 - **New — lens anywhere:** `LiquidGlassLens` is a layout-driven lens you can drop anywhere in the widget tree (no position/size params; size comes from layout). It **supports both Impeller and Skia automatically**, resolving the best render path for the running engine: on Impeller it refracts the **live backdrop** with no `LiquidGlassView` and no background widget at all; on Skia it refracts an ancestor `LiquidGlassView`'s captured background, and gracefully degrades to a frosted look when neither is available.
 - **New:** `LiquidGlassStyle` — one shared descriptor (**shape + appearance + refraction**) for every glass surface (lens, components, nav pill), with `copyWith(...)` and `merge(...)`.

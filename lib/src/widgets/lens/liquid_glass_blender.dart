@@ -769,9 +769,9 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
       resolution: viewBox.size,
       lenses: _lensesIn(members, viewBox),
       scale: 1.0,
-      // The Skia path samples a bound image, so there is no live backdrop to
-      // compose an engine blur into — blur in-shader here.
-      blur: _blurSigma,
+      // In-shader blur disabled on the Skia blending path for now (it is the
+      // heaviest per-fragment cost here); the merged glass refracts unblurred.
+      blur: 0,
     );
     _shader.setImageSampler(0, image);
 

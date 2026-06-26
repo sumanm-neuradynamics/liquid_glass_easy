@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'control_center_page.dart';
 import 'corner_style_page.dart';
-import 'glass_shapes_showcase.dart';
 import 'lens_image_page.dart';
-import 'metaball_shapes_test_page.dart';
-import 'nav_blend_scroll_page.dart';
 import 'nav_jelly_tuner.dart';
-import 'nav_unite_demo.dart';
 import 'scaffold_demo.dart';
 import 'slider_jelly_tuner.dart';
 import 'slider_toggle_page.dart';
@@ -71,6 +67,13 @@ class HomePage extends StatelessWidget {
 
   static final List<_Destination> _demos = [
     _Destination(
+      title: 'Blending Liquid Glasses',
+      subtitle: 'Drag glass shapes together to fuse, over a photo',
+      icon: Icons.blur_on_rounded,
+      gradient: const [Color(0xFF34D399), Color(0xFF0F766E)],
+      builder: (_) => const LensImagePage(),
+    ),
+    _Destination(
       title: 'Control Center',
       subtitle: 'iOS-style control centre, all lens-anywhere glass',
       icon: Icons.tune_rounded,
@@ -97,41 +100,6 @@ class HomePage extends StatelessWidget {
       icon: Icons.rounded_corner_rounded,
       gradient: const [Color(0xFFFF5C8A), Color(0xFFB12A57)],
       builder: (_) => const CornerStylePage(),
-    ),
-    _Destination(
-      title: 'Lens over Image',
-      subtitle: 'LiquidGlassLens refracting a background photo',
-      icon: Icons.image_rounded,
-      gradient: const [Color(0xFF34D399), Color(0xFF0F766E)],
-      builder: (_) => const LensImagePage(),
-    ),
-    _Destination(
-      title: 'Glass Shapes over Text',
-      subtitle: '2 circles + 1 squircle + 1 continuous, metaball-merged over text',
-      icon: Icons.text_fields_rounded,
-      gradient: const [Color(0xFF4B6CB7), Color(0xFF182848)],
-      builder: (_) => const GlassShapesShowcase(),
-    ),
-    _Destination(
-      title: 'Metaball Shapes Test',
-      subtitle: '2 continuous + 1 circular, draggable, blend toggle',
-      icon: Icons.blur_on_rounded,
-      gradient: const [Color(0xFFFF9E2C), Color(0xFFD45C00)],
-      builder: (_) => const MetaballShapesTestPage(),
-    ),
-    _Destination(
-      title: 'Nav Bar Unite',
-      subtitle: 'Action button springs into the glass nav bar & merges',
-      icon: Icons.add_circle_rounded,
-      gradient: const [Color(0xFFC33764), Color(0xFF1D2671)],
-      builder: (_) => const NavUniteDemo(),
-    ),
-    _Destination(
-      title: 'Scroll to Merge',
-      subtitle: 'Nav bar (3) + tab bar fuse into one as you scroll',
-      icon: Icons.unfold_less_rounded,
-      gradient: const [Color(0xFF1D2671), Color(0xFF2DD4BF)],
-      builder: (_) => const NavBlendScrollPage(),
     ),
   ];
 

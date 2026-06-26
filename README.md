@@ -30,6 +30,40 @@ These dynamic lenses **magnify**, **distort**, **blur**, **tint**, and **refract
 
 ---
 
+## What's New in 3.1
+
+### `LiquidGlassBlender` — fuse lenses into one liquid surface
+
+Wrap two to six `LiquidGlassLens` descendants in a `LiquidGlassBlender` and their
+silhouettes merge into a single liquid glass surface: as neighbouring lenses
+approach they grow a smooth **metaball bridge**, and they pull apart as you
+separate them — each member keeps its own corner style through the merge.
+
+```dart
+LiquidGlassView(
+  backgroundWidget: myBackground,
+  child: LiquidGlassBlender(
+    smoothness: 56,
+    style: const LiquidGlassStyle(
+      shape: LiquidGlassShape.continuousRoundedRectangle(cornerRadius: 36),
+    ),
+    child: Stack(
+      children: const [
+        Positioned(left: 40, top: 80, child: SizedBox(width: 120, height: 120, child: LiquidGlassLens())),
+        Positioned(left: 120, top: 110, child: SizedBox(width: 100, height: 100, child: LiquidGlassLens())),
+      ],
+    ),
+  ),
+)
+```
+
+It works on **both backends** — Impeller samples the live backdrop, Skia refracts
+the captured background (place it inside a `LiquidGlassView`).
+
+> ⚠️ **The blend is not optimized for Skia yet.** On the Skia capture path it can
+> be heavy and in-shader blur is currently disabled for the blend. It is fully
+> functional, but expect the smoothest results on Impeller for now.
+
 ## What's New in 3.0
 
 Version 3.0 is a major step toward a simpler, more flexible API.
@@ -143,6 +177,7 @@ to your UI.
 
 - **True liquid glass visuals** — real-glass look and physics with fluid transparency, soft highlights, and light-bending refraction.
 - **Lens-anywhere** — `LiquidGlassLens` is layout-driven; place it anywhere in the tree with no position/size params.
+- **Liquid blending** — `LiquidGlassBlender` fuses 2–6 lenses into one metaball surface (not yet optimized for Skia).
 - **Impeller *and* Skia** — auto-resolved render paths: live backdrop on Impeller, captured background on Skia, frosted fallback otherwise.
 - **Real-time lens rendering** — distortion, blur, tint, and refraction react instantly as content moves behind the glass.
 - **Custom shapes** — circular rounded rectangles, iOS-style squircles, or Apple-style continuous-corner capsules.

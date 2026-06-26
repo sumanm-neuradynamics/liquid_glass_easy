@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 
 // =============================================================
-// LiquidGlassLens over a background image.
+// Lens over image — blended.
 //
-// A photo fills the screen and a few `LiquidGlassLens` widgets float on
-// top of it — a wide "now playing" card, a circular lens and a capsule
-// chip. On Impeller each lens refracts the live photo behind it; on
-// Skia/Web it degrades to a frosted look (see LiquidGlassLens docs).
+// A photo fills the screen and a few draggable glass shapes float on top, fused
+// by a LiquidGlassBlender: drag any two together and they merge into one liquid
+// surface (metaball), then pull apart as you separate them. No blur — clear
+// refraction over the photo.
+//
+// Wrapped in LiquidGlassView so it works on BOTH backends.
 //
 //   flutter run -t lib/lens_image_page.dart   (standalone)
 //   …or open it from the gallery.
@@ -30,16 +32,42 @@ class _LensImageApp extends StatelessWidget {
   }
 }
 
-/// A page showcasing [LiquidGlassLens] over a photographic background.
-class LensImagePage extends StatelessWidget {
+/// A page showcasing the blend over a photographic background.
+class LensImagePage extends StatefulWidget {
   const LensImagePage({super.key});
 
-  // A full-body person on a city street — portrait crop so the whole
-  // figure fills the screen under BoxFit.cover, with busy street detail
-  // that makes the refraction easy to read as the lens passes over it.
+  @override
+  State<LensImagePage> createState() => _LensImagePageState();
+}
+
+class _LensImagePageState extends State<LensImagePage> {
+  // A full-body person on a city street — busy detail makes the refraction
+  // easy to read as the glass passes over it.
   static const String _imageUrl =
       'https://images.unsplash.com/photo-1485968579580-b6d095142e6e'
       '?auto=format&fit=crop&w=900&h=1600&q=80';
+
+  // Top-left of each draggable shape — placed close so they start fused.
+  Offset _card = const Offset(40, 170);
+  Offset _circle = const Offset(60, 270);
+  Offset _squircle = const Offset(150, 320);
+
+  // The merged material: clear glass (NO blur), slight tint + saturation, an
+  // optical rim and a gentle optical refraction.
+  static const _groupStyle = LiquidGlassStyle(
+    shape: LiquidGlassShape.continuousRoundedRectangle(
+      cornerRadius: 36,
+      borderWidth: 1.5,
+    ),
+    appearance: LiquidGlassAppearance(color: Color(0x14FFFFFF), saturation: 1.05),
+    refraction: LiquidGlassRefraction(
+      refractionType: OpticalRefraction(
+        refraction: 1.5,
+        refractionWidth: 26,
+        depth: 0.7,
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -51,63 +79,122 @@ class LensImagePage extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      // LiquidGlassView provides the captured background the lenses
-      // refract. On Impeller it renders normally and the live backdrop is
-      // sampled; on Skia / Web this is the capture source (so the lenses
-      // refract even without Impeller).
       body: LiquidGlassView(
         backgroundWidget: const _Background(url: _imageUrl),
-        // Lenses placed anywhere inside `child` connect to this view
-        // automatically. Each is wrapped in a LiquidGlassDraggable.
-        child: SafeArea(
-          child: Stack(
-            children: const [
-              Positioned(
-                left: 20,
-                right: 20,
-                top: 80,
-                child: LiquidGlassDraggable(child: _NowPlayingCard()),
-              ),
-              Positioned(
-                left: 30,
-                top: 260,
-                child: LiquidGlassDraggable(child: _CircleLens()),
-              ),
-              Positioned(
-                right: 30,
-                top: 260,
-                child: LiquidGlassDraggable(child: _SquircleLens()),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 410,
-                child: Center(
-                  child: LiquidGlassDraggable(child: _GlassChip()),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: LiquidGlassBlender(
+                smoothness: 58,
+                style: _groupStyle,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _draggable(
+                      pos: _card,
+                      size: const Size(248, 120),
+                      shape: const LiquidGlassShape.continuousRoundedRectangle(
+                        cornerRadius: 32,
+                      ),
+                      onMove: (d) => setState(() => _card += d),
+                      child: const _CardContent(),
+                    ),
+                    _draggable(
+                      pos: _circle,
+                      size: const Size(120, 120),
+                      shape: const LiquidGlassShape.continuousRoundedRectangle(
+                        cornerRadius: 60,
+                      ),
+                      onMove: (d) => setState(() => _circle += d),
+                      child: const Icon(Icons.favorite_rounded,
+                          color: Colors.white, size: 38),
+                    ),
+                    _draggable(
+                      pos: _squircle,
+                      size: const Size(140, 140),
+                      shape: const LiquidGlassShape.squircle(cornerRadius: 40),
+                      onMove: (d) => setState(() => _squircle += d),
+                      child: const Icon(Icons.bolt_rounded,
+                          color: Colors.white, size: 40),
+                    ),
+                  ],
                 ),
               ),
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 24,
+            ),
+            const Positioned(
+              left: 20,
+              right: 20,
+              bottom: 24,
+              child: IgnorePointer(
                 child: Text(
-                  'Drag any glass card around over the photo',
+                  'Drag the glass shapes together to blend',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _draggable({
+    required Offset pos,
+    required Size size,
+    required LiquidGlassShape shape,
+    required ValueChanged<Offset> onMove,
+    required Widget child,
+  }) {
+    return Positioned(
+      left: pos.dx,
+      top: pos.dy,
+      width: size.width,
+      height: size.height,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanUpdate: (e) => onMove(e.delta),
+        child: LiquidGlassLens(
+          style: LiquidGlassStyle(shape: shape),
+          child: Center(child: child),
         ),
       ),
     );
   }
 }
 
-/// The refractable background captured by [LiquidGlassView]: the network
-/// photo (with a gradient fallback) plus a soft scrim so white text on the
-/// glass stays readable. Folding the scrim in here means the lenses refract
-/// the scrimmed photo on the Skia capture path too.
+class _CardContent extends StatelessWidget {
+  const _CardContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 22),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Liquid Glass',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Refraction over a live photo',
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The refractable background captured by [LiquidGlassView]: the network photo
+/// (with a gradient fallback) plus a soft scrim for text legibility.
 class _Background extends StatelessWidget {
   final String url;
   const _Background({required this.url});
@@ -133,16 +220,15 @@ class _Background extends StatelessWidget {
           errorBuilder: (_, __, ___) => _fallback,
           loadingBuilder: (context, child, progress) {
             if (progress == null) return child;
-            return Stack(
+            return const Stack(
               fit: StackFit.expand,
-              children: const [
+              children: [
                 _fallback,
                 Center(child: CircularProgressIndicator(color: Colors.white)),
               ],
             );
           },
         ),
-        // Soft scrim for text legibility.
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -153,165 +239,6 @@ class _Background extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// A wide glass card — the headline lens.
-class _NowPlayingCard extends StatelessWidget {
-  const _NowPlayingCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 150,
-      child: LiquidGlassLens(
-        style: const LiquidGlassStyle(
-          shape: LiquidGlassShape.continuousRoundedRectangle(cornerRadius: 36,lightDirection: 39),
-          appearance: LiquidGlassAppearance(color: Color(0x14FFFFFF)),
-          refraction: LiquidGlassRefraction(
-            refractionMode: LiquidGlassRefractionMode.radialRefraction,
-            refractionType: OpticalRefraction(
-              refraction: 1.5, // IOR — bend angle (useful ~1.0–2.0)
-              refractionWidth: 30, // edge band width
-              depth: 0.5, // strength — how much it bends
-            ),
-          ),
-        ),
-        child: const Padding(
-          padding: EdgeInsets.all(20),
-          child: Row(
-            children: [
-              SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Liquid Glass',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Refraction over a live photo',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A circular lens — a continuous rounded rect at full radius is a circle.
-class _CircleLens extends StatelessWidget {
-  const _CircleLens();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 120,
-      height: 120,
-      child: LiquidGlassLens(
-        style: const LiquidGlassStyle(
-          shape: LiquidGlassShape.continuousRoundedRectangle(cornerRadius: 60),
-          refraction: LiquidGlassRefraction(
-            distortion: 0.18,
-            magnification: 1.1,
-          ),
-        ),
-        child: const Center(
-          child: Icon(Icons.favorite_rounded, color: Colors.white, size: 40),
-        ),
-      ),
-    );
-  }
-}
-
-/// A squircle lens.
-class _SquircleLens extends StatelessWidget {
-  const _SquircleLens();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      height: 160,
-      child: LiquidGlassLens(
-        style: const LiquidGlassStyle(
-          shape: LiquidGlassShape.continuousRoundedRectangle(
-            cornerRadius: 36,
-            lightDirection: 39,
-            lightIntensity: 3,
-            borderWidth: 0,
-            borderType: OpticalBorder(
-              borderSolidity: 1, // light-driven solid rim
-              borderSaturation: 0.7, // desaturate the rim colour
-            ),
-          ),
-          appearance: LiquidGlassAppearance(color: Color(0x14FFFFFF)),
-          refraction: LiquidGlassRefraction(
-            refractionMode: LiquidGlassRefractionMode.shapeRefraction,
-            refractionType: OpticalRefraction(
-              refraction: 1.5, // IOR — bend angle (useful ~1.0–2.0)
-              refractionWidth: 20, // edge band width
-              depth: 1, // strength — how much it bends
-            ),
-          ),
-        ),
-        child: const Center(
-          child: Icon(Icons.bolt_rounded, color: Colors.white, size: 40),
-        ),
-      ),
-    );
-  }
-}
-
-/// A capsule chip lens.
-class _GlassChip extends StatelessWidget {
-  const _GlassChip();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        height: 56,
-        width: 220,
-        child: LiquidGlassLens(
-          style: const LiquidGlassStyle(
-            shape: LiquidGlassShape.continuousRoundedRectangle(
-              cornerRadius: 28,
-            ),
-          ),
-          child: const Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.auto_awesome_rounded,
-                    color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'Tap to explore',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
