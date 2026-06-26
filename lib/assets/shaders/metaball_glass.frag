@@ -19,10 +19,23 @@
 // -----------------------------------------------------------------------------
 
 #include <flutter/runtime_effect.glsl>
-// The merged metaball field is a smooth-union with no analytic gradient, so it
-// needs the derivative-based shapeFrom1Tap. Opt in BEFORE the shared header so
-// that function is compiled here. (Impeller-only: dFdx is invalid SkSL.)
+// The merged metaball field is a smooth-union with no analytic gradient, so its
+// gradient comes from either hardware derivatives (1 SDF tap) or a 5-tap central
+// difference. The backend is chosen OUTSIDE the shader (in Dart) by loading the
+// matching entry, because dFdx cannot even COMPILE in SkSL — a runtime uniform
+// can't help, the whole program must be free of it on Skia:
+//
+//   * metaball_glass.frag      (this file) → Impeller. dFdx is valid, so opt
+//     into the derivative shapeFrom1Tap (1-tap) BEFORE the shared header.
+//   * metaball_glass_skia.frag → Skia/web. It #includes THIS file with
+//     METABALL_SKIA pre-defined, which leaves GLASS_USE_DERIVATIVE_GRAD undefined
+//     (dFdx never compiled → loads on Skia) and switches the field to the 5-tap.
+#ifndef METABALL_SKIA
 #define GLASS_USE_DERIVATIVE_GRAD
+#define SHAPE_GRAD_1TAP 1
+#else
+#define SHAPE_GRAD_1TAP 0
+#endif
 #include "liquid_glass_common.glsl"
 // Opt the shared border into the half-Lambert rim wrap for the MERGED shape.
 // Single-lens shaders don't define this, so their border compiles unchanged.
@@ -66,40 +79,33 @@ uniform vec4 u_lens2;
 uniform vec4 u_lens3;
 uniform vec4 u_lens4;
 uniform vec4 u_lens5;
-// u_lensMetaN = (cornerRadius px, enabled[>0.5], cornerStyle, blend).
+// u_lensMetaN = (cornerRadius px, enabled[>0.5], cornerStyle, packedSides).
+//   packedSides packs the four per-side blend activations (right,left,down,up;
+//   each 0..1) at 5 bits each into one float — see unpackSides(). This folds the
+//   old separate u_lensSidesN vec4 into the spare meta slot (was the debug-only
+//   `blend`), saving one binding per lens. NOTE: requires highp (not fp16-safe).
 uniform vec4 u_lensMeta0;
 uniform vec4 u_lensMeta1;
 uniform vec4 u_lensMeta2;
 uniform vec4 u_lensMeta3;
 uniform vec4 u_lensMeta4;
 uniform vec4 u_lensMeta5;
-// u_lensSidesN = per-lens side-blend activation (right, left, down, up), each
-// 0..1, from Dart neighbour proximity. Drives the per-corner continuous→rounded
-// morph (a corner rounds when either side it joins is active).
-uniform vec4 u_lensSides0;
-uniform vec4 u_lensSides1;
-uniform vec4 u_lensSides2;
-uniform vec4 u_lensSides3;
-uniform vec4 u_lensSides4;
-uniform vec4 u_lensSides5;
-
-// Metaball blend radius in px (the "gooeyness").
-uniform float u_smoothness;
-
 // ── Shared glass block (same semantics as liquid_glass.frag) ──────────────
-// x=magnification  y=distortion  z=distortionThicknessPx
-// w=enableBackgroundTransparency
+// All loose scalars are merged into vec4s to cut bindings; the #define block
+// below restores their original names. The float-offset ORDER here is the exact
+// order packMetaballGlassUniforms writes with setFloat(i++,…) — keep in lockstep.
+// x=magnification  y=distortion  z=distortionThicknessPx  w=enableBackgroundTransparency
 uniform vec4 u_warp;
-uniform float u_diagonalFlip;
+// x=smoothness (the metaball "gooeyness", px)  y=diagonalFlip  z=borderWidth  w=borderSoftness
+uniform vec4 u_warpB;
+// x=borderAlpha  y=lightIntensity  z=lightDirection  w=honorBackdropAlpha
+uniform vec4 u_warpC;
+// x=blur (in-shader blur radius, fragment px)  y=shapeAaPx (edge-AA band)  z,w=unused
+uniform vec4 u_warpD;
 
-uniform float u_borderWidth;
-uniform float u_borderSoftness;
 uniform vec4  u_borderColor;
-uniform float u_borderAlpha;
-uniform float u_lightIntensity;
 uniform vec4  u_lightColor;
 uniform vec4  u_shadowColor;
-uniform float u_lightDirection;
 uniform vec4  u_lensColor;
 // x=oneSideLightIntensity  y=chromaticAberration  z=saturation  w=lightMode
 uniform vec4 u_packA;
@@ -108,33 +114,30 @@ uniform vec4 u_packB;
 // x=doubleSideLightIntensity  y=borderSaturation  z=borderSolidity  w=borderMode
 uniform vec4 u_packC;
 
-// Capture-region mapping (see liquid_glass.frag). Full-frame capture =
-// offset (0,0), size u_resolution.
-uniform vec2 u_imageOffset;
-uniform vec2 u_imageSize;
-
-// 1.0 = fold the sampled backdrop's alpha into coverage (Skia capture);
-// 0.0 = treat backdrop as opaque (Impeller live backdrop).
-uniform float u_honorBackdropAlpha;
-
-// In-shader blur radius in FRAGMENT px (0 = off). The single-lens pipeline
-// blurs via a stacked BackdropFilter; the merged silhouette has no RRect to
-// clip a BackdropFilter to, so the blur is done here (sampling the backdrop /
-// captured image directly) which behaves identically on both backends.
-uniform float u_blur;
-
-// Edge-AA band width in FRAGMENT px (1.0 on Skia, dpr on Impeller). MUST be
-// the last uniform — see packMetaballGlassUniforms.
-uniform float u_shapeAaPx;
+// Capture-region mapping (see liquid_glass.frag): xy=offset, zw=size. Full-frame
+// capture = offset (0,0), size u_resolution. MUST be the last uniform — see
+// packMetaballGlassUniforms.
+uniform vec4 u_imageRegion;
 
 // --- Restore original names ------------------------------------------------
-// u_lensN / u_lensMetaN / u_lensSidesN are now real individual uniforms (see the
-// array-revert A/B test above), so no per-lens aliases are needed. Only the
-// scalar vec4 packs are aliased back to their original names below.
+// u_lensN / u_lensMetaN are real individual uniforms, so they need no aliases;
+// only the scalar vec4 packs are aliased back to their original names below.
 #define u_magnification                u_warp.x
 #define u_distortion                   u_warp.y
 #define u_distortionThicknessPx        u_warp.z
 #define u_enableBackgroundTransparency u_warp.w
+#define u_smoothness                   u_warpB.x
+#define u_diagonalFlip                 u_warpB.y
+#define u_borderWidth                  u_warpB.z
+#define u_borderSoftness               u_warpB.w
+#define u_borderAlpha                  u_warpC.x
+#define u_lightIntensity               u_warpC.y
+#define u_lightDirection               u_warpC.z
+#define u_honorBackdropAlpha           u_warpC.w
+#define u_blur                         u_warpD.x
+#define u_shapeAaPx                    u_warpD.y
+#define u_imageOffset                  u_imageRegion.xy
+#define u_imageSize                    u_imageRegion.zw
 #define u_oneSideLightIntensity        u_packA.x
 #define u_chromaticAberration          u_packA.y
 #define u_saturation                   u_packA.z
@@ -182,6 +185,19 @@ out vec4 frag_color;
 // =====================================================
 // Metaball field: smooth-union of the enabled lens SDFs
 // =====================================================
+
+// Unpack the four per-side blend activations from a single float (see
+// u_lensMetaN.w). Each side (right, left, down, up) was quantised to 5 bits
+// (0..31) and packed as r + l*32 + d*1024 + u*32768 on the Dart side; here we
+// peel them back off and renormalise to 0..1. highp-only (the packed integer
+// reaches ~2^20, which fp16 cannot represent exactly).
+vec4 unpackSides(float p) {
+    float u = floor(p / 32768.0); p -= u * 32768.0;
+    float d = floor(p / 1024.0);  p -= d * 1024.0;
+    float l = floor(p / 32.0);    p -= l * 32.0;
+    float r = p;
+    return vec4(r, l, d, u) / 31.0;   // (right, left, down, up)
+}
 
 // Polynomial smooth minimum — the metaball blend. As two SDFs come within ~k
 // of each other their union grows a smooth bridge instead of a hard crease.
@@ -283,12 +299,12 @@ float lensDistanceContFlat(vec2 p, vec4 lens, vec4 meta) {
 
 float field(vec2 p) {
     float d = 1e9;
-    if (u_lensMeta0.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens0, u_lensMeta0, u_lensSides0), u_smoothness);
-    if (u_lensMeta1.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens1, u_lensMeta1, u_lensSides1), u_smoothness);
-    if (u_lensMeta2.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens2, u_lensMeta2, u_lensSides2), u_smoothness);
-    if (u_lensMeta3.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens3, u_lensMeta3, u_lensSides3), u_smoothness);
-    if (u_lensMeta4.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens4, u_lensMeta4, u_lensSides4), u_smoothness);
-    if (u_lensMeta5.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens5, u_lensMeta5, u_lensSides5), u_smoothness);
+    if (u_lensMeta0.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens0, u_lensMeta0, unpackSides(u_lensMeta0.w)), u_smoothness);
+    if (u_lensMeta1.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens1, u_lensMeta1, unpackSides(u_lensMeta1.w)), u_smoothness);
+    if (u_lensMeta2.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens2, u_lensMeta2, unpackSides(u_lensMeta2.w)), u_smoothness);
+    if (u_lensMeta3.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens3, u_lensMeta3, unpackSides(u_lensMeta3.w)), u_smoothness);
+    if (u_lensMeta4.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens4, u_lensMeta4, unpackSides(u_lensMeta4.w)), u_smoothness);
+    if (u_lensMeta5.y > 0.5) d = smoothUnion(d, lensDistanceMorph(p, u_lens5, u_lensMeta5, unpackSides(u_lensMeta5.w)), u_smoothness);
     return d;
 }
 
@@ -378,8 +394,9 @@ float fieldShape(vec2 p) {
 #endif
 }
 
-// Merged ShapeData via the same 5-tap central-difference scheme as
-// evaluateShape(), but over the smooth-union field.
+// Merged ShapeData. The gradient method is fixed at COMPILE time by the entry
+// file (SHAPE_GRAD_1TAP): Impeller → hardware-derivative 1-tap (dFdx, cheap);
+// Skia → 5-tap central difference (no dFdx).
 ShapeData evaluateField(vec2 fragPx) {
 #if SHAPE_GRAD_1TAP
     return shapeFrom1Tap(fieldShape(fragPx));
@@ -487,12 +504,12 @@ MergedField evaluateMerged(vec2 p) {
     m.hardSdf   = 1e9;
     vec2 anchorAcc = vec2(0.0);
     float anchorW = 0.0;
-    accumulateMerged(p, u_lens0, u_lensMeta0, u_lensSides0, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens1, u_lensMeta1, u_lensSides1, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens2, u_lensMeta2, u_lensSides2, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens3, u_lensMeta3, u_lensSides3, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens4, u_lensMeta4, u_lensSides4, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens5, u_lensMeta5, u_lensSides5, m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens0, u_lensMeta0, unpackSides(u_lensMeta0.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens1, u_lensMeta1, unpackSides(u_lensMeta1.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens2, u_lensMeta2, unpackSides(u_lensMeta2.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens3, u_lensMeta3, unpackSides(u_lensMeta3.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens4, u_lensMeta4, unpackSides(u_lensMeta4.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens5, u_lensMeta5, unpackSides(u_lensMeta5.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
     m.anchor = (anchorW > EPS) ? anchorAcc / anchorW : p;
     return m;
 }

@@ -316,13 +316,16 @@ void packMetaballGlassUniforms(
     }
   }
 
-  // u_lensMeta0..5 — cornerRadius px + enabled flag + corner style + blend.
+  // u_lensMeta0..5 — (cornerRadius px, enabled flag, corner style, packedSides).
+  // packedSides folds the four per-side activations into the spare slot (was the
+  // debug-only `blend`) — see _packMetaballSides — so the separate u_lensSides
+  // array is gone (one fewer binding per lens).
   for (int n = 0; n < kMetaballMaxLenses; n++) {
     if (n < lenses.length) {
       shader.setFloat(i++, lenses[n].cornerRadius * scale);
       shader.setFloat(i++, 1.0);
       shader.setFloat(i++, lenses[n].cornerStyle.toDouble());
-      shader.setFloat(i++, lenses[n].blend);
+      shader.setFloat(i++, _packMetaballSides(lenses[n].sides));
     } else {
       shader.setFloat(i++, 0);
       shader.setFloat(i++, 0);
@@ -331,84 +334,89 @@ void packMetaballGlassUniforms(
     }
   }
 
-  // u_lensSides0..5 — per-side blend activation (right, left, down, up).
-  for (int n = 0; n < kMetaballMaxLenses; n++) {
-    if (n < lenses.length) {
-      final s = lenses[n].sides;
-      shader.setFloat(i++, s[0]);
-      shader.setFloat(i++, s[1]);
-      shader.setFloat(i++, s[2]);
-      shader.setFloat(i++, s[3]);
-    } else {
-      shader.setFloat(i++, 0);
-      shader.setFloat(i++, 0);
-      shader.setFloat(i++, 0);
-      shader.setFloat(i++, 0);
-    }
-  }
-
-  // u_smoothness
-  shader.setFloat(i++, smoothness * scale);
-
-  // ── Shared glass block ──────────────────────────────────────────────
+  // ── Shared glass block (every loose scalar packed into a vec4) ───────────
+  // u_warp = (magnification, distortion, distortionThicknessPx, enableBgTransp).
   shader.setFloat(i++, magnification);
   shader.setFloat(i++, distortion);
   shader.setFloat(i++, distortionWidth * scale);
   shader.setFloat(i++, enableInnerRadiusTransparent ? 1.0 : 0.0);
+  // u_warpB = (smoothness, diagonalFlip, borderWidth, borderSoftness).
+  shader.setFloat(i++, smoothness * scale);
   shader.setFloat(i++, diagonalFlip);
-
   shader.setFloat(i++, borderWidth * scale);
   shader.setFloat(i++, shape.borderSoftness);
+  // u_warpC = (borderAlpha, lightIntensity, lightDirection, honorBackdropAlpha).
+  shader.setFloat(i++, borderAlpha);
+  shader.setFloat(i++, shape.lightIntensity);
+  shader.setFloat(i++, shape.lightDirection);
+  shader.setFloat(i++, honorBackdropAlpha ? 1.0 : 0.0);
+  // u_warpD = (blur, shapeAaPx, unused, unused).
+  shader.setFloat(i++, blur * scale);
+  shader.setFloat(i++, scale);
+  shader.setFloat(i++, 0);
+  shader.setFloat(i++, 0);
 
+  // u_borderColor
   shader.setFloat(i++, shape.borderColor?.r ?? 0);
   shader.setFloat(i++, shape.borderColor?.g ?? 0);
   shader.setFloat(i++, shape.borderColor?.b ?? 0);
   shader.setFloat(i++, shape.borderColor?.a ?? 0);
-  shader.setFloat(i++, borderAlpha);
 
-  shader.setFloat(i++, shape.lightIntensity);
-
+  // u_lightColor
   shader.setFloat(i++, shape.lightColor.r);
   shader.setFloat(i++, shape.lightColor.g);
   shader.setFloat(i++, shape.lightColor.b);
   shader.setFloat(i++, shape.lightColor.a);
 
+  // u_shadowColor
   shader.setFloat(i++, shape.shadowColor.r);
   shader.setFloat(i++, shape.shadowColor.g);
   shader.setFloat(i++, shape.shadowColor.b);
   shader.setFloat(i++, shape.shadowColor.a);
 
-  shader.setFloat(i++, shape.lightDirection);
-
+  // u_lensColor
   shader.setFloat(i++, lensColor.r);
   shader.setFloat(i++, lensColor.g);
   shader.setFloat(i++, lensColor.b);
   shader.setFloat(i++, lensColor.a);
 
+  // u_packA = (oneSideLightIntensity, chromaticAberration, saturation, lightMode)
   shader.setFloat(
       i++, shape.isOpticalBorder ? 0.0 : shape.oneSideLightIntensity);
   shader.setFloat(i++, chromaticAberration);
   shader.setFloat(i++, saturation);
   shader.setFloat(i++, selectedLightMode);
+  // u_packB = (refractionMode, refractionType, refractionIndex, ambientIntensity)
   shader.setFloat(i++, selectedRefractionMode);
   shader.setFloat(i++, selectedRefractionType);
   shader.setFloat(i++, refractionIndex);
   shader.setFloat(i++, shape.ambientIntensity);
+  // u_packC = (doubleSideLightIntensity, borderSaturation, borderSolidity, borderMode)
   shader.setFloat(
       i++, shape.isOpticalBorder ? 0.0 : shape.doubleSideLightIntensity);
   shader.setFloat(i++, shape.borderSaturation);
   shader.setFloat(i++, shape.borderSolidity);
   shader.setFloat(i++, selectedBorderMode);
 
-  // u_imageOffset / u_imageSize
+  // u_imageRegion = (offset.xy, size.xy) — the captured/backdrop sub-rect.
   final Size imgSize = imageSize ?? resolution;
   shader.setFloat(i++, imageOffset.dx * scale);
   shader.setFloat(i++, imageOffset.dy * scale);
   shader.setFloat(i++, imgSize.width * scale);
   shader.setFloat(i++, imgSize.height * scale);
+}
 
-  // u_honorBackdropAlpha, u_blur, u_shapeAaPx (last).
-  shader.setFloat(i++, honorBackdropAlpha ? 1.0 : 0.0);
-  shader.setFloat(i++, blur * scale);
-  shader.setFloat(i++, scale);
+/// Packs the four per-side blend activations `[right, left, down, up]` (each
+/// `0..1`) into a single float for `u_lensMetaN.w`, matching the shader's
+/// `unpackSides()`. Each side is quantised to 5 bits (0..31) and laid out as
+/// `r + l*32 + d*1024 + u*32768` (max ≈ 2^20, exact in a 32-bit float — but NOT
+/// fp16-safe, hence the metaball shader's highp requirement). 5 bits is ample
+/// for a soft morph weight.
+double _packMetaballSides(List<double> sides) {
+  int q(double v) => (v.clamp(0.0, 1.0) * 31.0).round();
+  return (q(sides[0]) +
+          q(sides[1]) * 32 +
+          q(sides[2]) * 1024 +
+          q(sides[3]) * 32768)
+      .toDouble();
 }

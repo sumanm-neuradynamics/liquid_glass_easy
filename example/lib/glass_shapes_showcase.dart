@@ -42,6 +42,7 @@ class _GlassShapesShowcaseState extends State<GlassShapesShowcase> {
   );
 
   static const _continuousStyle = LiquidGlassStyle(
+    appearance: LiquidGlassAppearance(blur: LiquidGlassBlur(sigmaX: 0.5, sigmaY: 0.5)),
     shape: LiquidGlassShape.continuousRoundedRectangle(cornerRadius: 48),
   );
 
@@ -64,7 +65,9 @@ class _GlassShapesShowcaseState extends State<GlassShapesShowcase> {
           //    metaball merge. Drag them together and they simply overlap;
           //    each keeps its own corner style (circle / squircle /
           //    continuous).
-          Positioned.fill(
+          LiquidGlassBlender(
+            smoothness: 50,
+            style: _continuousStyle,
             child: Stack(
               children: [
                 _draggable(
@@ -98,6 +101,7 @@ class _GlassShapesShowcaseState extends State<GlassShapesShowcase> {
               ],
             ),
           ),
+ 
         ],
       ),
     );

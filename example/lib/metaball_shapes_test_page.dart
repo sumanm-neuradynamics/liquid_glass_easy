@@ -35,21 +35,24 @@ class _MetaballShapesTestPageState extends State<MetaballShapesTestPage> {
   Offset _squircle = const Offset(60, 520);
 
   bool _blend = true;
-  bool _perSideMorph = true;
 
   // Per-lens styles — identical except for the corner style. The blender reads
   // each member's corner STYLE (not just its radius), so each shape keeps its
   // own corners through the merge.
   static const _roundedStyle = LiquidGlassStyle(
     shape: LiquidGlassShape.roundedRectangle(cornerRadius: _radius),
+                appearance: LiquidGlassAppearance(blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2)),
+
   );
   static const _continuousStyle = LiquidGlassStyle(
-        appearance: LiquidGlassAppearance(blur: LiquidGlassBlur(sigmaX: 0.5, sigmaY: 0.5)),
+            appearance: LiquidGlassAppearance(blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2)),
 
-    shape: LiquidGlassShape.continuousRoundedRectangle(cornerRadius: 50),
+    shape: LiquidGlassShape.roundedRectangle(cornerRadius: 50),
   );
   static const _squircleStyle = LiquidGlassStyle(
-    shape: LiquidGlassShape.squircle(cornerRadius: _radius),
+            appearance: LiquidGlassAppearance(blur: LiquidGlassBlur(sigmaX: 2, sigmaY: 2)),
+
+    shape: LiquidGlassShape.roundedRectangle(cornerRadius: _radius),
   );
 
   @override
@@ -83,12 +86,6 @@ class _MetaballShapesTestPageState extends State<MetaballShapesTestPage> {
         actions: [
           Row(
             children: [
-              const Text('Per-side'),
-              Switch(
-                value: _perSideMorph,
-                onChanged: (v) => setState(() => _perSideMorph = v),
-              ),
-              const SizedBox(width: 8),
               const Text('Blend'),
               Switch(
                 value: _blend,
@@ -104,7 +101,6 @@ class _MetaballShapesTestPageState extends State<MetaballShapesTestPage> {
           if (_blend)
             LiquidGlassBlender(
               smoothness: 50,
-              perSideMorph: _perSideMorph,
               style: _continuousStyle,
               child: lenses,
             )

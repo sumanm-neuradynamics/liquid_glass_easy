@@ -65,7 +65,6 @@ class LiquidGlassBlender extends StatefulWidget {
     required this.child,
     this.style = const LiquidGlassStyle(),
     this.smoothness = 48,
-    this.perSideMorph = true,
     this.useImpellerBackdrop,
     this.useEngineBlur = true,
   }) : assert(smoothness > 0);
@@ -78,22 +77,6 @@ class LiquidGlassBlender extends StatefulWidget {
 
   /// Radius, in logical pixels, over which nearby lens outlines flow together.
   final double smoothness;
-
-  /// How continuous (Apple capsule-style) lenses morph toward a circular
-  /// rounded rectangle as neighbours close in — so the capsule corners don't
-  /// fight the metaball bridge.
-  ///
-  /// * `true` (default): **per-side estimation.** Only the corners on the
-  ///   side(s) actually facing a close neighbour (and all corners when a
-  ///   neighbour sinks inside) morph; the rest of the lens keeps its capsule
-  ///   corners. Localized and subtle.
-  /// * `false`: **whole-shape morph.** The entire continuous lens morphs to a
-  ///   circular rounded rectangle by its overall proximity to any neighbour —
-  ///   every corner rounds together, regardless of direction.
-  ///
-  /// Only continuous lenses are affected either way; squircle and circular
-  /// members are never morphed.
-  final bool perSideMorph;
 
   /// Overrides renderer detection. When null, inherits `LiquidGlassView` and
   /// otherwise uses Flutter's shader-filter capability.
@@ -117,11 +100,27 @@ class _LiquidGlassBlenderState extends State<LiquidGlassBlender> {
   final _LiquidGlassBlenderRegistry _registry = _LiquidGlassBlenderRegistry();
   ui.FragmentShader? _shader;
 
+  /// Which backend [_shader] was compiled for. The two entries differ only in
+  /// the merged-field gradient: Impeller uses the derivative 1-tap
+  /// (metaball_glass.frag), Skia uses the 5-tap (metaball_glass_skia.frag, which
+  /// contains no dFdx so it can load on Skia/web). A backend flip reloads.
+  bool? _shaderImpeller;
+
   @override
-  void initState() {
-    super.initState();
-    _LiquidGlassBlenderProgram.ensureLoaded().then((program) {
-      if (mounted) {
+  void dispose() {
+    _registry.dispose();
+    super.dispose();
+  }
+
+  /// Loads (once per backend) the metaball entry shader for [impeller] and swaps
+  /// it in when ready. The backend is detected here in Dart — Skia can't even
+  /// compile the derivative entry, so this can't be a single shared program.
+  void _ensureShader(bool impeller) {
+    if (_shaderImpeller == impeller && _shader != null) return;
+    _shaderImpeller = impeller;
+    _LiquidGlassBlenderProgram.ensureLoaded(impeller).then((program) {
+      // Ignore a stale load if the backend flipped while we were loading.
+      if (mounted && _shaderImpeller == impeller) {
         setState(() => _shader = program.fragmentShader());
       }
     }).catchError((Object _) {
@@ -131,18 +130,14 @@ class _LiquidGlassBlenderState extends State<LiquidGlassBlender> {
   }
 
   @override
-  void dispose() {
-    _registry.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final lensScope = LiquidGlassLensScope.maybeOf(context);
     final bool useImpeller = (widget.useImpellerBackdrop ??
             lensScope?.useImpellerBackdrop ??
             true) &&
         ui.ImageFilter.isShaderFilterSupported;
+
+    _ensureShader(useImpeller);
 
     return Stack(
       fit: StackFit.passthrough,
@@ -155,7 +150,6 @@ class _LiquidGlassBlenderState extends State<LiquidGlassBlender> {
               shader: _shader!,
               style: widget.style,
               smoothness: widget.smoothness,
-              perSideMorph: widget.perSideMorph,
               useImpellerBackdrop: useImpeller,
               useEngineBlur: widget.useEngineBlur,
               lensScope: lensScope,
@@ -173,28 +167,39 @@ class _LiquidGlassBlenderState extends State<LiquidGlassBlender> {
 }
 
 class _LiquidGlassBlenderProgram {
-  static ui.FragmentProgram? _program;
-  static Future<ui.FragmentProgram>? _loading;
+  // One entry shader per backend: Impeller uses the derivative 1-tap field
+  // gradient; Skia/web uses the 5-tap (dFdx is invalid SkSL). Cached per backend
+  // so a flip never recompiles.
+  static const Map<bool, String> _assets = <bool, String>{
+    true: 'metaball_glass.frag',
+    false: 'metaball_glass_skia.frag',
+  };
+  static final Map<bool, ui.FragmentProgram> _programs =
+      <bool, ui.FragmentProgram>{};
+  static final Map<bool, Future<ui.FragmentProgram>> _loading =
+      <bool, Future<ui.FragmentProgram>>{};
 
-  static Future<ui.FragmentProgram> ensureLoaded() {
-    final cached = _program;
+  static Future<ui.FragmentProgram> ensureLoaded(bool impeller) {
+    final cached = _programs[impeller];
     if (cached != null) return Future.value(cached);
-    return _loading ??= _load();
+    return _loading[impeller] ??= _load(impeller);
   }
 
-  static Future<ui.FragmentProgram> _load() async {
+  static Future<ui.FragmentProgram> _load(bool impeller) async {
+    final String name = _assets[impeller]!;
     try {
-      _program = await ui.FragmentProgram.fromAsset(
-        'packages/liquid_glass_easy/lib/assets/shaders/metaball_glass.frag',
-      );
-    } catch (_) {
-      _program = await ui.FragmentProgram.fromAsset(
-        'lib/assets/shaders/metaball_glass.frag',
-      );
+      try {
+        return _programs[impeller] = await ui.FragmentProgram.fromAsset(
+          'packages/liquid_glass_easy/lib/assets/shaders/$name',
+        );
+      } catch (_) {
+        return _programs[impeller] = await ui.FragmentProgram.fromAsset(
+          'lib/assets/shaders/$name',
+        );
+      }
     } finally {
-      _loading = null;
+      _loading.remove(impeller);
     }
-    return _program!;
   }
 }
 
@@ -368,7 +373,6 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
     required this.shader,
     required this.style,
     required this.smoothness,
-    required this.perSideMorph,
     required this.useImpellerBackdrop,
     required this.useEngineBlur,
     required this.lensScope,
@@ -380,7 +384,6 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
   final ui.FragmentShader shader;
   final LiquidGlassStyle style;
   final double smoothness;
-  final bool perSideMorph;
   final bool useImpellerBackdrop;
   final bool useEngineBlur;
   final LiquidGlassLensScope? lensScope;
@@ -394,7 +397,6 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
       shader: shader,
       style: style,
       smoothness: smoothness,
-      perSideMorph: perSideMorph,
       useImpellerBackdrop: useImpellerBackdrop,
       useEngineBlur: useEngineBlur,
       lensScope: lensScope,
@@ -413,7 +415,6 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
       ..shader = shader
       ..style = style
       ..smoothness = smoothness
-      ..perSideMorph = perSideMorph
       ..useImpellerBackdrop = useImpellerBackdrop
       ..useEngineBlur = useEngineBlur
       ..lensScope = lensScope
@@ -428,7 +429,6 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     required ui.FragmentShader shader,
     required LiquidGlassStyle style,
     required double smoothness,
-    required bool perSideMorph,
     required bool useImpellerBackdrop,
     required bool useEngineBlur,
     required LiquidGlassLensScope? lensScope,
@@ -438,7 +438,6 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
         _shader = shader,
         _style = style,
         _smoothness = smoothness,
-        _perSideMorph = perSideMorph,
         _useImpellerBackdrop = useImpellerBackdrop,
         _useEngineBlur = useEngineBlur,
         _lensScope = lensScope,
@@ -464,7 +463,6 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   ui.FragmentShader _shader;
   LiquidGlassStyle _style;
   double _smoothness;
-  bool _perSideMorph;
   bool _useImpellerBackdrop;
   bool _useEngineBlur;
   LiquidGlassLensScope? _lensScope;
@@ -498,13 +496,6 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   set smoothness(double value) {
     if (_smoothness == value) return;
     _smoothness = value;
-    markNeedsPaint();
-  }
-
-  bool get perSideMorph => _perSideMorph;
-  set perSideMorph(bool value) {
-    if (_perSideMorph == value) return;
-    _perSideMorph = value;
     markNeedsPaint();
   }
 
@@ -655,48 +646,59 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     final double sigma = _blurSigma;
     final bool engineBlur = _useEngineBlur && sigma > 0;
 
-    // The engine Gaussian inflates its snapshot beyond the (full-surface) clip
-    // by ~3·sigma on each side, and the outer shader samples THAT inflated
-    // snapshot. Without telling it, the shader maps screen pixels over the bare
-    // resolution and reads a too-large window out of the texture — downscaling
-    // the refracted content inside the lens. So expand the sampling window by
-    // the blur coverage:
-    //   • SIZE: the surface's own size (the clip), NOT _screenSize — the surface
-    //     is usually shorter than the FlutterView (status bar / system-nav
-    //     insets), and sizing against _screenSize.height leaves a vertical-only
-    //     downscale.
-    //   • OFFSET: just −m. The snapshot's sampling origin already aligns with
-    //     the surface, so adding the surface's global top-left would shift the
-    //     refracted content off the lens.
-    // Logical px; the packer scales by dpr. (3·sigma ≈ Impeller's Gaussian
-    // coverage; nudge if a residual uniform scale shows.)
-    const double kBlurCoverageSigmas = 3.0;
-    final double m = kBlurCoverageSigmas * sigma;
+    // The compose path's blurred snapshot is CLIPPED to this surface
+    // (Offset.zero & size — see the pushClipRect below) and the outer shader
+    // reads it in that SAME surface-local space, so the sampling window simply
+    // IS the surface: offset 0, size = surface. No blur-coverage outset.
+    //
+    // (Earlier this added an `m = ~3·sigma` outset on the assumption the
+    // snapshot was inflated and lived in screen space. Once the silhouette and
+    // sampling were moved into surface-local space that outset only shrank the
+    // window to its centre, magnifying the content by (size+2m)/size — the
+    // "blur zooms in" artefact. The clip pins the snapshot to the surface, so
+    // the correct window has no margin.)
     final Size surfaceSize = engineBlur
         ? MatrixUtils.transformRect(getTransformTo(null), Offset.zero & size)
             .size
         : Size.zero;
 
+    // Coordinate space differs by path — and the SILHOUETTE must use the same
+    // space its FlutterFragCoord() resolves in, or the glass shape detaches
+    // from the child:
+    //   • Plain ImageFilter.shader (no blur): FlutterFragCoord() is FULL-SCREEN
+    //     physical px, so pack global lens rects against _screenSize.
+    //   • Engine-blur COMPOSE path: the inner blur renders into a snapshot
+    //     bounded by THIS surface's clip (Offset.zero & size), so the outer
+    //     shader's FlutterFragCoord() is SURFACE-LOCAL (the same reason the
+    //     sampling window above only needs −m, not the surface's global
+    //     top-left). Packing global lens centers here draws the silhouette
+    //     shifted by the surface's global top-left — the status-bar / app-bar
+    //     inset — while the child, laid out normally, stays put (the constant,
+    //     blur-independent "lens slid down, text centred" artefact). So pack
+    //     lenses and resolution in that same surface-local space.
     _packShared(
-      resolution: _screenSize,
-      lenses: _lensesIn(members, null),
+      resolution: engineBlur ? surfaceSize : _screenSize,
+      lenses: _lensesIn(members, engineBlur ? this : null),
       scale: _devicePixelRatio,
       // Engine blur runs before the shader → don't blur again in-shader.
       blur: engineBlur ? 0.0 : sigma,
-      imageOffset: engineBlur ? Offset(-m, -m) : Offset.zero,
-      imageSize: engineBlur
-          ? Size(surfaceSize.width + 2 * m, surfaceSize.height + 2 * m)
-          : null,
+      // Surface-clipped snapshot → sample it 1:1: no offset, window = surface.
+      imageOffset: Offset.zero,
+      imageSize: engineBlur ? surfaceSize : null,
     );
 
     final ui.ImageFilter shaderFilter = ui.ImageFilter.shader(_shader);
     final ui.ImageFilter filter = engineBlur
         ? ui.ImageFilter.compose(
             outer: shaderFilter,
-            // Sigma is in the shader's space (physical px), so scale by dpr.
+            // ImageFilter.blur sigma is LOGICAL px (same units the single-lens
+            // Impeller path passes raw, and what the public blur value means),
+            // so do NOT scale by dpr — that over-blurred by dpr (≈3×) and also
+            // left the snapshot inflation out of sync with the `m = 3·sigma`
+            // sampling margin, which is itself logical (the packer applies dpr).
             inner: ui.ImageFilter.blur(
-              sigmaX: sigma * _devicePixelRatio,
-              sigmaY: sigma * _devicePixelRatio,
+              sigmaX: sigma,
+              sigmaY: sigma,
             ),
           )
         : shaderFilter;
@@ -831,17 +833,10 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
           final double prox = sp * sp * (3.0 - 2.0 * sp);
           if (prox <= 0.0) continue;
 
-          // Whole-shape morph (per-side estimation off): every corner rounds
-          // by the overall proximity, regardless of which way the neighbour
-          // lies — the original pre-estimation behaviour.
-          if (!perSideMorph) {
-            sides[0] = math.max(sides[0], prox);
-            sides[1] = math.max(sides[1], prox);
-            sides[2] = math.max(sides[2], prox);
-            sides[3] = math.max(sides[3], prox);
-            continue;
-          }
-
+          // Per-side estimation (always on): only the corners on the side(s)
+          // actually facing a close neighbour morph toward a circular rounded
+          // rectangle; the rest of the lens keeps its capsule corners.
+          //
           // When the boxes sink INTO each other (overlap on both axes) the
           // merged silhouette wraps around every side, so morph all four
           // corners — not just the ones facing the neighbour. The deeper the

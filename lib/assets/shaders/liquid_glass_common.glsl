@@ -82,7 +82,11 @@ struct ShapeData {
 
 // Metaball merged-field gradient (separate from the single-lens method above).
 // 1 = derivative 1-tap; 0 = the field's own 5-tap. Only metaball uses this.
+// The metaball entry files pre-define it per backend (Impeller=1, Skia=0), so
+// only set a default when nobody did.
+#ifndef SHAPE_GRAD_1TAP
 #define SHAPE_GRAD_1TAP 1
+#endif
 
 // Derivative-based gradient (dFdx/dFdy on the float SDF value). Skia's SkSL has
 // no dFdx(float), and spirv-cross emits EVERY declared function whether or not
