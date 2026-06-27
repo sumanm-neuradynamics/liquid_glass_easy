@@ -266,6 +266,17 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
   double _dragFollow = 0;
   bool _tabDragging = false;
 
+  /// Fractional position of the initial press, captured at long-press
+  /// start. A click (a press that never became a real drag) commits to
+  /// THIS cell, so a quick press always selects exactly where it landed
+  /// instead of borrowing the drag glide's lagging follow position.
+  double _pressFrac = 0;
+
+  /// True once the finger has moved far enough from [_pressFrac] to count
+  /// as a genuine drag — distinguishes a hold-and-slide from a click that
+  /// merely tripped the long-press recognizer (jittery tap-to-click).
+  bool _draggedRealMove = false;
+
   // ── Travel spring ────────────────────────────────────────────────
   // The pill's position is spring-driven (same underdamped integrator
   // as the jelly), so a tap travels with momentum and settles with a
@@ -464,6 +475,10 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
     _syncJellyConfig();
     _dragJelly.start(_dragFollow);
     _travelVel = 0;
+    // Remember where the press landed; until the finger moves off it, this
+    // is treated as a click and commits to this exact cell on release.
+    _pressFrac = frac;
+    _draggedRealMove = false;
     _startTicker();
     setState(() => _tabPillFracIndex = frac);
   }
@@ -471,6 +486,10 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
   void _onTabPillLongPressMoveUpdate(LongPressMoveUpdateDetails d) {
     if (!_tabDragging) return;
     final frac = _xToTabFrac(d.globalPosition.dx);
+    // Once the finger travels a fraction of a cell from the press point,
+    // it's a real drag — release should settle to the glide, not the
+    // pressed cell. Small jitter (tap-to-click) stays below this.
+    if ((frac - _pressFrac).abs() > 0.2) _draggedRealMove = true;
     // Only set the destination; the pill (and its jelly) chase it via the
     // smoothed follow in _onTick.
     setState(() => _tabPillFracIndex = frac);
@@ -487,11 +506,14 @@ class _LiquidGlassAnimatedNavBarState extends State<LiquidGlassAnimatedNavBar>
   }
 
   void _releaseTabPillDrag() {
-    // Snap from where the pill VISUALLY is (the smoothed follow), not the
-    // raw finger, so an interrupted glide settles to the nearest tab it
-    // actually reached.
+    // The pill always travels FROM where it visually is (the smoothed
+    // follow) so the motion is continuous. WHERE it commits depends on the
+    // gesture: a real drag settles to the tab the glide reached; a click
+    // (no real drag) commits to the cell that was pressed, so a quick press
+    // lands exactly where it landed instead of on the lagging follow.
     final from = _dragFollow;
-    final next = from.round().clamp(0, _layout.itemCount - 1);
+    final double snapFrac = _draggedRealMove ? from : _pressFrac;
+    final next = snapFrac.round().clamp(0, _layout.itemCount - 1);
     final notify = next != _tabIndex;
     setState(() {
       _tabDragging = false;

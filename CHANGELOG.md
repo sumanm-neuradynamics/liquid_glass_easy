@@ -1,3 +1,6 @@
+## 3.2.1
+- **Fix — bottom nav bar tab selection on web:** clicking a tab on web could select the wrong tab (the neighbour), walk toward the target one click at a time, or not change selection at all — most noticeable with a trackpad. A quick click was being routed through the hold-to-drag path and committing to the glide's lagging position instead of the cell that was pressed. A click now commits to the pressed tab. The tap-and-hold drag gesture is unchanged.
+
 ## 3.2.0
 - **Per-backend single-lens shaders:** the shape-gradient method now differs by engine. Impeller keeps the hardware-derivative (`dFdx`) gradient, while Skia/web loads a separate `liquid_glass_skia.frag` / `liquid_glass_border_skia.frag` that selects an **analytic gradient** instead — `dFdx` is invalid SkSL, so the previous shared program was only correct on Impeller. Programs are cached **per backend** and resolved automatically; the frosted fallback now also covers the brief async load when a lens mounts on a backend that wasn't preloaded.
 - **`LiquidGlassShaders` API (backward-compatible):** `ensureLoaded`, `isLoaded`/`isLoadedFor`, `createMainShader`, and `createBorderShader` now accept an optional `impeller` flag, defaulting to the engine's native backend (`ui.ImageFilter.isShaderFilterSupported`). Existing no-argument calls keep working.

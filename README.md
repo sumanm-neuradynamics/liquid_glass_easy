@@ -11,8 +11,8 @@
 These dynamic lenses **magnify**, **distort**, **blur**, **tint**, and **refract** the content behind them — recreating the iOS 26 Liquid Glass look with stunning, glass-like effects that respond fluidly to **movement** and **touch**.
 
 <p>
-  <img src="showcases/liquid_glass_blending.gif" height="240" alt="Liquid Glass Blending"/>
-  <img src="showcases/liquid_glass_bottom_nav_bar.gif" height="240" alt="Liquid Glass Bottom Nav Bar"/>
+  <img src="showcases/liquid_glass_blending.gif" width="36%" alt="Liquid Glass Blending"/>
+  <img src="showcases/liquid_glass_bottom_nav_bar.gif" width="63%" alt="Liquid Glass Bottom Nav Bar"/>
 </p>
 
 <p>
