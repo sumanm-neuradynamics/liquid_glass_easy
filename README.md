@@ -7,11 +7,12 @@
   <a href="https://github.com/AhmeedGamil/liquid_glass_easy/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AhmeedGamil/liquid_glass_easy?style=for-the-badge&color=4CAF50" alt="license"/></a>
 </p>
 
-**A Flutter package that adds real-time, interactive liquid glass lenses.**
-These dynamic lenses **magnify**, **distort**, **blur**, **tint**, and **refract** the content behind them — creating stunning, glass-like effects that respond fluidly to **movement** and **touch**.
+**A Flutter package that brings Apple's iOS-style Liquid Glass to your app with real-time, interactive lenses.**
+These dynamic lenses **magnify**, **distort**, **blur**, **tint**, and **refract** the content behind them — recreating the iOS 26 Liquid Glass look with stunning, glass-like effects that respond fluidly to **movement** and **touch**.
 
 <p>
-  <img src="showcases/liquid_glass_bottom_nav_bar.gif" width="98%" alt="Liquid Glass Bottom Nav Bar"/>
+  <img src="showcases/liquid_glass_blending.gif" height="240" alt="Liquid Glass Blending"/>
+  <img src="showcases/liquid_glass_bottom_nav_bar.gif" height="240" alt="Liquid Glass Bottom Nav Bar"/>
 </p>
 
 <p>
@@ -29,6 +30,25 @@ These dynamic lenses **magnify**, **distort**, **blur**, **tint**, and **refract
 </p>
 
 ---
+
+## What's New in 3.2
+
+### Sharper, faster blending on both backends
+
+3.2 is a rendering pass focused on the `LiquidGlassBlender` and the engine split:
+
+- **Per-backend shaders.** The single-lens shaders now ship a backend-specific
+  build: Impeller keeps the hardware-derivative gradient, while Skia/web loads a
+  dedicated entry with an **analytic gradient** (`dFdx` is invalid SkSL). Programs
+  are cached per backend and resolved automatically — no API change needed.
+- **Skia blend quality + blur.** The metaball blend on Skia now uses an analytic
+  merged-field gradient and has **in-shader blur re-enabled**, with chromatic
+  aberration applied *before* the blur to match Impeller.
+- **Cheaper blend on Impeller.** The engine-blur backdrop pass is now clipped to
+  the **tight glass region** instead of the whole surface, so the costly pass only
+  covers where the merged glass actually is.
+- **`debugClipBounds`** — a new diagnostic flag on `LiquidGlassBlender` that
+  outlines the backdrop clip region (off by default).
 
 ## What's New in 3.1
 
@@ -60,9 +80,11 @@ LiquidGlassView(
 It works on **both backends** — Impeller samples the live backdrop, Skia refracts
 the captured background (place it inside a `LiquidGlassView`).
 
-> ⚠️ **The blend is not optimized for Skia yet.** On the Skia capture path it can
-> be heavy and in-shader blur is currently disabled for the blend. It is fully
-> functional, but expect the smoothest results on Impeller for now.
+> ⚠️ **A note on blur on Skia.** In-shader blur on the Skia capture path may cost
+> **performance** when the lenses are big or the blur is big. Also, **high blur
+> (above ~7)** doesn't match the look of a real backdrop blur. It isn't clamped,
+> though — the value is left unrestricted so you can push it if you want; just
+> expect it to diverge from the Impeller look at high sigmas.
 
 ## What's New in 3.0
 
@@ -192,7 +214,7 @@ to your UI.
 
 ```yaml
 dependencies:
-  liquid_glass_easy: ^3.0.0
+  liquid_glass_easy: ^3.2.0
 ```
 
 ```bash

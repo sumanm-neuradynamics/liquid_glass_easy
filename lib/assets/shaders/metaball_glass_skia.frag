@@ -7,8 +7,9 @@
 // a runtime uniform can't rescue it, the compiled program must contain no dFdx.
 //
 // Defining METABALL_SKIA before the include leaves GLASS_USE_DERIVATIVE_GRAD
-// undefined (dFdx never compiled) and selects the 5-tap central-difference
-// gradient (SHAPE_GRAD_1TAP 0), which is valid on every backend.
+// undefined (dFdx never compiled) and selects the ANALYTIC merged gradient
+// (METABALL_GRAD_ANALYTIC 1) — the smooth-union's exact gradient from the
+// per-lens rounded-rect gradients, one pass, valid on every backend.
 //
 // The Dart side (LiquidGlassBlender) detects the backend and loads this file on
 // the Skia capture path and metaball_glass.frag on the Impeller path — so the

@@ -6,14 +6,10 @@
 // -----------------------------------------------------------------------------
 
 #include <flutter/runtime_effect.glsl>
-// Force the 5-tap central-difference gradient (center + 4 neighbours) for the
-// shape normal / orthoDist. It is exact for EVERY corner style (circular,
-// squircle, continuous) on BOTH backends, unlike the default analytic gradient
-// which reuses the circular-corner normal for squircle/continuous. Costs ~5x
-// the SDF evals. Must be set BEFORE common.glsl, where the method is applied;
-// the value 2 is GLASS_GRAD_5TAP (that named constant is defined in common.glsl,
-// so it can't be referenced here yet).
-#define GLASS_GRAD_METHOD 2   // GLASS_GRAD_5TAP
+// Shape-gradient method, chosen BEFORE common.glsl applies it: derivative on
+// Impeller (this entry), analytic on Skia (liquid_glass_skia.frag) — or 5-tap on
+// both when LIQUID_GLASS_FORCE_5TAP is set. See liquid_glass_grad_select.glsl.
+#include "liquid_glass_grad_select.glsl"
 #include "liquid_glass_common.glsl"
 #include "liquid_glass_border.glsl"
 #define PI 3.14159265

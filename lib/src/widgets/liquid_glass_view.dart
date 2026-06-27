@@ -266,7 +266,7 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
     // page after the first), build the shaders synchronously so
     // `shadersReady` is true on the very first frame. Otherwise fall
     // back to the async load (first launch only).
-    if (LiquidGlassShaders.isLoaded) {
+    if (LiquidGlassShaders.isLoadedFor(_useImpeller)) {
       _buildShaders();
     } else {
       _loadShaders().then((_) {
@@ -332,7 +332,7 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
 
   Future<void> _loadShaders() async {
     try {
-      await LiquidGlassShaders.ensureLoaded();
+      await LiquidGlassShaders.ensureLoaded(_useImpeller);
     } catch (_) {
       // Shaders unavailable (broken build / unsupported test env):
       // `_shaders` stays empty, so lenses simply don't render instead
@@ -355,30 +355,31 @@ class _LiquidGlassViewState extends State<LiquidGlassView>
       // appearing transparent).
       final count = widget.children.length;
       _shaders = {
-        'liquid_glass_list':
-            _createShaderList(LiquidGlassShaders.createMainShader, count),
-        'liquid_glass_border_list':
-            _createShaderList(LiquidGlassShaders.createBorderShader, count),
+        'liquid_glass_list': _createShaderList(
+            () => LiquidGlassShaders.createMainShader(_useImpeller), count),
+        'liquid_glass_border_list': _createShaderList(
+            () => LiquidGlassShaders.createBorderShader(_useImpeller), count),
       };
     } else {
       // Skia native draws each CustomPaint immediately, so a single
       // shared shader instance is safe and cheaper.
       _shaders = {
-        'liquid_glass': LiquidGlassShaders.createMainShader(),
-        'liquid_glass_border': LiquidGlassShaders.createBorderShader(),
+        'liquid_glass': LiquidGlassShaders.createMainShader(_useImpeller),
+        'liquid_glass_border':
+            LiquidGlassShaders.createBorderShader(_useImpeller),
       };
     }
   }
 
   Future<void> _recreateShaders(int newCount) async {
     if (!_usePerLensShaders) return;
-    if (!LiquidGlassShaders.isLoaded) return;
+    if (!LiquidGlassShaders.isLoadedFor(_useImpeller)) return;
 
     setState(() {
-      _shaders['liquid_glass_list'] =
-          _createShaderList(LiquidGlassShaders.createMainShader, newCount);
-      _shaders['liquid_glass_border_list'] =
-          _createShaderList(LiquidGlassShaders.createBorderShader, newCount);
+      _shaders['liquid_glass_list'] = _createShaderList(
+          () => LiquidGlassShaders.createMainShader(_useImpeller), newCount);
+      _shaders['liquid_glass_border_list'] = _createShaderList(
+          () => LiquidGlassShaders.createBorderShader(_useImpeller), newCount);
     });
   }
 

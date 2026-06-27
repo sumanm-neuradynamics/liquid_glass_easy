@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'control_center_page.dart';
 import 'corner_style_page.dart';
 import 'lens_image_page.dart';
+import 'liquid_menu_page.dart';
 import 'nav_jelly_tuner.dart';
 import 'scaffold_demo.dart';
 import 'slider_jelly_tuner.dart';
@@ -72,6 +73,13 @@ class HomePage extends StatelessWidget {
       icon: Icons.blur_on_rounded,
       gradient: const [Color(0xFF34D399), Color(0xFF0F766E)],
       builder: (_) => const LensImagePage(),
+    ),
+    _Destination(
+      title: 'Liquid Action Menu',
+      subtitle: 'A glass FAB whose actions flow out of it, still connected',
+      icon: Icons.bubble_chart_rounded,
+      gradient: const [Color(0xFF5BC0FF), Color(0xFF7C5CFF)],
+      builder: (_) => const LiquidMenuPage(),
     ),
     _Destination(
       title: 'Control Center',

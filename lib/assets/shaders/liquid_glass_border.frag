@@ -6,6 +6,9 @@
 // -----------------------------------------------------------------------------
 
 #include <flutter/runtime_effect.glsl>
+// Same backend-split gradient method as liquid_glass.frag: derivative on
+// Impeller (this entry), analytic on Skia (liquid_glass_border_skia.frag).
+#include "liquid_glass_grad_select.glsl"
 #include "liquid_glass_border.glsl"
 #include "liquid_glass_common.glsl"
 #define PI 3.14159265

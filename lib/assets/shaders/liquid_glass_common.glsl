@@ -8,14 +8,7 @@
 #ifndef LIQUID_GLASS_HELPER_GLSL
 #define LIQUID_GLASS_HELPER_GLSL
 
-// EXPERIMENT (mediump perf test): single switch for the default float
-// precision across ALL glass shaders. This file is #included FIRST by every
-// shader, so the macro is defined before any other precision statement.
-// Flip GLASS_FLOAT_PRECISION back to `highp` to fully revert.
-//
-// NOTE: mediump (fp16) quantizes the large PIXEL-space coordinates the SDF/
-// refraction math runs on (≈1px steps above 1024), so expect blockier edges /
-// wobbling refraction. This toggle exists to MEASURE the perf trade on-device.
+
 #ifndef GLASS_FLOAT_PRECISION
 #define GLASS_FLOAT_PRECISION highp
 #endif
@@ -68,9 +61,9 @@ struct ShapeData {
    5TAP <-> ANALYTIC (DERIVATIVE won't load there). Default ANALYTIC keeps the
    single-lens shaders valid on every backend out of the box.
 
-   NB: the metaball shader's MERGED smooth-union field has no analytic gradient,
-   so it always uses the derivative 1-tap (shapeFrom1Tap) via SHAPE_GRAD_1TAP +
-   GLASS_USE_DERIVATIVE_GRAD below — it is an Impeller-only feature.
+   NB: the metaball shader's MERGED smooth-union field uses the derivative 1-tap
+   (shapeFrom1Tap) on Impeller; on Skia it propagates an ANALYTIC gradient
+   (the h-weighted blend of the per-lens gradients) — see metaball_glass.frag.
    =========================== */
 #define GLASS_GRAD_DERIVATIVE 0
 #define GLASS_GRAD_ANALYTIC   1

@@ -19,22 +19,31 @@
 // -----------------------------------------------------------------------------
 
 #include <flutter/runtime_effect.glsl>
-// The merged metaball field is a smooth-union with no analytic gradient, so its
-// gradient comes from either hardware derivatives (1 SDF tap) or a 5-tap central
-// difference. The backend is chosen OUTSIDE the shader (in Dart) by loading the
-// matching entry, because dFdx cannot even COMPILE in SkSL — a runtime uniform
-// can't help, the whole program must be free of it on Skia:
+// The merged metaball field's gradient comes from hardware derivatives (1 SDF
+// tap) on Impeller, or an analytic propagation (the h-weighted blend of the
+// per-lens gradients — no dFdx, no extra taps) on Skia. The backend is chosen
+// OUTSIDE the shader (in Dart) by loading the matching entry, because dFdx
+// cannot even COMPILE in SkSL — a runtime uniform can't help, the whole
+// program must be free of it on Skia:
 //
 //   * metaball_glass.frag      (this file) → Impeller. dFdx is valid, so opt
 //     into the derivative shapeFrom1Tap (1-tap) BEFORE the shared header.
 //   * metaball_glass_skia.frag → Skia/web. It #includes THIS file with
 //     METABALL_SKIA pre-defined, which leaves GLASS_USE_DERIVATIVE_GRAD undefined
-//     (dFdx never compiled → loads on Skia) and switches the field to the 5-tap.
+//     (dFdx never compiled → loads on Skia) and selects the ANALYTIC gradient:
+//     the smooth-union's gradient is the h-weighted blend of the per-lens
+//     rounded-rect gradients (exact, single pass, no dFdx and no 5-tap).
 #ifndef METABALL_SKIA
 #define GLASS_USE_DERIVATIVE_GRAD
 #define SHAPE_GRAD_1TAP 1
 #else
 #define SHAPE_GRAD_1TAP 0
+#define METABALL_GRAD_ANALYTIC 1
+#endif
+// Default off (Impeller path uses the derivative 1-tap); the Skia entry above
+// turns it on. When 1, the merged field carries its own analytic gradient.
+#ifndef METABALL_GRAD_ANALYTIC
+#define METABALL_GRAD_ANALYTIC 0
 #endif
 #include "liquid_glass_common.glsl"
 // Opt the shared border into the half-Lambert rim wrap for the MERGED shape.
@@ -239,6 +248,21 @@ float lensDistance(vec2 p, vec4 lens, vec4 meta) {
     }
 
     return roundedRectangleShape(p, lens.xy, halfSize, r);
+}
+
+// Analytic gradient DIRECTION (unit) of one lens, from rounded-rect geometry —
+// the same construction as shapeFrom1TapAnalytic. Squircle/continuous reuse this
+// rounded-rect direction (their SDF VALUE stays exact), matching the single-lens
+// analytic path. Feeds the merged-field analytic gradient (no dFdx, Skia-safe).
+vec2 lensGradDir(vec2 p, vec4 lens, vec4 meta) {
+    vec2 halfSize = max(lens.zw, vec2(EPS));
+    float r = min(meta.x, min(halfSize.x, halfSize.y));
+    vec2 rel = p - lens.xy;
+    vec2 sg  = sign(rel);
+    vec2 q   = abs(rel) - halfSize + r;
+    if (q.x > 0.0 && q.y > 0.0) return sg * normalize(max(q, vec2(EPS)));
+    if (q.x > q.y) return vec2(sg.x, 0.0);
+    return vec2(0.0, sg.y);
 }
 
 // Per-lens SDF with the PER-CORNER continuous→rounded-rect morph. `sides` =
@@ -460,11 +484,13 @@ struct MergedField {
     float smoothSdf;   // == field(p)
     float hardSdf;     // == fieldHard(p)
     vec2  anchor;      // == anchorFor(p)
+    vec2  grad;        // analytic merged gradient (METABALL_GRAD_ANALYTIC only)
 };
 
 void accumulateMerged(vec2 p, vec4 lens, vec4 meta, vec4 sides,
                       inout float smoothSdf, inout float hardSdf,
-                      inout vec2 anchorAcc, inout float anchorW) {
+                      inout vec2 anchorAcc, inout float anchorW,
+                      inout vec2 gradAcc) {
     if (meta.y < 0.5) return;
 
     // The one raw SDF for this lens — shared by all three accumulators.
@@ -494,31 +520,45 @@ void accumulateMerged(vec2 p, vec4 lens, vec4 meta, vec4 sides,
         }
     }
 
-    // Smooth union (== field's smoothUnion chain).
-    smoothSdf = smoothUnion(smoothSdf, dMorph, u_smoothness);
+    // Smooth union, inlined so the blend weight h is shared with the gradient.
+    // h and the value are bit-identical to smoothUnion(smoothSdf, dMorph, k).
+    float kk = max(u_smoothness, EPS);
+    float h  = clamp(0.5 + 0.5 * (dMorph - smoothSdf) / kk, 0.0, 1.0);
+    smoothSdf = mix(dMorph, smoothSdf, h) - kk * h * (1.0 - h);
+
+#if METABALL_GRAD_ANALYTIC
+    // Analytic merged gradient: the polynomial smin's gradient is exactly the
+    // h-weighted blend of the two input gradients (the -k·h·(1-h) correction
+    // term's derivative cancels). gradAcc carries the running accumulator's
+    // gradient; lensGradDir is this lens's. The first lens lands h≈0 → gradAcc
+    // takes its direction outright.
+    gradAcc = mix(lensGradDir(p, lens, meta), gradAcc, h);
+#endif
 }
 
 MergedField evaluateMerged(vec2 p) {
     MergedField m;
     m.smoothSdf = 1e9;
     m.hardSdf   = 1e9;
+    m.grad      = vec2(0.0);
     vec2 anchorAcc = vec2(0.0);
     float anchorW = 0.0;
-    accumulateMerged(p, u_lens0, u_lensMeta0, unpackSides(u_lensMeta0.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens1, u_lensMeta1, unpackSides(u_lensMeta1.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens2, u_lensMeta2, unpackSides(u_lensMeta2.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens3, u_lensMeta3, unpackSides(u_lensMeta3.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens4, u_lensMeta4, unpackSides(u_lensMeta4.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
-    accumulateMerged(p, u_lens5, u_lensMeta5, unpackSides(u_lensMeta5.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW);
+    accumulateMerged(p, u_lens0, u_lensMeta0, unpackSides(u_lensMeta0.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW, m.grad);
+    accumulateMerged(p, u_lens1, u_lensMeta1, unpackSides(u_lensMeta1.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW, m.grad);
+    accumulateMerged(p, u_lens2, u_lensMeta2, unpackSides(u_lensMeta2.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW, m.grad);
+    accumulateMerged(p, u_lens3, u_lensMeta3, unpackSides(u_lensMeta3.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW, m.grad);
+    accumulateMerged(p, u_lens4, u_lensMeta4, unpackSides(u_lensMeta4.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW, m.grad);
+    accumulateMerged(p, u_lens5, u_lensMeta5, unpackSides(u_lensMeta5.w), m.smoothSdf, m.hardSdf, anchorAcc, anchorW, m.grad);
     m.anchor = (anchorW > EPS) ? anchorAcc / anchorW : p;
     return m;
 }
 
-// The fused path is exact only when fieldShape == field (no experiment
-// macro) AND the gradient is the 1-tap derivative (the 5-tap needs field
-// sampled at 4 neighbours, which the fused single-point pass doesn't give).
+// The fused path is exact only when fieldShape == field (no experiment macro)
+// AND the gradient comes from a SINGLE per-fragment pass: the 1-tap derivative
+// (Impeller) or the analytic merged gradient (Skia). The 5-tap needs field
+// sampled at 4 neighbours, which the fused single-point pass doesn't give.
 #define METABALL_FUSED_PATH \
-    (SHAPE_GRAD_1TAP && !METABALL_EIKONAL_CONTINUOUS && !METABALL_FLATTEN_CONTINUOUS_BLEND)
+    ((SHAPE_GRAD_1TAP || METABALL_GRAD_ANALYTIC) && !METABALL_EIKONAL_CONTINUOUS && !METABALL_FLATTEN_CONTINUOUS_BLEND)
 
 // =====================================================
 // Background sampling (CA + optional in-shader blur), saturation, tint —
@@ -544,18 +584,18 @@ vec3 sampleChroma(vec2 uv, float shift) {
     return vec3(r, g, b);
 }
 
-// Two-ring blur of the raw backdrop (NO chroma split), px-space kernel.
-vec3 blurField(vec2 uv) {
+// Two-ring blur where EACH tap is a chroma-split sample, so CA happens BEFORE
+// the blur — the colour fringe is diffused by the frost, not laid over it.
+vec3 blurFieldChroma(vec2 uv, float shift) {
     vec2 pxToUv = 1.0 / max(u_imageSize, vec2(EPS));
-    vec3 color = texture(u_texture_input, uv).rgb;
+    vec3 color = sampleChroma(uv, shift);
     float count = 1.0;
     for (int ring = 1; ring <= 2; ring++) {
         float radius = u_blur * float(ring) * 0.5;
         for (int tap = 0; tap < 6; tap++) {
             float angle = 6.2831853 * float(tap) / 6.0 + float(ring) * 0.5;
             vec2 duv = vec2(cos(angle), sin(angle)) * radius * pxToUv;
-            color += texture(u_texture_input,
-                             clamp(uv + duv, vec2(0.001), vec2(0.999))).rgb;
+            color += sampleChroma(clamp(uv + duv, vec2(0.001), vec2(0.999)), shift);
             count += 1.0;
         }
     }
@@ -566,15 +606,9 @@ vec3 sampleBackground(vec2 refractedPx, float caShift) {
     vec2 uv = refractedToUv(refractedPx);
     // No in-shader blur (e.g. Impeller engine-blur path): CA on the sample.
     if (u_blur < 0.5) return sampleChroma(uv, caShift);
-    // Skia in-shader blur: blur FIRST, then split RGB on the blurred field so
-    // CA lands AFTER the blur (matches Impeller's engine-blur-then-CA order).
-    vec3 base = blurField(uv);
-    if (caShift < 0.001) return base;
-    float luma = dot(base, vec3(0.2126, 0.7152, 0.0722));
-    vec2 offset = vec2(caShift * luma);
-    float r = blurField(clamp(uv + offset, vec2(0.001), vec2(0.999))).r;
-    float b = blurField(clamp(uv - offset, vec2(0.001), vec2(0.999))).b;
-    return vec3(r, base.g, b);
+    // Skia in-shader blur: CA FIRST (each tap is a chroma sample), then the
+    // kernel averages — so the colour fringe is blurred along with the field.
+    return blurFieldChroma(uv, caShift);
 }
 
 vec3 applySaturation(vec3 color, float saturation) {
@@ -615,7 +649,19 @@ void main() {
     // the anchor together (see evaluateMerged). Bit-identical to the
     // separate-pass branch below for this config.
     MergedField mf      = evaluateMerged(fragPx);
+#if METABALL_GRAD_ANALYTIC
+    // Skia: build ShapeData from the merged ANALYTIC gradient (no dFdx). The
+    // gradient is a blend of unit per-lens gradients, so |grad| <= 1 — dividing
+    // by it inflates orthoDist at the neck exactly like a true distance field.
+    ShapeData shapeData;
+    shapeData.sdf       = mf.smoothSdf;
+    shapeData.grad      = mf.grad;
+    float gLen          = max(length(mf.grad), EPS);
+    shapeData.normal    = mf.grad / gLen;
+    shapeData.orthoDist = mf.smoothSdf / gLen;
+#else
     ShapeData shapeData = shapeFrom1Tap(mf.smoothSdf);
+#endif
     float shapeDistPx   = shapeData.orthoDist;
     float shapeMask     = computeShapeMask(shapeDistPx);
 

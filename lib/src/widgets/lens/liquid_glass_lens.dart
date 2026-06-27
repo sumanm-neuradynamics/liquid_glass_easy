@@ -172,9 +172,15 @@ class _LiquidGlassLensState extends State<LiquidGlassLens> {
       _warnFrostedOnce('no Impeller and no ancestor LiquidGlassView');
     }
 
-    if (mode == null || !LiquidGlassShaders.isLoaded) {
-      // Frosted fallback — also shown for the brief async shader load
-      // on the very first lens of the app's lifetime.
+    if (mode == null || !LiquidGlassShaders.isLoadedFor(impeller)) {
+      // Frosted fallback — also shown for the brief async shader load on the
+      // very first lens of the app's lifetime. If this lens's backend differs
+      // from the one preloaded in initState, kick its load and rebuild.
+      if (mode != null) {
+        LiquidGlassShaders.ensureLoaded(impeller).then((_) {
+          if (mounted) setState(() {});
+        }).catchError((Object _) {});
+      }
       return _FrostedGlassFallback(
         shape: _shape,
         appearance: _appearance,
@@ -183,9 +189,9 @@ class _LiquidGlassLensState extends State<LiquidGlassLens> {
       );
     }
 
-    _mainShader ??= LiquidGlassShaders.createMainShader();
+    _mainShader ??= LiquidGlassShaders.createMainShader(impeller);
     if (mode == LiquidGlassLensRenderMode.skiaCapture) {
-      _borderShader ??= LiquidGlassShaders.createBorderShader();
+      _borderShader ??= LiquidGlassShaders.createBorderShader(impeller);
     }
 
     final Size screenSize = MediaQuery.sizeOf(context);

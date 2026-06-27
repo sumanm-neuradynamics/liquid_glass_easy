@@ -41,11 +41,11 @@ class LensImagePage extends StatefulWidget {
 }
 
 class _LensImagePageState extends State<LensImagePage> {
-  // A full-body person on a city street — busy detail makes the refraction
-  // easy to read as the glass passes over it.
+  // Busy detail makes the refraction easy to read as the glass passes over it.
+  // Served from the project's asset repo (same source as the other demos).
   static const String _imageUrl =
-      'https://images.unsplash.com/photo-1485968579580-b6d095142e6e'
-      '?auto=format&fit=crop&w=900&h=1600&q=80';
+      'https://raw.githubusercontent.com/AhmeedGamil/liquid_glass_easy_assets'
+      '/main/blending.jpg';
 
   // Top-left of each draggable shape — placed close so they start fused.
   Offset _card = const Offset(40, 170);
@@ -59,11 +59,15 @@ class _LensImagePageState extends State<LensImagePage> {
       cornerRadius: 36,
       borderWidth: 1.5,
     ),
-    appearance: LiquidGlassAppearance(color: Color(0x14FFFFFF), saturation: 1.05),
+    appearance: LiquidGlassAppearance(
+      color: Color(0x14FFFFFF),
+      saturation: 1.05,
+      blur: LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
+    ),
     refraction: LiquidGlassRefraction(
       refractionType: OpticalRefraction(
         refraction: 1.5,
-        refractionWidth: 26,
+        refractionWidth: 24,
         depth: 0.7,
       ),
     ),
@@ -102,7 +106,7 @@ class _LensImagePageState extends State<LensImagePage> {
                     _draggable(
                       pos: _circle,
                       size: const Size(120, 120),
-                      shape: const LiquidGlassShape.continuousRoundedRectangle(
+                      shape: const LiquidGlassShape.roundedRectangle(
                         cornerRadius: 60,
                       ),
                       onMove: (d) => setState(() => _circle += d),

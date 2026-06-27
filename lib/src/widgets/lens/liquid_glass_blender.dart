@@ -21,6 +21,10 @@ double _sideDir(double x) {
 
 /// Blends two to six descendant `LiquidGlassLens` widgets into one surface.
 ///
+/// The upper limit is **six shapes for now** ([maxLensCount]) — the metaball
+/// field compares every member per fragment, so the cap keeps the shader cost
+/// bounded; it may be raised in a future release.
+///
 /// The descendant lenses keep their normal layout and child content, but their
 /// individual glass passes are replaced by one smooth metaball union. The
 /// group's [style] controls the shared material; each lens's shape and layout
@@ -58,6 +62,10 @@ double _sideDir(double x) {
 /// ```
 class LiquidGlassBlender extends StatefulWidget {
   static const int minLensCount = 2;
+
+  /// Maximum number of `LiquidGlassLens` members that can be blended into one
+  /// surface — **six for now**; the cap keeps the per-fragment metaball cost
+  /// bounded and may be raised later.
   static const int maxLensCount = 6;
 
   const LiquidGlassBlender({
@@ -67,6 +75,7 @@ class LiquidGlassBlender extends StatefulWidget {
     this.smoothness = 48,
     this.useImpellerBackdrop,
     this.useEngineBlur = true,
+    this.debugClipBounds = false,
   }) : assert(smoothness > 0);
 
   /// Any widget tree containing two to six `LiquidGlassLens` descendants.
@@ -91,6 +100,17 @@ class LiquidGlassBlender extends StatefulWidget {
   /// blur (e.g. to A/B, or if a device rejects a composed shader filter). No
   /// effect on the Skia capture path, which always blurs in-shader.
   final bool useEngineBlur;
+
+  /// Debug: draw a magenta outline around the backdrop **clip region** (the
+  /// blob union inflated by the rim/blur/refraction/bridge margin). Works on
+  /// both backends — the Impeller engine-blur clip and the Skia draw rect.
+  ///
+  /// **Diagnostic only — it costs performance.** It adds an extra stroked
+  /// `drawRect` every frame, and on Impeller that draw lands on the parent
+  /// canvas *after* the backdrop pass, which can break paint batching. Keep it
+  /// `false` in production; turn it on only while tuning to see where the
+  /// costly pass runs.
+  final bool debugClipBounds;
 
   @override
   State<LiquidGlassBlender> createState() => _LiquidGlassBlenderState();
@@ -152,6 +172,7 @@ class _LiquidGlassBlenderState extends State<LiquidGlassBlender> {
               smoothness: widget.smoothness,
               useImpellerBackdrop: useImpeller,
               useEngineBlur: widget.useEngineBlur,
+              debugClipBounds: widget.debugClipBounds,
               lensScope: lensScope,
               screenSize: MediaQuery.sizeOf(context),
               devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
@@ -375,6 +396,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
     required this.smoothness,
     required this.useImpellerBackdrop,
     required this.useEngineBlur,
+    required this.debugClipBounds,
     required this.lensScope,
     required this.screenSize,
     required this.devicePixelRatio,
@@ -386,6 +408,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
   final double smoothness;
   final bool useImpellerBackdrop;
   final bool useEngineBlur;
+  final bool debugClipBounds;
   final LiquidGlassLensScope? lensScope;
   final Size screenSize;
   final double devicePixelRatio;
@@ -399,6 +422,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
       smoothness: smoothness,
       useImpellerBackdrop: useImpellerBackdrop,
       useEngineBlur: useEngineBlur,
+      debugClipBounds: debugClipBounds,
       lensScope: lensScope,
       screenSize: screenSize,
       devicePixelRatio: devicePixelRatio,
@@ -417,6 +441,7 @@ class _LiquidGlassBlenderSurface extends LeafRenderObjectWidget {
       ..smoothness = smoothness
       ..useImpellerBackdrop = useImpellerBackdrop
       ..useEngineBlur = useEngineBlur
+      ..debugClipBounds = debugClipBounds
       ..lensScope = lensScope
       ..screenSize = screenSize
       ..devicePixelRatio = devicePixelRatio;
@@ -431,6 +456,7 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     required double smoothness,
     required bool useImpellerBackdrop,
     required bool useEngineBlur,
+    required bool debugClipBounds,
     required LiquidGlassLensScope? lensScope,
     required Size screenSize,
     required double devicePixelRatio,
@@ -440,6 +466,7 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
         _smoothness = smoothness,
         _useImpellerBackdrop = useImpellerBackdrop,
         _useEngineBlur = useEngineBlur,
+        _debugClipBounds = debugClipBounds,
         _lensScope = lensScope,
         _screenSize = screenSize,
         _devicePixelRatio = devicePixelRatio;
@@ -465,6 +492,7 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   double _smoothness;
   bool _useImpellerBackdrop;
   bool _useEngineBlur;
+  bool _debugClipBounds;
   LiquidGlassLensScope? _lensScope;
   Size _screenSize;
   double _devicePixelRatio;
@@ -511,6 +539,13 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
   set useEngineBlur(bool value) {
     if (_useEngineBlur == value) return;
     _useEngineBlur = value;
+    markNeedsPaint();
+  }
+
+  bool get debugClipBounds => _debugClipBounds;
+  set debugClipBounds(bool value) {
+    if (_debugClipBounds == value) return;
+    _debugClipBounds = value;
     markNeedsPaint();
   }
 
@@ -646,45 +681,49 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     final double sigma = _blurSigma;
     final bool engineBlur = _useEngineBlur && sigma > 0;
 
-    // The compose path's blurred snapshot is CLIPPED to this surface
-    // (Offset.zero & size — see the pushClipRect below) and the outer shader
-    // reads it in that SAME surface-local space, so the sampling window simply
-    // IS the surface: offset 0, size = surface. No blur-coverage outset.
+    // ENGINE-BLUR COMPOSE PATH — clip-local frame.
     //
-    // (Earlier this added an `m = ~3·sigma` outset on the assumption the
-    // snapshot was inflated and lived in screen space. Once the silhouette and
-    // sampling were moved into surface-local space that outset only shrank the
-    // window to its centre, magnifying the content by (size+2m)/size — the
-    // "blur zooms in" artefact. The clip pins the snapshot to the surface, so
-    // the correct window has no margin.)
-    final Size surfaceSize = engineBlur
-        ? MatrixUtils.transformRect(getTransformTo(null), Offset.zero & size)
-            .size
-        : Size.zero;
+    // Clipping the compose pass to the tight glass rect (`glassRect`) bounds the
+    // costly backdrop+blur to where the glass is — but clipping the snapshot
+    // ALSO moves the outer shader's FlutterFragCoord origin to glassRect.topLeft
+    // (the snapshot is bounded by the clip). So we pack EVERYTHING in that
+    // clip-local frame, or the pieces desync:
+    //   • lens centres shifted by −glassRect.topLeft (else the silhouette slides
+    //     down by topLeft — the "lenses shifted to bottom" artefact),
+    //   • resolution = glassRect.size,
+    //   • sampling window = the rect from its OWN origin: offset 0, size = the
+    //     rect — matching the clip-sized snapshot 1:1 (else the refracted
+    //     content slides/scales inside the lens).
+    // Earlier breakage was a half-and-half frame (clip-local FragCoord but
+    // surface-local lenses / imageSize); keep all four in lockstep.
+    final Rect glassRect = engineBlur
+        ? _glassClipRect(members, this, Offset.zero & size)
+        : Rect.zero;
 
-    // Coordinate space differs by path — and the SILHOUETTE must use the same
-    // space its FlutterFragCoord() resolves in, or the glass shape detaches
-    // from the child:
-    //   • Plain ImageFilter.shader (no blur): FlutterFragCoord() is FULL-SCREEN
-    //     physical px, so pack global lens rects against _screenSize.
-    //   • Engine-blur COMPOSE path: the inner blur renders into a snapshot
-    //     bounded by THIS surface's clip (Offset.zero & size), so the outer
-    //     shader's FlutterFragCoord() is SURFACE-LOCAL (the same reason the
-    //     sampling window above only needs −m, not the surface's global
-    //     top-left). Packing global lens centers here draws the silhouette
-    //     shifted by the surface's global top-left — the status-bar / app-bar
-    //     inset — while the child, laid out normally, stays put (the constant,
-    //     blur-independent "lens slid down, text centred" artefact). So pack
-    //     lenses and resolution in that same surface-local space.
+    // Plain (no-blur) path: FlutterFragCoord is FULL-SCREEN physical px → pack
+    // GLOBAL lens rects against _screenSize. Engine-blur path: clip-local.
+    final List<MetaballLensUniform> packedLenses = engineBlur
+        ? _lensesIn(members, this)
+            .map((l) => MetaballLensUniform(
+                  center: l.center - glassRect.topLeft,
+                  halfSize: l.halfSize,
+                  cornerRadius: l.cornerRadius,
+                  cornerStyle: l.cornerStyle,
+                  blend: l.blend,
+                  sides: l.sides,
+                ))
+            .toList(growable: false)
+        : _lensesIn(members, null);
+
     _packShared(
-      resolution: engineBlur ? surfaceSize : _screenSize,
-      lenses: _lensesIn(members, engineBlur ? this : null),
+      resolution: engineBlur ? glassRect.size : _screenSize,
+      lenses: packedLenses,
       scale: _devicePixelRatio,
       // Engine blur runs before the shader → don't blur again in-shader.
       blur: engineBlur ? 0.0 : sigma,
-      // Surface-clipped snapshot → sample it 1:1: no offset, window = surface.
+      // Clip-local snapshot → sample from its own origin: offset 0, window = rect.
       imageOffset: Offset.zero,
-      imageSize: engineBlur ? surfaceSize : null,
+      imageSize: engineBlur ? glassRect.size : null,
     );
 
     final ui.ImageFilter shaderFilter = ui.ImageFilter.shader(_shader);
@@ -711,18 +750,13 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     // limits where pixels land — the shader's backdrop sampler is the FULL
     // screen regardless — so we keep it as a cost saver.
     //
-    // Engine-blur COMPOSE path: the inner blur first renders a snapshot bounded
-    // by THIS clip, and the outer shader samples that snapshot while still
-    // computing uv = refractedPx / u_resolution over the whole screen
-    // (u_imageOffset=0, u_imageSize=resolution). A tight clip would make the
-    // shader read a screen-sized UV range out of a union-sized texture —
-    // scaling the refracted content by clip.size/screen and shifting it by
-    // clip.topLeft (the "content shifts/scales inside the lens" artefact). So we
-    // clip to the FULL surface here: the snapshot spans the screen and the
-    // shader's full-screen sampling assumption holds. (Costs a full-surface
-    // backdrop pass, but only when a blurred style is used.)
+    // Engine-blur COMPOSE path: clip to the tight `glassRect`. The shader was
+    // packed in this rect's clip-local frame above (lenses shifted, resolution =
+    // rect, sampling window = rect from origin), so the snapshot, FragCoord and
+    // sampling all share one frame — the costly backdrop+blur is bounded to the
+    // glass region instead of the whole surface.
     final Rect clipRect = engineBlur
-        ? (Offset.zero & size)
+        ? glassRect
         : _glassClipRect(members, this, Offset.zero & size);
     _clipLayer.layer = context.pushClipRect(
       needsCompositing,
@@ -736,6 +770,24 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
         );
       },
       oldLayer: _clipLayer.layer,
+    );
+
+    // DEBUG: outline the engine-blur clip region so it can be verified on
+    // screen — it should hug the merged glass as the lenses move. Drawn on the
+    // parent canvas (after the clip) so the stroke isn't clipped.
+    if (_debugClipBounds && engineBlur) {
+      _paintDebugClipOutline(context.canvas, clipRect.shift(offset));
+    }
+  }
+
+  /// Magenta outline of the backdrop clip region (debug only, both backends).
+  void _paintDebugClipOutline(ui.Canvas canvas, Rect rect) {
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..color = const Color(0xFFFF00FF),
     );
   }
 
@@ -769,9 +821,9 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
       resolution: viewBox.size,
       lenses: _lensesIn(members, viewBox),
       scale: 1.0,
-      // In-shader blur disabled on the Skia blending path for now (it is the
-      // heaviest per-fragment cost here); the merged glass refracts unblurred.
-      blur: 0,
+      // In-shader blur on the Skia blending path: the chroma-tap kernel in
+      // sampleBackground applies CA per tap, so CA lands BEFORE the blur.
+      blur: _blurSigma,
     );
     _shader.setImageSampler(0, image);
 
@@ -785,8 +837,13 @@ class _RenderLiquidGlassBlenderSurface extends RenderBox {
     canvas
       ..save()
       ..translate(offset.dx - surfaceInView.dx, offset.dy - surfaceInView.dy)
-      ..drawRect(drawRect, Paint()..shader = _shader)
-      ..restore();
+      ..drawRect(drawRect, Paint()..shader = _shader);
+    // DEBUG: outline the Skia draw region (same coord frame), matching the
+    // Impeller engine-blur clip outline.
+    if (_debugClipBounds) {
+      _paintDebugClipOutline(canvas, drawRect);
+    }
+    canvas.restore();
   }
 
   /// The enabled members as metaball lenses, in [target]'s coordinate space
