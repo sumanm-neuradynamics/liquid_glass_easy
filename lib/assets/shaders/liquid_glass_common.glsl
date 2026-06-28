@@ -91,8 +91,12 @@ struct ShapeData {
 #if (GLASS_GRAD_METHOD == GLASS_GRAD_DERIVATIVE) || defined(GLASS_USE_DERIVATIVE_GRAD)
 ShapeData shapeFrom1Tap(float fC){
     vec2 grad = vec2(dFdx(fC), dFdy(fC));
+    // GLES derivative Y-flip — only on engines BEFORE the OpenGLES coordinate
+    // unification (post-3.44.0 sets IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED).
     #ifdef IMPELLER_TARGET_OPENGLES
+    #ifndef IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED
     grad.y = -grad.y;
+    #endif
     #endif
     float gL  = max(length(grad), EPS);
     ShapeData d;

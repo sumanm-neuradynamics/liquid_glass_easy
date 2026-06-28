@@ -567,8 +567,12 @@ MergedField evaluateMerged(vec2 p) {
 vec2 refractedToUv(vec2 refractedPx) {
     vec2 uv = clamp((refractedPx - u_imageOffset) / u_imageSize,
                     vec2(0.001), vec2(0.999));
+    // GLES sampler Y-flip — only on engines BEFORE the OpenGLES coordinate
+    // unification (post-3.44.0 sets IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED).
     #ifdef IMPELLER_TARGET_OPENGLES
+    #ifndef IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED
     uv.y = 1.0 - uv.y;
+    #endif
     #endif
     return uv;
 }

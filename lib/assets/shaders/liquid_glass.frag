@@ -161,8 +161,12 @@ vec4 finalSample(
     // (refractedPx - 0) / u_resolution, identical to the old behavior.
     vec2 sampleUV = clamp((refractedPx - u_imageOffset) / u_imageSize,
                           vec2(0.001), vec2(0.999));
+    // GLES sampler Y-flip — only on engines BEFORE the OpenGLES coordinate
+    // unification (post-3.44.0 sets IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED).
     #ifdef IMPELLER_TARGET_OPENGLES
+    #ifndef IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED
     sampleUV.y = 1.0 - sampleUV.y;
+    #endif
     #endif
     // Chromatic aberration is confined to the distortion band (caShift),
     // not applied across the whole lens body. The caller passes 0 outside
