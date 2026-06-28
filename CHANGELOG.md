@@ -1,3 +1,6 @@
+## 3.2.2
+- **Fix — vertically mirrored refraction on OpenGL ES (emulators):** Flutter's OpenGLES coordinate-system unification (engine after 3.44.0) removed the framebuffer Y-flip, which turned the shaders' manual sampler/derivative Y-flips into a *double* flip — a symmetrical Y-axis refraction artifact visible on Android emulators that fall back to OpenGL ES (real Vulkan/Metal devices were never affected). All four `IMPELLER_TARGET_OPENGLES` flips are now guarded by `#ifndef IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED`, so they apply only on older engines and are skipped once the engine sets the macro. Skia/web and Vulkan/Metal are unchanged.
+
 ## 3.2.1
 - **Fix — bottom nav bar tab selection on web:** clicking a tab on web could select the wrong tab (the neighbour), walk toward the target one click at a time, or not change selection at all — most noticeable with a trackpad. A quick click was being routed through the hold-to-drag path and committing to the glide's lagging position instead of the cell that was pressed. A click now commits to the pressed tab. The tap-and-hold drag gesture is unchanged.
 
