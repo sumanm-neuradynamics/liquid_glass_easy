@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../utils/liquid_glass_glyph.dart';
+
 /// A single app-icon tile drawn with a rounded-square gradient and
 /// centered glyph, optionally labelled. This widget is plain
 /// Material — it is meant to be placed *inside* a [LiquidGlass]
 /// child (e.g. a dock or app grid) so the glass refracts whatever is
 /// behind it.
 class LiquidGlassAppIcon extends StatelessWidget {
-  /// The icon glyph displayed at the center.
-  final IconData icon;
+  /// The icon glyph displayed at the center. Ignored when [iconAsset]
+  /// is set. Exactly one of [icon] / [iconAsset] must be provided.
+  final IconData? icon;
+
+  /// SVG asset path for the glyph, takes precedence over [icon].
+  final String? iconAsset;
+
+  /// Package [iconAsset] ships from, when it isn't the app's own assets.
+  final String? iconAssetPackage;
 
   /// Optional label rendered below the icon. When `null`, only the
   /// rounded square is drawn (useful inside a tight dock).
@@ -27,13 +36,16 @@ class LiquidGlassAppIcon extends StatelessWidget {
 
   const LiquidGlassAppIcon({
     super.key,
-    required this.icon,
+    this.icon,
+    this.iconAsset,
+    this.iconAssetPackage,
     this.label,
     this.gradient = const [Color(0xFF4FB3FF), Color(0xFF1E69DE)],
     this.foregroundColor = Colors.white,
     this.size = 56,
     this.onTap,
-  });
+  }) : assert(icon != null || iconAsset != null,
+            'Provide either icon or iconAsset');
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +69,13 @@ class LiquidGlassAppIcon extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(icon, color: foregroundColor, size: size * 0.55),
+      child: LiquidGlassGlyph(
+        icon: icon,
+        assetPath: iconAsset,
+        assetPackage: iconAssetPackage,
+        color: foregroundColor,
+        size: size * 0.55,
+      ),
     );
 
     final tapped = Material(

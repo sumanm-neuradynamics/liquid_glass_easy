@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/liquid_glass_glyph.dart';
 import '../liquid_glass_tab_bar.dart' show LiquidGlassTabBarItem;
 import 'liquid_glass_nav_bar_layout.dart';
 import 'liquid_glass_nav_bar_style.dart';
@@ -28,8 +29,12 @@ class LiquidGlassNavTabCell extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            selected ? (item.selectedIcon ?? item.icon) : item.icon,
+          LiquidGlassGlyph(
+            icon: selected ? (item.selectedIcon ?? item.icon) : item.icon,
+            assetPath: selected
+                ? (item.selectedIconAsset ?? item.iconAsset)
+                : item.iconAsset,
+            assetPackage: item.iconAssetPackage,
             size: style.iconSize,
             color: color,
           ),

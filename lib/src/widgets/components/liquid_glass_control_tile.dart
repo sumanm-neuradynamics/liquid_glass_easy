@@ -5,6 +5,7 @@ import '../liquid_glass_config.dart';
 import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
+import '../utils/liquid_glass_glyph.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// A compact one-touch control tile rendered as liquid glass.
@@ -20,7 +21,9 @@ import '../utils/liquid_glass_shape.dart';
 class LiquidGlassControlTile extends StatelessWidget {
   const LiquidGlassControlTile({
     super.key,
-    required this.icon,
+    this.icon,
+    this.iconAsset,
+    this.iconAssetPackage,
     required this.active,
     this.label,
     this.activeColor = const Color(0xFF34C759),
@@ -31,10 +34,18 @@ class LiquidGlassControlTile extends StatelessWidget {
     this.refraction = _defaultRefraction,
     this.style,
     this.visibility = true,
-  });
+  }) : assert(icon != null || iconAsset != null,
+            'Provide either icon or iconAsset');
 
-  /// The tile glyph.
-  final IconData icon;
+  /// The tile glyph. Ignored when [iconAsset] is set. Exactly one of
+  /// [icon] / [iconAsset] must be provided.
+  final IconData? icon;
+
+  /// SVG asset path for the glyph, takes precedence over [icon].
+  final String? iconAsset;
+
+  /// Package [iconAsset] ships from, when it isn't the app's own assets.
+  final String? iconAssetPackage;
 
   /// Whether the tile is in its "on" state.
   final bool active;
@@ -123,7 +134,13 @@ class LiquidGlassControlTile extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, color: Colors.white, size: size * 0.42),
+                  LiquidGlassGlyph(
+                    icon: icon,
+                    assetPath: iconAsset,
+                    assetPackage: iconAssetPackage,
+                    color: Colors.white,
+                    size: size * 0.42,
+                  ),
                   if (label != null) ...[
                     const SizedBox(height: 4),
                     Text(

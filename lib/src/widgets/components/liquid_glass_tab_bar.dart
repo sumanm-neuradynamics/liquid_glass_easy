@@ -5,25 +5,43 @@ import '../liquid_glass_config.dart';
 import '../liquid_glass_style.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
+import '../utils/liquid_glass_glyph.dart';
 import '../utils/liquid_glass_shape.dart';
 
 /// Description of a single tab in [LiquidGlassTabBar].
 class LiquidGlassTabBarItem {
-  /// Icon shown when the tab is unselected.
-  final IconData icon;
+  /// Icon shown when the tab is unselected. Ignored when [iconAsset] is
+  /// set. Exactly one of [icon] / [iconAsset] must be provided.
+  final IconData? icon;
 
-  /// Icon shown when the tab is selected (defaults to [icon]).
+  /// Icon shown when the tab is selected (defaults to [icon] /
+  /// [iconAsset]).
   final IconData? selectedIcon;
+
+  /// SVG asset path shown when unselected, takes precedence over [icon].
+  final String? iconAsset;
+
+  /// SVG asset path shown when selected (defaults to [iconAsset] /
+  /// [selectedIcon]).
+  final String? selectedIconAsset;
+
+  /// Package [iconAsset] / [selectedIconAsset] ship from, when they
+  /// aren't the app's own assets.
+  final String? iconAssetPackage;
 
   /// Optional label below the icon. When `null` the tab renders icon
   /// only, matching the modern liquid-glass minimal style.
   final String? label;
 
   const LiquidGlassTabBarItem({
-    required this.icon,
+    this.icon,
     this.selectedIcon,
+    this.iconAsset,
+    this.selectedIconAsset,
+    this.iconAssetPackage,
     this.label,
-  });
+  }) : assert(icon != null || iconAsset != null,
+            'Provide either icon or iconAsset');
 }
 
 /// A floating "liquid glass" tab bar.
@@ -368,8 +386,12 @@ class _TabButton extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                selected ? (item.selectedIcon ?? item.icon) : item.icon,
+              LiquidGlassGlyph(
+                icon: selected ? (item.selectedIcon ?? item.icon) : item.icon,
+                assetPath: selected
+                    ? (item.selectedIconAsset ?? item.iconAsset)
+                    : item.iconAsset,
+                assetPackage: item.iconAssetPackage,
                 size: iconSize,
                 color: color,
               ),
@@ -398,16 +420,26 @@ class _TabButton extends StatelessWidget {
 class LiquidGlassTabBarAction extends StatelessWidget {
   const LiquidGlassTabBarAction({
     super.key,
-    required this.icon,
+    this.icon,
+    this.iconAsset,
+    this.iconAssetPackage,
     this.onTap,
     this.foregroundColor = Colors.white,
     this.size = 56,
     this.style,
     this.visibility = true,
-  });
+  }) : assert(icon != null || iconAsset != null,
+            'Provide either icon or iconAsset');
 
-  /// The action glyph.
-  final IconData icon;
+  /// The action glyph. Ignored when [iconAsset] is set. Exactly one of
+  /// [icon] / [iconAsset] must be provided.
+  final IconData? icon;
+
+  /// SVG asset path for the glyph, takes precedence over [icon].
+  final String? iconAsset;
+
+  /// Package [iconAsset] ships from, when it isn't the app's own assets.
+  final String? iconAssetPackage;
 
   /// Tap callback.
   final VoidCallback? onTap;
@@ -484,7 +516,13 @@ class LiquidGlassTabBarAction extends StatelessWidget {
             customBorder: const CircleBorder(),
             onTap: onTap,
             child: Center(
-              child: Icon(icon, color: foregroundColor, size: size * 0.46),
+              child: LiquidGlassGlyph(
+                icon: icon,
+                assetPath: iconAsset,
+                assetPackage: iconAssetPackage,
+                color: foregroundColor,
+                size: size * 0.46,
+              ),
             ),
           ),
         ),

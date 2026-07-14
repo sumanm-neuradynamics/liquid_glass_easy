@@ -3,36 +3,41 @@ import 'package:flutter/material.dart';
 import '../lens/liquid_glass_lens.dart';
 import '../liquid_glass_config.dart';
 import '../liquid_glass_style.dart';
+import '../../theme/app_colors.dart';
 import '../utils/liquid_glass_blur.dart';
 import '../utils/liquid_glass_border_mode.dart';
 import '../utils/liquid_glass_glyph.dart';
 import '../utils/liquid_glass_shape.dart';
 
-/// A pill-shaped action button rendered as liquid glass.
+/// A pill-shaped action button rendered as warm-gold liquid glass — the
+/// Ayantra brand variant of the plain [LiquidGlassButton].
 ///
-/// This is a plain widget: drop it anywhere in your layout (a `Row`, a
-/// `Column`, a `Stack`) and it renders a single [LiquidGlassLens] around
-/// its label/icon. It needs no position and no `LiquidGlassView` on
-/// Impeller; on Skia / Web place it inside a `LiquidGlassView` so it has
-/// a background to refract.
+/// Same drop-in shape as [LiquidGlassButton]: place it anywhere in a
+/// layout; it needs no position and no `LiquidGlassView` on Impeller, and
+/// on Skia / Web it just needs a `LiquidGlassView` ancestor to refract.
 ///
-/// Styling uses one [LiquidGlassStyle] ([style] — shape + appearance +
-/// refraction), defaulted to a tuned iOS-style glass, so the simplest call
-/// is just `label` + `onPressed`. For a solid call-to-action (e.g. a blue
-/// "Continue"), pass a [style] with a colored tint — compose from
-/// [defaultStyle] to keep the rest of the tuned look:
+/// Its [defaultStyle] tints the glass with [AppColors.primary300] (the
+/// brand gold) instead of a neutral white frost — mirroring the existing
+/// `goldCta` / `primaryCta` pattern of tinting at ~72% alpha — with a
+/// warmer, more saturated optical rim so the pill reads as gold liquid
+/// glass rather than plain frosted glass.
+///
+/// To use the current [Theme]'s primary color instead of the static
+/// brand gold, override the appearance from context:
 ///
 /// ```dart
-/// LiquidGlassButton(
+/// AyantraButtonLiquid(
 ///   label: 'Continue',
-///   style: LiquidGlassButton.defaultStyle.copyWith(
-///     appearance: LiquidGlassAppearance(color: Colors.blue.withAlpha(160)),
+///   style: AyantraButtonLiquid.defaultStyle.copyWith(
+///     appearance: LiquidGlassAppearance(
+///       color: Theme.of(context).colorScheme.primary.withAlpha(184),
+///     ),
 ///   ),
 ///   onPressed: () {},
 /// )
 /// ```
-class LiquidGlassButton extends StatelessWidget {
-  const LiquidGlassButton({
+class AyantraButtonLiquid extends StatelessWidget {
+  const AyantraButtonLiquid({
     super.key,
     required this.label,
     this.icon,
@@ -44,7 +49,7 @@ class LiquidGlassButton extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 20),
     this.style,
     this.visibility = true,
-    this.foregroundColor = Colors.white,
+    this.foregroundColor = AppColors.secondary500,
     this.fontSize = 16,
     this.fontWeight = FontWeight.w600,
     this.iconSize = 20,
@@ -56,8 +61,8 @@ class LiquidGlassButton extends StatelessWidget {
   /// Optional leading icon. Ignored when [iconAsset] is set.
   final IconData? icon;
 
-  /// Optional leading icon as an SVG asset path (e.g.
-  /// `'assets/icons/star.svg'`), takes precedence over [icon].
+  /// Optional leading icon as an SVG asset path, takes precedence over
+  /// [icon].
   final String? iconAsset;
 
   /// Package [iconAsset] ships from, when it isn't the app's own assets.
@@ -78,16 +83,17 @@ class LiquidGlassButton extends StatelessWidget {
   /// The button's glass look as one [LiquidGlassStyle] (shape +
   /// appearance + refraction), taken as the complete look. When null the
   /// tuned [defaultStyle] is used. Its `shape` may be null, in which case
-  /// a full pill ([LiquidGlassShape] with radius `height / 2`) and a tuned
-  /// optical border are used. To tweak one facet while keeping the rest of
-  /// the tuned look, compose with `copyWith`, e.g.
-  /// `style: LiquidGlassButton.defaultStyle.copyWith(...)`.
+  /// a full pill ([LiquidGlassShape] with radius `height / 2`) and a
+  /// tuned gold optical border are used. To tweak one facet while keeping
+  /// the rest of the tuned look, compose with `copyWith`, e.g.
+  /// `style: AyantraButtonLiquid.defaultStyle.copyWith(...)`.
   final LiquidGlassStyle? style;
 
   /// Whether the button is shown; toggling animates the glass in/out.
   final bool visibility;
 
-  /// Color of the label text and icon.
+  /// Color of the label text and icon. Defaults to [AppColors.secondary500]
+  /// (dark chrome) for contrast against the opaque brand-gold fill.
   final Color foregroundColor;
 
   /// Font size of the label.
@@ -96,12 +102,13 @@ class LiquidGlassButton extends StatelessWidget {
   /// Font weight of the label.
   final FontWeight fontWeight;
 
-  /// Size of the leading [icon].
+  /// Size of the leading icon.
   final double iconSize;
 
   static const LiquidGlassAppearance _defaultAppearance =
       LiquidGlassAppearance(
-    color: Color(0x1CFFFFFF), // white, alpha 28
+    // Brand gold at ~72% alpha, mirroring the goldCta/primaryCta tint.
+    color: Color(0xB8EEAB2F), // AppColors.primary300, alpha ~184/255
     blur: LiquidGlassBlur(sigmaX: 3, sigmaY: 3),
   );
 
@@ -112,11 +119,12 @@ class LiquidGlassButton extends StatelessWidget {
     chromaticAberration: 0.002,
   );
 
-  /// The tuned default look — a faint white frost over a soft optical
-  /// refraction. Its `shape` is `null`: the button derives a height-tracking
-  /// full pill with an optical border when [style] supplies no shape.
-  /// Compose with `copyWith` to tweak one facet, e.g.
-  /// `style: LiquidGlassButton.defaultStyle.copyWith(...)`.
+  /// The tuned default look — an opaque-leaning brand-gold tint over a
+  /// soft optical refraction with a warmer, more saturated rim. Its
+  /// `shape` is `null`: the button derives a height-tracking full pill
+  /// with a gold optical border when [style] supplies no shape. Compose
+  /// with `copyWith` to tweak one facet, e.g.
+  /// `style: AyantraButtonLiquid.defaultStyle.copyWith(...)`.
   static const LiquidGlassStyle defaultStyle = LiquidGlassStyle(
     appearance: _defaultAppearance,
     refraction: _defaultRefraction,
@@ -132,8 +140,10 @@ class LiquidGlassButton extends StatelessWidget {
           lightIntensity: 1.2,
           lightDirection: 80,
           borderType: const OpticalBorder(
-            borderSaturation: 1.2,
-            ambientIntensity: 1.0,
+            // Bumped saturation/ambient vs. the plain white button so the
+            // rim reads warm-gold rather than neutral.
+            borderSaturation: 1.4,
+            ambientIntensity: 1.15,
             borderSolidity: 0.35,
           ),
         );

@@ -29,6 +29,7 @@ import '../../liquid_glass.dart';
 import '../../liquid_glass_view.dart';
 import '../../utils/liquid_glass_blur.dart';
 import '../../utils/liquid_glass_border_mode.dart';
+import '../../utils/liquid_glass_glyph.dart';
 import '../../utils/liquid_glass_position.dart';
 import '../../utils/liquid_glass_shape.dart';
 import '../bottom_nav_bar/liquid_glass_nav_bar_layout.dart'
@@ -916,8 +917,12 @@ class _StyledShellTab extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            selected ? (item.selectedIcon ?? item.icon) : item.icon,
+          LiquidGlassGlyph(
+            icon: selected ? (item.selectedIcon ?? item.icon) : item.icon,
+            assetPath: selected
+                ? (item.selectedIconAsset ?? item.iconAsset)
+                : item.iconAsset,
+            assetPackage: item.iconAssetPackage,
             size: itemStyle.iconSize,
             color: color,
           ),

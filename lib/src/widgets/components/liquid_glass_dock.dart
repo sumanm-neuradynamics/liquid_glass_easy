@@ -10,15 +10,27 @@ import 'liquid_glass_app_icon.dart';
 
 /// Lightweight description of a single entry in [LiquidGlassDock].
 class LiquidGlassDockApp {
-  final IconData icon;
+  /// Ignored when [iconAsset] is set. Exactly one of [icon] /
+  /// [iconAsset] must be provided.
+  final IconData? icon;
+
+  /// SVG asset path for the glyph, takes precedence over [icon].
+  final String? iconAsset;
+
+  /// Package [iconAsset] ships from, when it isn't the app's own assets.
+  final String? iconAssetPackage;
+
   final List<Color> gradient;
   final VoidCallback? onTap;
 
   const LiquidGlassDockApp({
-    required this.icon,
+    this.icon,
+    this.iconAsset,
+    this.iconAssetPackage,
     this.gradient = const [Color(0xFF4FB3FF), Color(0xFF1E69DE)],
     this.onTap,
-  });
+  }) : assert(icon != null || iconAsset != null,
+            'Provide either icon or iconAsset');
 }
 
 /// A horizontal dock of app icons inside a single liquid-glass blob with
@@ -130,6 +142,8 @@ class LiquidGlassDock extends StatelessWidget {
               for (int i = 0; i < apps.length; i++) ...[
                 LiquidGlassAppIcon(
                   icon: apps[i].icon,
+                  iconAsset: apps[i].iconAsset,
+                  iconAssetPackage: apps[i].iconAssetPackage,
                   gradient: apps[i].gradient,
                   size: iconSize,
                   onTap: apps[i].onTap,
