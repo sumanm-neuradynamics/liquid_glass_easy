@@ -45,10 +45,11 @@ export 'package:liquid_glass_easy/src/widgets/utils/liquid_glass_jelly_config.da
 // Each is a single LiquidGlass lens placed in a LiquidGlassView.
 export 'package:liquid_glass_easy/src/widgets/components/liquid_glass_button.dart';
 // Ayantra brand variant of LiquidGlassButton: same pill-button shape,
-// tinted with the Ayantra gold palette (see AppColors) instead of a
-// neutral white frost.
+// tinted with the Ayantra gold palette instead of a neutral white frost.
+// Its palette (AppColors) is intentionally NOT exported — it duplicates
+// the consuming app's own AppColors, so exporting it would collide with
+// that class name wherever both are imported.
 export 'package:liquid_glass_easy/src/widgets/components/ayantra_button_liquid.dart';
-export 'package:liquid_glass_easy/src/theme/app_colors.dart';
 // Jelly: a reusable squash/stretch wrapper driven by a 1-D value — the
 // slider/nav-bar jelly physics exposed as a drop-in widget.
 export 'package:liquid_glass_easy/src/widgets/components/liquid_glass_jelly.dart';
