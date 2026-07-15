@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../utils/liquid_glass_shape.dart';
@@ -119,18 +121,37 @@ class _AnimatedBottomNavBarContentState
         child: LayoutBuilder(builder: (context, constraints) {
           final cellWidth = constraints.maxWidth / widget.items.length;
           final cellHeight = constraints.maxHeight;
+
+          // The pill hugs just the icon (Material-3-style icon indicator)
+          // instead of the whole icon+label cell, so it sits as a small
+          // circle behind the glyph and leaves the label uncovered.
+          final iconSize = widget.itemStyle.iconSize;
+          final hasLabel = widget.items.any((it) => it.label != null);
+          // Approximate the label's line height from its font size —
+          // close enough to line the icon up with where it sits in the
+          // real icon+label column below.
+          final labelBlockHeight = hasLabel
+              ? widget.itemStyle.iconLabelGap +
+                  widget.itemStyle.labelFontSize * 1.2
+              : 0.0;
+          final columnHeight = iconSize + labelBlockHeight;
+          final pillDiameter =
+              math.min(iconSize + 18, math.min(cellWidth, cellHeight));
+          final iconCenterY = ((cellHeight - columnHeight) / 2 + iconSize / 2)
+              .clamp(pillDiameter / 2, cellHeight - pillDiameter / 2);
+
           return AnimatedBuilder(
             animation: _controller,
             builder: (context, _) {
               final frac = _currentIndex;
-              final pillRect = Rect.fromLTWH(
-                frac * cellWidth,
-                0,
-                cellWidth,
-                cellHeight,
+              final pillRect = Rect.fromCenter(
+                center: Offset(frac * cellWidth + cellWidth / 2, iconCenterY),
+                width: pillDiameter,
+                height: pillDiameter,
               );
-              final pillRadius = cellHeight / 2;
+              final pillRadius = pillDiameter / 2;
               return Stack(
+                clipBehavior: Clip.none,
                 children: [
                   // Moving selection pill — slides behind the icons.
                   // A soft fill; any rim comes from the pill shape's
@@ -145,7 +166,8 @@ class _AnimatedBottomNavBarContentState
                         ),
                       ),
                     ),
-                  // Unselected icon row, clipped to OUTSIDE the pill.
+                  // Unselected icons, clipped to OUTSIDE the pill. Labels
+                  // are hidden here — they're drawn once, unclipped, below.
                   Positioned.fill(
                     child: IgnorePointer(
                       child: ClipPath(
@@ -154,12 +176,15 @@ class _AnimatedBottomNavBarContentState
                           pillRadius: pillRadius,
                           shape: widget.pillShape,
                         ),
-                        child: _animatedIconRow(forceSelected: false),
+                        child: _animatedIconRow(
+                          forceSelected: false,
+                          hideLabel: true,
+                        ),
                       ),
                     ),
                   ),
-                  // Selected icon row, clipped to INSIDE the pill — this
-                  // is the part that "fills in" as the pill passes over.
+                  // Selected icons, clipped to INSIDE the pill — this is
+                  // the part that "fills in" as the pill passes over.
                   Positioned.fill(
                     child: IgnorePointer(
                       child: ClipPath(
@@ -168,8 +193,19 @@ class _AnimatedBottomNavBarContentState
                           pillRadius: pillRadius,
                           shape: widget.pillShape,
                         ),
-                        child: _animatedIconRow(forceSelected: true),
+                        child: _animatedIconRow(
+                          forceSelected: true,
+                          hideLabel: true,
+                        ),
                       ),
+                    ),
+                  ),
+                  // Labels — a single unclipped pass, colored by the real
+                  // committed selection (not the pill's travel fraction),
+                  // since the pill no longer covers them.
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: _labelRow(),
                     ),
                   ),
                   // Tap layer on top — owns all pointer events.
@@ -193,7 +229,7 @@ class _AnimatedBottomNavBarContentState
   /// or unselected state. The two copies (selected / unselected) share
   /// the exact same layout, so the pill-shaped clip cuts cleanly
   /// between filled and outlined.
-  Widget _animatedIconRow({required bool forceSelected}) {
+  Widget _animatedIconRow({required bool forceSelected, bool hideLabel = false}) {
     return Row(
       children: [
         for (final item in widget.items)
@@ -202,6 +238,25 @@ class _AnimatedBottomNavBarContentState
               item: item,
               selected: forceSelected,
               style: widget.itemStyle,
+              hideLabel: hideLabel,
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The label-only pass: icons hidden, colored by the real committed
+  /// selection rather than the pill's travel fraction.
+  Widget _labelRow() {
+    return Row(
+      children: [
+        for (int i = 0; i < widget.items.length; i++)
+          Expanded(
+            child: LiquidGlassNavTabCell(
+              item: widget.items[i],
+              selected: i == widget.selectedIndex,
+              style: widget.itemStyle,
+              hideIcon: true,
             ),
           ),
       ],

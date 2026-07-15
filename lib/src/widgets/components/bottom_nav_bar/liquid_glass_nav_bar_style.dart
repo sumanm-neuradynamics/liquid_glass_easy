@@ -119,7 +119,9 @@ class LiquidGlassNavPillStyle {
   /// How long the pill takes to slide between tabs ([animated] only).
   final Duration animationDuration;
 
-  /// Easing curve for the pill slide ([animated] only).
+  /// Easing curve for the pill slide ([animated] only). Kept
+  /// non-overshooting by design — a plain smooth glide ("sliding water"),
+  /// never a spring bounce.
   final Curve animationCurve;
 
   /// Blur behind the moving **glass** pill (glass [mode]s only).
@@ -201,7 +203,7 @@ class LiquidGlassNavPillStyle {
     this.color = const Color(0x26FFFFFF),
     this.animated = false,
     this.animationDuration = const Duration(milliseconds: 320),
-    this.animationCurve = Curves.easeOutCubic,
+    this.animationCurve = Curves.easeInOutCubic,
     this.blur = const LiquidGlassBlur(),
     this.growHeight = 12,
     this.distortion = 0.06,

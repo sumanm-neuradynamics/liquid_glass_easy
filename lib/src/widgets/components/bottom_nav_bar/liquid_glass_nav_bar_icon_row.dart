@@ -15,11 +15,21 @@ class LiquidGlassNavTabCell extends StatelessWidget {
   final bool selected;
   final LiquidGlassNavItemStyle style;
 
+  /// Renders the icon fully transparent while keeping its layout space —
+  /// used to line up a separate, unclipped glyph pass drawn on top.
+  final bool hideIcon;
+
+  /// Renders the label fully transparent while keeping its layout space —
+  /// used to line up a separate, unclipped label pass drawn on top.
+  final bool hideLabel;
+
   const LiquidGlassNavTabCell({
     super.key,
     required this.item,
     required this.selected,
     this.style = const LiquidGlassNavItemStyle(),
+    this.hideIcon = false,
+    this.hideLabel = false,
   });
 
   @override
@@ -29,23 +39,29 @@ class LiquidGlassNavTabCell extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          LiquidGlassGlyph(
-            icon: selected ? (item.selectedIcon ?? item.icon) : item.icon,
-            assetPath: selected
-                ? (item.selectedIconAsset ?? item.iconAsset)
-                : item.iconAsset,
-            assetPackage: item.iconAssetPackage,
-            size: style.iconSize,
-            color: color,
+          Opacity(
+            opacity: hideIcon ? 0 : 1,
+            child: LiquidGlassGlyph(
+              icon: selected ? (item.selectedIcon ?? item.icon) : item.icon,
+              assetPath: selected
+                  ? (item.selectedIconAsset ?? item.iconAsset)
+                  : item.iconAsset,
+              assetPackage: item.iconAssetPackage,
+              size: style.iconSize,
+              color: color,
+            ),
           ),
           if (item.label != null) ...[
             SizedBox(height: style.iconLabelGap),
-            Text(
-              item.label!,
-              style: TextStyle(
-                fontSize: style.labelFontSize,
-                fontWeight: style.fontWeightFor(selected: selected),
-                color: color,
+            Opacity(
+              opacity: hideLabel ? 0 : 1,
+              child: Text(
+                item.label!,
+                style: TextStyle(
+                  fontSize: style.labelFontSize,
+                  fontWeight: style.fontWeightFor(selected: selected),
+                  color: color,
+                ),
               ),
             ),
           ],
